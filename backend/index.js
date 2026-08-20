@@ -13,6 +13,7 @@ const blocklistRoutes = require('./routes/blocklist');
 const announcementRoutes = require('./routes/announcements');
 const gateRoutes = require('./routes/gates');
 const { startCronJobs } = require('./cron');
+const reportRoutes = require('./routes/reports');
 
 // Import db
 require('./config/db');
@@ -33,6 +34,7 @@ app.use('/api/entry', entryRoutes);
 app.use('/api/blocklist', blocklistRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/gates', gateRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check
 app.get('/', (req, res) => {
