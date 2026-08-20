@@ -12,6 +12,7 @@ const entryRoutes = require('./routes/entry');
 const blocklistRoutes = require('./routes/blocklist');
 const announcementRoutes = require('./routes/announcements');
 const gateRoutes = require('./routes/gates');
+const { startCronJobs } = require('./cron');
 
 // Import db
 require('./config/db');
@@ -48,6 +49,8 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Internal server error.', error: err.message });
 });
+
+startCronJobs();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
