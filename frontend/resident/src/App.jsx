@@ -5,6 +5,8 @@ import SignIn from './pages/SignIn';
 import ForgotPassword from './pages/ForgotPassword';
 import CreatePassword from './pages/CreatePassword';
 import PasswordChanged from './pages/PasswordChanged';
+import Home from './pages/Home';
+import Schedule from './pages/Schedule';
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/create-password" element={<CreatePassword />} />
         <Route path="/password-changed" element={<PasswordChanged />} />
+        <Route path="/schedule" element={<Schedule />} />
+        <Route path="/home" element={<Home />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
