@@ -11,6 +11,7 @@ const registrationRoutes = require('./routes/registrations');
 const entryRoutes = require('./routes/entry');
 const blocklistRoutes = require('./routes/blocklist');
 const announcementRoutes = require('./routes/announcements');
+const gateRoutes = require('./routes/gates');
 
 // Import db
 require('./config/db');
@@ -30,6 +31,7 @@ app.use('/api/registrations', registrationRoutes);
 app.use('/api/entry', entryRoutes);
 app.use('/api/blocklist', blocklistRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/gates', gateRoutes);
 
 // Health check
 app.get('/', (req, res) => {
