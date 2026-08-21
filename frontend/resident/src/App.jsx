@@ -17,6 +17,7 @@ import FAQs from './pages/FAQs';
 import Terms from './pages/Terms';
 import ContactGuard from './pages/ContactGuard';
 import Complaints from './pages/Complaints';
+import PreRegister from './pages/Preregister';
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
         <Route path="/terms" element={<Terms />} />
         <Route path="/contact-guard" element={<ContactGuard />} />
         <Route path="/complaints" element={<Complaints />} />
+        <Route path="/pre-register" element={<PreRegister />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

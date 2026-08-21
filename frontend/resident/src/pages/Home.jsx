@@ -9,7 +9,7 @@ export default function Home() {
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
 
-  // Sample data (ikokonekta natin sa backend after)
+  // ── Base sample data (ikokonekta natin sa backend after) ──
   const announcements = [
     { icon: '🔥', bg: 'bg-white', text: 'Fire incident happening at Gemini Street' },
     { icon: '⚠️', bg: 'bg-white', text: 'Gate 1 temporarily closed' },
@@ -17,7 +17,7 @@ export default function Home() {
     { icon: '🧑', bg: 'bg-red-100', text: 'Homeowners meeting today at clubhouse, 10:30 AM' },
   ];
 
-  const schedule = [
+  const baseSchedule = [
     { time: '2:00 PM\nto\n-----', name: 'Joshua Mina', type: 'Visitor', purpose: 'Visiting a friend', status: 'ACTIVE' },
     { time: '-----', name: 'Juan Dela Cruz', type: 'Visitor', purpose: 'Visiting a friend', status: 'EXPECTED' },
     { time: '6:00 PM\nto\n6:30 PM', name: 'Delivery Rider', type: 'Delivery', purpose: 'Delivery', status: 'DEPARTED' },
@@ -27,6 +27,25 @@ export default function Home() {
     { icon: '🧑', bg: 'bg-teal-100', name: 'Maria Santos', date: 'May 31, 2026', type: 'Visitor' },
     { icon: '📦', bg: 'bg-yellow-100', name: 'Pedro Pascal', date: 'May 7, 2026', type: 'Delivery' },
   ];
+
+  // ── Pre-registered visitors (galing sa PreRegister → localStorage) ──
+  const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
+  const registeredRows = registered.map((r) => ({
+    time: '-----',
+    name: r.name,
+    type: r.regType === 'Delivery' ? 'Delivery' : 'Visitor',
+    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'Visit'),
+    status: 'EXPECTED',
+    expectedDate: r.date,
+  }));
+
+  // Bagong-register muna sa taas ng listahan
+  const schedule = [...registeredRows, ...baseSchedule];
+
+  // ── Derived counts para sa stat cards ──
+  const todaysVisitorsCount = schedule.filter((s) => s.status === 'ACTIVE').length;
+  const expectedTodayCount = schedule.filter((s) => s.status === 'EXPECTED').length;
+  const visitHistoryCount = history.length;
 
   // Build ALL days of the current month with correct day labels
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -105,17 +124,17 @@ export default function Home() {
         <div className="grid grid-cols-3 gap-3 mt-6">
           <div className="bg-teal-100 rounded-3xl p-4 shadow">
             <p className="text-sm text-ink">Today's Visitors</p>
-            <p className="text-4xl font-extrabold text-ink my-2">1</p>
+            <p className="text-4xl font-extrabold text-ink my-2">{todaysVisitorsCount}</p>
             <div className="w-11 h-11 rounded-2xl bg-ink flex items-center justify-center text-white text-lg">👥</div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F1D88A' }}>
             <p className="text-sm text-ink">Expected Today</p>
-            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a6d12' }}>3</p>
+            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a6d12' }}>{expectedTodayCount}</p>
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#B8901F' }}>📅</div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F3C9C9' }}>
             <p className="text-sm text-ink">Visit History</p>
-            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>5</p>
+            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>{visitHistoryCount}</p>
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#A83232' }}>📄</div>
           </div>
         </div>
