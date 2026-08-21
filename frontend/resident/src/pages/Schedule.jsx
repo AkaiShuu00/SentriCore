@@ -29,23 +29,18 @@ export default function Schedule() {
     DEPARTED: items.filter(i => i.status === 'DEPARTED').length,
   };
 
-  // Week days
-  const week = [];
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7);
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    week.push(d);
+  // Build ALL days of the current month with correct day labels (scrollable)
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthDays = [];
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateObj = new Date(year, month, i);
+    monthDays.push({ dayNum: i, dayLabel: DAYS[dateObj.getDay()] });
   }
 
   const monthYear = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
 
-  const statusStyle = {
-    ACTIVE: 'bg-green-200 text-green-800',
-    EXPECTED: 'text-yellow-800',
-    DEPARTED: 'text-red-800',
-  };
   const badgeBg = {
     ACTIVE: '#B4E4BE',
     EXPECTED: '#F1D88A',
@@ -57,6 +52,11 @@ export default function Schedule() {
     .filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
 
   const showBadge = filter === 'ALL'; // panelist revision: hide badge in filtered tabs
+
+  const scrollDates = (dir) => {
+    const el = document.getElementById('sched-day-scroll');
+    if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
+  };
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto">
@@ -89,25 +89,26 @@ export default function Schedule() {
           </div>
         </div>
 
-        {/* Day calendar */}
+        {/* Day calendar — scrollable full month */}
         <div className="bg-white rounded-3xl p-4 shadow mt-5">
           <div className="flex items-center gap-2">
-            <button onClick={() => setWeekOffset(weekOffset - 1)}
+            <button onClick={() => scrollDates(-1)}
                     className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">‹</button>
-            <div className="flex gap-2 overflow-x-auto flex-1">
-              {week.map((d) => {
-                const isActive = d.getDate() === selectedDay;
+            <div id="sched-day-scroll" className="flex gap-2 overflow-x-auto flex-1"
+                 style={{ scrollbarWidth: 'none' }}>
+              {monthDays.map((d) => {
+                const isActive = d.dayNum === selectedDay;
                 return (
-                  <button key={d.toISOString()} onClick={() => setSelectedDay(d.getDate())}
-                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[60px] shadow ${isActive ? 'text-white' : 'bg-white text-ink border border-gray-100'}`}
+                  <button key={d.dayNum} onClick={() => setSelectedDay(d.dayNum)}
+                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[60px] shadow shrink-0 ${isActive ? 'text-white' : 'bg-white text-ink border border-gray-100'}`}
                           style={isActive ? { backgroundColor: '#0F6E6E' } : {}}>
-                    <span className="text-xs font-semibold">{DAYS[d.getDay()]}</span>
-                    <span className="text-2xl font-extrabold">{d.getDate()}</span>
+                    <span className="text-xs font-semibold">{d.dayLabel}</span>
+                    <span className="text-2xl font-extrabold">{d.dayNum}</span>
                   </button>
                 );
               })}
             </div>
-            <button onClick={() => setWeekOffset(weekOffset + 1)}
+            <button onClick={() => scrollDates(1)}
                     className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">›</button>
           </div>
         </div>

@@ -7,6 +7,14 @@ import CreatePassword from './pages/CreatePassword';
 import PasswordChanged from './pages/PasswordChanged';
 import Home from './pages/Home';
 import Schedule from './pages/Schedule';
+import History from './pages/History';
+import Profile from './pages/Profile';
+import PasswordSecurity from './pages/PasswordSecurity';
+import NotificationSettings from './pages/NotificationSettings';
+import HelpCenter from './pages/HelpCenter';
+import Blocklist from './pages/Blocklist';
+import FAQs from './pages/FAQs';
+import Terms from './pages/Terms';
 
 function App() {
   return (
@@ -20,6 +28,14 @@ function App() {
         <Route path="/password-changed" element={<PasswordChanged />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/home" element={<Home />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/password-security" element={<PasswordSecurity />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/notification-settings" element={<NotificationSettings />} />
+        <Route path="/help-center" element={<HelpCenter />} />
+        <Route path="/blocklist" element={<Blocklist />} />
+        <Route path="/faqs" element={<FAQs />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
