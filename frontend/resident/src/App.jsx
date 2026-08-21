@@ -15,6 +15,8 @@ import HelpCenter from './pages/HelpCenter';
 import Blocklist from './pages/Blocklist';
 import FAQs from './pages/FAQs';
 import Terms from './pages/Terms';
+import ContactGuard from './pages/ContactGuard';
+import Complaints from './pages/Complaints';
 
 function App() {
   return (
@@ -36,6 +38,8 @@ function App() {
         <Route path="/blocklist" element={<Blocklist />} />
         <Route path="/faqs" element={<FAQs />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/contact-guard" element={<ContactGuard />} />
+        <Route path="/complaints" element={<Complaints />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
