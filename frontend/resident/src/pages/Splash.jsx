@@ -9,7 +9,7 @@ export default function Splash() {
       <div className="bg-cream w-full min-h-screen sm:min-h-0 sm:max-w-md sm:rounded-[50%/8%] flex flex-col items-center justify-center py-20"
            style={{ minHeight: '100vh' }}>
         <button
-          onClick={() => navigate('/select-user')}
+          onClick={() => navigate('/signin')}
           className="flex flex-col items-center transition-transform active:scale-95 hover:scale-105"
         >
           <img src="/logo.jpg" alt="SentriCore" className="w-40 h-40 object-contain" />

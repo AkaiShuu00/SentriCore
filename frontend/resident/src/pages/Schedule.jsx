@@ -10,17 +10,17 @@ export default function Schedule() {
   const [filter, setFilter] = useState('ALL');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
-  const [weekOffset, setWeekOffset] = useState(0);
 
-  // Sample data (ikokonekta sa backend after)
-  const items = [
-    { start: '2:00 PM', end: '-----', name: 'Joshua Mina', type: 'Visitor', purpose: 'Visiting a friend', status: 'ACTIVE' },
-    { start: '-----', end: '', name: 'Juan Dela Cruz', type: 'Visitor', purpose: 'Visiting a friend', status: 'EXPECTED' },
-    { start: '-----', end: '', name: 'Adrianne Pawhay', type: 'Visitor', purpose: 'N/A', status: 'EXPECTED' },
-    { start: '-----', end: '', name: 'Naveah Lim', type: 'Visitor', purpose: 'Casual visit', status: 'EXPECTED' },
-    { start: '6:00 PM', end: '6:30 PM', name: 'Delivery Rider', type: 'Delivery', purpose: 'Delivery', status: 'DEPARTED' },
-    { start: '8:45 PM', end: '10:23 PM', name: 'Joeffrey Lannister', type: 'Visitor', purpose: 'N/A', status: 'DEPARTED' },
-  ];
+  // ── Real data: pre-registered visitors (galing sa PreRegister → localStorage) ──
+  const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
+  const items = registered.map((r) => ({
+    start: '-----',
+    end: '',
+    name: r.name,
+    type: r.regType === 'Delivery' ? 'Delivery' : 'Visitor',
+    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'N/A'),
+    status: 'EXPECTED',
+  }));
 
   const counts = {
     TOTAL: items.length,
@@ -135,31 +135,41 @@ export default function Schedule() {
         {/* List */}
         <div className="bg-white rounded-3xl p-4 shadow mt-4 max-h-[45vh] overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="text-center text-ink/50 py-6">No visitors found.</p>
+            <div className="text-center py-8">
+              <p className="text-4xl mb-2">📭</p>
+              <p className="text-ink/60 font-semibold">
+                {filter === 'ALL' ? 'No visitors scheduled yet' : `No ${filter.toLowerCase()} visitors`}
+              </p>
+              <p className="text-ink/40 text-sm mt-1">
+                {filter === 'ALL' ? 'Pre-register a visitor to see them here.' : 'Try another filter or pre-register a visitor.'}
+              </p>
+            </div>
           ) : (
-            filtered.map((it, i) => (
-              <div key={i} className="flex items-center gap-3 mb-3">
-                <div className="text-xs font-bold text-ink text-center w-16 shrink-0 leading-tight">
-                  {it.start}
-                  {it.end && <><br />to<br />{it.end}</>}
-                </div>
-                <div className="flex-1 border border-gray-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-ink">{it.name}</p>
-                    <p className="text-sm text-ink/60">{it.type}</p>
-                    <p className="text-sm text-ink/60">Purpose: {it.purpose}</p>
+            <>
+              {filtered.map((it, i) => (
+                <div key={i} className="flex items-center gap-3 mb-3">
+                  <div className="text-xs font-bold text-ink text-center w-16 shrink-0 leading-tight">
+                    {it.start}
+                    {it.end && <><br />to<br />{it.end}</>}
                   </div>
-                  {showBadge && (
-                    <span className="text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap"
-                          style={{ backgroundColor: badgeBg[it.status], color: '#333' }}>
-                      {it.status}
-                    </span>
-                  )}
+                  <div className="flex-1 border border-gray-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-ink">{it.name}</p>
+                      <p className="text-sm text-ink/60">{it.type}</p>
+                      <p className="text-sm text-ink/60">Purpose: {it.purpose}</p>
+                    </div>
+                    {showBadge && (
+                      <span className="text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap"
+                            style={{ backgroundColor: badgeBg[it.status], color: '#333' }}>
+                        {it.status}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+              <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
+            </>
           )}
-          <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
         </div>
       </div>
 

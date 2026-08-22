@@ -9,7 +9,7 @@ export default function Home() {
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
 
-  // ── Base sample data (ikokonekta natin sa backend after) ──
+  // ── Announcements (sample muna — ikokonekta sa backend after) ──
   const announcements = [
     { icon: '🔥', bg: 'bg-white', text: 'Fire incident happening at Gemini Street' },
     { icon: '⚠️', bg: 'bg-white', text: 'Gate 1 temporarily closed' },
@@ -17,35 +17,21 @@ export default function Home() {
     { icon: '🧑', bg: 'bg-red-100', text: 'Homeowners meeting today at clubhouse, 10:30 AM' },
   ];
 
-  const baseSchedule = [
-    { time: '2:00 PM\nto\n-----', name: 'Joshua Mina', type: 'Visitor', purpose: 'Visiting a friend', status: 'ACTIVE' },
-    { time: '-----', name: 'Juan Dela Cruz', type: 'Visitor', purpose: 'Visiting a friend', status: 'EXPECTED' },
-    { time: '6:00 PM\nto\n6:30 PM', name: 'Delivery Rider', type: 'Delivery', purpose: 'Delivery', status: 'DEPARTED' },
-  ];
-
-  const history = [
-    { icon: '🧑', bg: 'bg-teal-100', name: 'Maria Santos', date: 'May 31, 2026', type: 'Visitor' },
-    { icon: '📦', bg: 'bg-yellow-100', name: 'Pedro Pascal', date: 'May 7, 2026', type: 'Delivery' },
-  ];
-
-  // ── Pre-registered visitors (galing sa PreRegister → localStorage) ──
+  // ── Real data: pre-registered visitors (galing sa PreRegister → localStorage) ──
   const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
-  const registeredRows = registered.map((r) => ({
+  const schedule = registered.map((r) => ({
     time: '-----',
     name: r.name,
     type: r.regType === 'Delivery' ? 'Delivery' : 'Visitor',
-    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'Visit'),
+    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'N/A'),
     status: 'EXPECTED',
     expectedDate: r.date,
   }));
 
-  // Bagong-register muna sa taas ng listahan
-  const schedule = [...registeredRows, ...baseSchedule];
-
-  // ── Derived counts para sa stat cards ──
+  // ── Derived counts para sa stat cards (totoong data na) ──
   const todaysVisitorsCount = schedule.filter((s) => s.status === 'ACTIVE').length;
   const expectedTodayCount = schedule.filter((s) => s.status === 'EXPECTED').length;
-  const visitHistoryCount = history.length;
+  const visitHistoryCount = 0; // walang history source pa — 0 muna hanggang backend
 
   // Build ALL days of the current month with correct day labels
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -70,6 +56,10 @@ export default function Home() {
     const el = document.getElementById('day-scroll');
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
+
+  const filteredSchedule = schedule.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-cream pb-24 max-w-md mx-auto relative">
@@ -178,40 +168,40 @@ export default function Home() {
 
         {/* Schedule list */}
         <div className="bg-white rounded-3xl p-4 shadow mt-4 max-h-96 overflow-y-auto">
-          {schedule
-            .filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
-            .map((s, i) => (
-              <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3 flex items-center gap-3">
-                <div className="text-xs font-bold text-ink whitespace-pre-line text-center w-16 shrink-0">{s.time}</div>
-                <div className="flex-1">
-                  <p className="font-bold text-ink">{s.name}</p>
-                  <p className="text-sm text-ink/60">{s.type}</p>
-                  <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
+          {filteredSchedule.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-4xl mb-2">📭</p>
+              <p className="text-ink/60 font-semibold">No visitors scheduled yet</p>
+              <p className="text-ink/40 text-sm mt-1">Pre-register a visitor to see them here.</p>
+            </div>
+          ) : (
+            <>
+              {filteredSchedule.map((s, i) => (
+                <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3 flex items-center gap-3">
+                  <div className="text-xs font-bold text-ink whitespace-pre-line text-center w-16 shrink-0">{s.time}</div>
+                  <div className="flex-1">
+                    <p className="font-bold text-ink">{s.name}</p>
+                    <p className="text-sm text-ink/60">{s.type}</p>
+                    <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${statusStyle[s.status]}`}>
+                    {s.status}
+                  </span>
                 </div>
-                <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${statusStyle[s.status]}`}>
-                  {s.status}
-                </span>
-              </div>
-            ))}
-          <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
+              ))}
+              <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
+            </>
+          )}
         </div>
 
         {/* Recent Visit History */}
         <h3 className="text-xl font-extrabold text-ink mt-8 mb-3">Recent Visit History</h3>
         <div className="bg-white rounded-3xl p-5 shadow">
-          {history.map((h, i) => (
-            <div key={i}>
-              <div className="flex items-center gap-4 py-3">
-                <div className={`w-11 h-11 rounded-full ${h.bg} flex items-center justify-center text-lg`}>{h.icon}</div>
-                <div>
-                  <p className="font-bold text-ink">{h.name}</p>
-                  <p className="text-sm text-ink/60">{h.date} | {h.type}</p>
-                </div>
-              </div>
-              <div className="border-b border-gray-200" />
-            </div>
-          ))}
-          <p className="text-center text-ink/50 text-sm py-3">--- View your recent history here ---</p>
+          <div className="text-center py-6">
+            <p className="text-4xl mb-2">🗂️</p>
+            <p className="text-ink/60 font-semibold">No visit history yet</p>
+            <p className="text-ink/40 text-sm mt-1">Completed visits will appear here.</p>
+          </div>
         </div>
       </div>
 

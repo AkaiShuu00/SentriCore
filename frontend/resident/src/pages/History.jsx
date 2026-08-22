@@ -11,14 +11,10 @@ export default function History() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  // Sample data (ikokonekta sa backend after)
-  const records = [
-    { date: 'June 2, 2026', time: '6:00 PM to 6:30 PM', name: 'Delivery Rider', vehicle: 'Private Vehicle', kind: 'Delivery', plate: 'HPP 657', status: 'DEPARTED', entryId: 'DLV 260602-1001', cat: 'DELIVERIES' },
-    { date: 'June 2, 2026', time: '8:45 PM to 10:23 PM', name: 'Joeffrey Lannister', vehicle: 'Private Vehicle', kind: 'Visitor', plate: 'ATK 999', status: 'DEPARTED', entryId: 'VST 260602-1002', cat: 'VISITORS' },
-    { date: 'May 31, 2026', time: '3:00 PM to 8:00 PM', name: 'Maria Santos', vehicle: 'Private Vehicle', kind: 'Visitor', plate: 'ABC 1234', status: 'DEPARTED', entryId: 'VST 260531-1001', cat: 'VISITORS' },
-    { date: 'May 7, 2026', time: '8:45 PM to 9:15 PM', name: 'Pedro Pascal', vehicle: 'Private Vehicle', kind: 'Delivery', plate: 'DEF 345', status: 'DEPARTED', entryId: 'DLV 260507-1001', cat: 'DELIVERIES' },
-    { date: 'June 1, 2026', time: '-----', name: 'Francesca Fruto', vehicle: '-----', kind: 'Visitor', plate: '-----', status: 'EXPIRED', entryId: 'VST 260601-1001', cat: 'VISITORS' },
-  ];
+  // ── Visit history = completed visits (DEPARTED/EXPIRED) ──
+  // Wala pang source nito hangga't hindi konektado sa backend (nangyayari lang
+  // ito kapag na-check-in/out na ng guard). Empty muna — iko-connect after.
+  const records = [];
 
   const counts = {
     TOTAL: records.length,
@@ -34,7 +30,7 @@ export default function History() {
 
   const monthYear = 'JUNE 2026';
 
-    // Format YYYY-MM-DD → "Aug 21" (short, clean)
+  // Format YYYY-MM-DD → "Aug 21" (short, clean)
   const fmtShort = (iso) => {
     if (!iso) return '';
     const d = new Date(iso + 'T00:00:00');
@@ -97,7 +93,7 @@ export default function History() {
                    placeholder="Search name"
                    className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent w-full" />
           </div>
-                    <div className="relative">
+          <div className="relative">
             <button onClick={() => setShowCalendar(!showCalendar)}
                     className="flex items-center gap-1 bg-white rounded-full px-3 py-3 shadow text-sm font-semibold text-ink whitespace-nowrap h-full">
                 {fromDate && toDate ? `${fmtShort(fromDate)} - ${fmtShort(toDate)}` : 'Select Date' } ▾
@@ -150,7 +146,13 @@ export default function History() {
           {/* Rows */}
           <div className="max-h-[50vh] overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="text-center text-ink/50 py-8">No records found.</p>
+              <div className="text-center py-10 px-4">
+                <p className="text-4xl mb-2">🗂️</p>
+                <p className="text-ink/60 font-semibold">No visit history yet</p>
+                <p className="text-ink/40 text-sm mt-1">
+                  Completed visits will appear here once your visitors have checked in and out.
+                </p>
+              </div>
             ) : (
               filtered.map((r, i) => (
                 <div key={i} className="grid grid-cols-4 gap-1 px-3 py-4 border-b border-gray-200 items-center">
