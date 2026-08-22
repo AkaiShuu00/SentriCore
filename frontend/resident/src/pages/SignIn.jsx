@@ -10,7 +10,8 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showNoAccount, setShowNoAccount] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);       // left modal
+  const [showNoAccount, setShowNoAccount] = useState(false); // right modal
 
   async function handleSignIn() {
     setError('');
@@ -23,12 +24,11 @@ export default function SignIn() {
       const res = await axios.post(`${API}/auth/login`, {
         username,
         password,
-        role: 'Resident',
+        role: 'Guard',
       });
-      // Save session
       localStorage.setItem('sentricore_token', res.data.token);
       localStorage.setItem('sentricore_user', JSON.stringify(res.data.user));
-      navigate('/home'); // dashboard (gagawin natin next)
+      navigate('/guard-home'); // TODO: palitan kung iba ang guard dashboard route mo
     } catch (err) {
       setError(err.response?.data?.message || 'Sign in failed. Please try again.');
       setLoading(false);
@@ -38,7 +38,7 @@ export default function SignIn() {
   return (
     <div className="min-h-screen bg-ink flex justify-center">
       <div className="bg-cream w-full sm:max-w-md min-h-screen relative overflow-hidden">
-        {/* Curved top with logo */}
+        {/* Logo */}
         <div className="flex flex-col items-center pt-10 pb-6">
           <img src="/logo.jpg" alt="SentriCore" className="w-24 h-24 object-contain" />
           <h1 className="text-2xl font-extrabold text-ink tracking-wide"
@@ -50,13 +50,12 @@ export default function SignIn() {
         <div className="px-8">
           <h2 className="text-4xl font-extrabold text-ink text-center my-8">SIGN IN</h2>
 
-          {/* Username (design says email, but backend uses username) */}
           <label className="block text-lg font-bold text-ink mb-2">Username</label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="resident1"
+            placeholder="guard1"
             className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30 mb-5"
           />
 
@@ -70,9 +69,9 @@ export default function SignIn() {
             className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30 mb-2"
           />
 
+          {/* Forgot password → LEFT modal (not a separate page) */}
           <div className="text-right mb-4">
-            <button onClick={() => navigate('/forgot-password')}
-                    className="text-ink underline text-sm">
+            <button onClick={() => setShowForgot(true)} className="text-ink underline text-sm">
               Forgot your password?
             </button>
           </div>
@@ -89,6 +88,7 @@ export default function SignIn() {
             {loading ? 'SIGNING IN...' : 'SIGN IN'}
           </button>
 
+          {/* Sign up → RIGHT modal */}
           <p className="text-center text-ink mt-5 mb-10">
             Don't have an account?{' '}
             <button onClick={() => setShowNoAccount(true)} className="font-bold underline">
@@ -97,11 +97,30 @@ export default function SignIn() {
           </p>
         </div>
 
-        {/* "No account" modal */}
+        {/* ── LEFT modal: Forgot password ── */}
+        {showForgot && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
+            <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full">
+              <div className="flex justify-center mb-4"><ForgotIcon /></div>
+              <h3 className="text-2xl font-extrabold text-ink mb-3">Forgot password?</h3>
+              <p className="text-ink/70 mb-6">
+                Please contact your HOA administrator to request a change of login credentials.
+              </p>
+              <button
+                onClick={() => setShowForgot(false)}
+                className="w-full bg-ink text-white font-bold py-4 rounded-full active:scale-95 transition"
+              >
+                BACK TO SIGN IN
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── RIGHT modal: Don't have an account ── */}
         {showNoAccount && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
             <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full">
-              <div className="text-6xl mb-4">🚫</div>
+              <div className="flex justify-center mb-4"><NoAccountIcon /></div>
               <h3 className="text-2xl font-extrabold text-ink mb-3">Don't have an account?</h3>
               <p className="text-ink/70 mb-6">
                 Please contact your HOA administrator to request for initial login credentials.
@@ -117,5 +136,37 @@ export default function SignIn() {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Icons (ink, matching the mockup) ───────────────────────────────────────
+function ForgotIcon() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* shackle */}
+      <path d="M24 30v-6a12 12 0 0 1 24 0v6" stroke="#112D31" strokeWidth="5" strokeLinecap="round" />
+      {/* lock body */}
+      <rect x="18" y="12" width="4" height="0" fill="none" />
+      <rect x="24" y="6" width="24" height="0" fill="none" />
+      <circle cx="36" cy="20" r="8" fill="#112D31" />
+      {/* asterisk field box */}
+      <rect x="12" y="30" width="48" height="20" rx="4" fill="#112D31" />
+      <text x="36" y="45" fontSize="16" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="monospace">✱✱✱✱</text>
+    </svg>
+  );
+}
+
+function NoAccountIcon() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* person head */}
+      <circle cx="36" cy="27" r="9" fill="#112D31" />
+      {/* person shoulders */}
+      <path d="M20 52c0-9 7-16 16-16s16 7 16 16" fill="#112D31" />
+      {/* prohibition circle */}
+      <circle cx="36" cy="36" r="30" stroke="#112D31" strokeWidth="5" fill="none" />
+      {/* slash */}
+      <line x1="16" y1="16" x2="56" y2="56" stroke="#112D31" strokeWidth="5" strokeLinecap="round" />
+    </svg>
   );
 }

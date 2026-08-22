@@ -1,5 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';import Splash from './pages/Splash';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+// ── Shared ──
+import Splash from './pages/Splash';
 import SignIn from './pages/SignIn';
+
+// ── Resident pages ──
 import ForgotPassword from './pages/ForgotPassword';
 import CreatePassword from './pages/CreatePassword';
 import PasswordChanged from './pages/PasswordChanged';
@@ -17,27 +22,43 @@ import ContactGuard from './pages/ContactGuard';
 import Complaints from './pages/Complaints';
 import PreRegister from './pages/Preregister';
 
+// ── Guard pages (gagawin natin — palitan/idagdag habang binubuo) ──
+import GuardHome from './pages/guard/GuardHome';
+import GuardSchedule from './pages/guard/GuardSchedule';
+// import GuardProfile from './pages/guard/GuardProfile';
+
 function App() {
   return (
     <BrowserRouter>
-      <Routes>        <Route path="/" element={<Splash />} />
+      <Routes>
+        {/* Shared entry */}
+        <Route path="/" element={<Splash />} />
         <Route path="/signin" element={<SignIn />} />
+
+        {/* Resident */}
+        <Route path="/home" element={<Home />} />
+        <Route path="/schedule" element={<Schedule />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/pre-register" element={<PreRegister />} />
+        <Route path="/contact-guard" element={<ContactGuard />} />
+        <Route path="/complaints" element={<Complaints />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/create-password" element={<CreatePassword />} />
         <Route path="/password-changed" element={<PasswordChanged />} />
-        <Route path="/schedule" element={<Schedule />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/history" element={<History />} />
         <Route path="/password-security" element={<PasswordSecurity />} />
-        <Route path="/profile" element={<Profile />} />
         <Route path="/notification-settings" element={<NotificationSettings />} />
         <Route path="/help-center" element={<HelpCenter />} />
         <Route path="/blocklist" element={<Blocklist />} />
         <Route path="/faqs" element={<FAQs />} />
         <Route path="/terms" element={<Terms />} />
-        <Route path="/contact-guard" element={<ContactGuard />} />
-        <Route path="/complaints" element={<Complaints />} />
-        <Route path="/pre-register" element={<PreRegister />} />
+
+        {/* Guard */}
+        <Route path="/guard-home" element={<GuardHome />} />
+        <Route path="/guard-schedule" element={<GuardSchedule />} /> 
+        {/* <Route path="/guard-profile" element={<GuardProfile />} /> */}
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
