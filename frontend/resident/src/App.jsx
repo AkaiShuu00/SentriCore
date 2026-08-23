@@ -25,7 +25,8 @@ import PreRegister from './pages/Preregister';
 // ── Guard pages (gagawin natin — palitan/idagdag habang binubuo) ──
 import GuardHome from './pages/guard/GuardHome';
 import GuardSchedule from './pages/guard/GuardSchedule';
-// import GuardProfile from './pages/guard/GuardProfile';
+import GuardProfile from './pages/guard/GuardProfile';
+import GuardLogs from './pages/guard/GuardLogs';
 
 function App() {
   return (
@@ -56,7 +57,8 @@ function App() {
         {/* Guard */}
         <Route path="/guard-home" element={<GuardHome />} />
         <Route path="/guard-schedule" element={<GuardSchedule />} /> 
-        {/* <Route path="/guard-profile" element={<GuardProfile />} /> */}
+        <Route path="/guard-profile" element={<GuardProfile />} />
+        <Route path="/guard-logs" element={<GuardLogs />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
+import AnnouncementsModal from '../components/AnnouncementsModal';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -8,6 +9,7 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
 
   // ── Announcements (sample muna — ikokonekta sa backend after) ──
   const announcements = [
@@ -74,7 +76,8 @@ export default function Home() {
       <div className="px-5">
         {/* Announcements */}
         <h2 className="text-xl font-extrabold text-ink mt-6 mb-3">ANNOUNCEMENTS</h2>
-        <div className="rounded-3xl p-5 shadow-lg text-white"
+        <button onClick={() => setShowAnnouncements(true)}
+             className="w-full text-left rounded-3xl p-5 shadow-lg text-white active:scale-[0.99] transition"
              style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
           {announcements.map((a, i) => (
             <div key={i}>
@@ -88,7 +91,7 @@ export default function Home() {
             </div>
           ))}
           <p className="text-center font-semibold mt-3">--- More ---</p>
-        </div>
+        </button>
 
         {/* Quick Actions */}
         <div className="bg-white rounded-3xl p-5 shadow mt-6">
@@ -206,6 +209,8 @@ export default function Home() {
       </div>
 
       <BottomNav active="home" />
+
+      {showAnnouncements && <AnnouncementsModal onClose={() => setShowAnnouncements(false)} />}
     </div>
   );
 }
