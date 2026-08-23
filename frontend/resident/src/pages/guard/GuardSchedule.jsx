@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import GuardBottomNav from '../../components/GuardBottomNav';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const TABS = ['SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
@@ -26,42 +27,59 @@ const SINGLE_ENTRIES = [
   { start: '8:45 PM', end: '10:23 PM',name: 'Joeffrey Lannister',resident: RESIDENT, address: ADDRESS, purpose: 'N/A',               status: 'DEPARTED' },
 ];
 
+// BATCH — expected pa (hindi pa dumarating), kaya names lang + VERIFY ENTRY/EXIT
 const BATCH_GROUPS = [
   {
+    kind: 'batch',
     id: 'BTC 260602-1001',
     resident: RESIDENT,
     address: ADDRESS,
     purpose: 'Birthday celebration',
     active: 0, expected: 6, departed: 0,
     visitors: [
-      { name: 'Tony Hawk',       start: '-----', status: 'EXPECTED' },
-      { name: 'Madeleine Mina',  start: '-----', status: 'EXPECTED' },
-      { name: 'Angel Libunao',   start: '-----', status: 'EXPECTED' },
-      { name: 'Love Licuanan',   start: '-----', status: 'EXPECTED' },
-      { name: 'Jericho Gonzales',start: '-----', status: 'EXPECTED' },
-      { name: 'Jefferson Moong', start: '-----', status: 'EXPECTED' },
+      { name: 'Tony Hawk',        start: '-----', status: 'EXPECTED' },
+      { name: 'Madeleine Mina',   start: '-----', status: 'EXPECTED' },
+      { name: 'Angel Libunao',    start: '-----', status: 'EXPECTED' },
+      { name: 'Love Licuanan',    start: '-----', status: 'EXPECTED' },
+      { name: 'Jericho Gonzales', start: '-----', status: 'EXPECTED' },
+      { name: 'Jefferson Moong',  start: '-----', status: 'EXPECTED' },
     ],
   },
 ];
 
+// LINKED — single visitors na sabay dumating (same arrival time), active na
 const LINKED_GROUPS = [
   {
+    kind: 'linked',
     id: 'LNK 260602-2001',
     resident: 'Marina Lewis',
     address: '34 Cancer St.',
-    purpose: '',
-    active: 2, expected: 1, departed: 0,
+    active: 3, expected: 0, departed: 0,
     visitors: [
-      { name: 'Ethan Reyes',  start: '3:15 PM', status: 'ACTIVE'   },
-      { name: 'Clara Mendoza',start: '3:15 PM', status: 'ACTIVE'   },
-      { name: 'Noah Santos',  start: '3:15 PM', status: 'EXPECTED' },
+      { name: 'Jon Snow',           start: '10:14 AM', end: '-----', type: 'Visitor', purpose: 'Board night', status: 'ACTIVE' },
+      { name: 'Rhaenyra Targaryen', start: '10:14 AM', end: '-----', type: 'Visitor', purpose: 'Board night', status: 'ACTIVE' },
+      { name: 'Theon Greyjoy',      start: '10:14 AM', end: '-----', type: 'Visitor', purpose: 'Board night', status: 'ACTIVE' },
     ],
   },
 ];
 
 const DELIVERY_ENTRIES = [
-  { start: '6:00 PM', end: '6:30 PM', name: 'Lazada Rider',  resident: RESIDENT, address: ADDRESS, purpose: 'Order PH268358', status: 'DEPARTED' },
-  { start: '-----',   end: '',        name: 'Shopee Express',resident: RESIDENT, address: ADDRESS, purpose: 'Order SP991024', status: 'EXPECTED' },
+  {
+    start: '-----', end: '',
+    dlvId: '',
+    orderId: 'PH 268358905823K',
+    rider: 'N/A',
+    resident: RESIDENT, address: ADDRESS,
+    status: 'EXPECTED',
+  },
+  {
+    start: '6:00 PM', end: '6:30 PM',
+    dlvId: 'DLV 260602-3001',
+    orderId: 'PH 88392038572',
+    rider: 'Delivery Rider',
+    resident: RESIDENT, address: ADDRESS,
+    status: 'DEPARTED',
+  },
 ];
 
 // Summary stats (community-wide — hardcoded muna para tumugma sa design)
@@ -75,7 +93,7 @@ export default function GuardSchedule() {
   const [tab, setTab] = useState('SINGLE');
   const [sortOpen, setSortOpen] = useState(false);
   const [sortBy, setSortBy] = useState('Default');
-  const [detail, setDetail] = useState(null); // batch/linked group na binuksan
+  const [detail, setDetail] = useState(null);
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
 
@@ -97,7 +115,6 @@ export default function GuardSchedule() {
 
   const matchSearch = (name) => name.toLowerCase().includes(search.toLowerCase());
 
-  // Sorted single/delivery lists
   const sortList = (list) => {
     if (sortBy === 'Name (A–Z)') return [...list].sort((a, b) => a.name.localeCompare(b.name));
     if (sortBy === 'Status') return [...list].sort((a, b) => a.status.localeCompare(b.status));
@@ -105,7 +122,9 @@ export default function GuardSchedule() {
   };
 
   const singles = sortList(SINGLE_ENTRIES.filter((e) => matchSearch(e.name)));
-  const deliveries = sortList(DELIVERY_ENTRIES.filter((e) => matchSearch(e.name)));
+  const deliveries = DELIVERY_ENTRIES.filter((e) =>
+    matchSearch(e.rider) || matchSearch(e.orderId) || matchSearch(e.dlvId || '')
+  );
   const batches = BATCH_GROUPS.filter((g) => matchSearch(g.id) || g.visitors.some((v) => matchSearch(v.name)));
   const linked = LINKED_GROUPS.filter((g) => matchSearch(g.id) || g.visitors.some((v) => matchSearch(v.name)));
 
@@ -212,80 +231,45 @@ export default function GuardSchedule() {
 
         {/* ── LIST AREA ── */}
         <div className="mt-4">
-          {/* SINGLE */}
           {tab === 'SINGLE' && (
             <div className="bg-white rounded-3xl p-4 shadow">
-              {singles.length === 0 ? (
-                <EmptyState />
-              ) : (
-                singles.map((e, i) => <SingleRow key={i} e={e} />)
-              )}
+              {singles.length === 0 ? <EmptyState /> : singles.map((e, i) => <SingleRow key={i} e={e} />)}
               <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
             </div>
           )}
 
-          {/* DELIVERY */}
           {tab === 'DELIVERY' && (
             <div className="bg-white rounded-3xl p-4 shadow">
-              {deliveries.length === 0 ? (
-                <EmptyState />
-              ) : (
-                deliveries.map((e, i) => <SingleRow key={i} e={e} />)
-              )}
+              {deliveries.length === 0 ? <EmptyState /> : deliveries.map((e, i) => <DeliveryRow key={i} e={e} />)}
               <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
             </div>
           )}
 
-          {/* BATCH */}
           {tab === 'BATCH' && (
             <div className="bg-white rounded-3xl p-4 shadow">
-              {batches.length === 0 ? (
-                <EmptyState />
-              ) : (
-                batches.map((g) => (
-                  <GroupCard key={g.id} g={g} label="Visitors" onOpen={() => setDetail({ ...g, kind: 'batch' })} />
-                ))
-              )}
+              {batches.length === 0 ? <EmptyState /> : batches.map((g) => (
+                <GroupCard key={g.id} g={g} label="Visitors" onOpen={() => setDetail(g)} />
+              ))}
               <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
             </div>
           )}
 
-          {/* LINKED */}
           {tab === 'LINKED' && (
             <div className="bg-white rounded-3xl p-4 shadow">
-              {linked.length === 0 ? (
-                <EmptyState />
-              ) : (
-                linked.map((g) => (
-                  <GroupCard key={g.id} g={g} label="Linked" onOpen={() => setDetail({ ...g, kind: 'linked' })} />
-                ))
-              )}
+              {linked.length === 0 ? <EmptyState /> : linked.map((g) => (
+                <GroupCard key={g.id} g={g} label="Linked" onOpen={() => setDetail(g)} />
+              ))}
               <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Detail modal (batch / linked) */}
+      {/* Detail modal */}
       {detail && <DetailModal group={detail} onClose={() => setDetail(null)} />}
 
       {/* Bottom nav (guard) */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white shadow-[0_-2px_12px_rgba(0,0,0,0.08)] flex items-center justify-around py-2 pb-4 z-40">
-        <button onClick={() => navigate('/guard-home')} className="flex flex-col items-center px-3">
-          <span className="text-2xl text-gray-400">🏠</span>
-        </button>
-        <button onClick={() => navigate('/guard-schedule')} className="flex flex-col items-center px-3">
-          <span className="text-2xl" style={{ color: '#0F6E6E' }}>📅</span>
-          <span className="text-[10px] font-semibold" style={{ color: '#0F6E6E' }}>Schedule</span>
-        </button>
-        <button onClick={() => alert('Verify / Scan')} className="w-14 h-14 rounded-full bg-ink text-white text-2xl flex items-center justify-center shadow-lg -mt-4">🔓</button>
-        <button onClick={() => alert('Logs')} className="flex flex-col items-center px-3">
-          <span className="text-2xl text-gray-400">📋</span>
-        </button>
-        <button onClick={() => navigate('/guard-profile')} className="flex flex-col items-center px-3">
-          <span className="text-2xl text-gray-400">👤</span>
-        </button>
-      </nav>
+      <GuardBottomNav active="schedule" />
     </div>
   );
 }
@@ -312,6 +296,43 @@ function SingleRow({ e }) {
   );
 }
 
+// ── Delivery row ──
+function DeliveryRow({ e }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <div className="text-xs font-bold text-ink text-center w-16 shrink-0 leading-tight">
+        {e.start}
+        {e.end && <><br />to<br />{e.end}</>}
+      </div>
+      <div className="flex-1 border border-gray-200 rounded-2xl p-3 shadow-sm flex items-center justify-between gap-2">
+        <div>
+          {e.dlvId
+            ? <p className="font-bold text-ink text-sm">{e.dlvId}</p>
+            : <p className="font-bold text-ink text-sm">-</p>}
+          <p className="text-xs text-ink/60">Order ID: {e.orderId}</p>
+          <p className="text-xs text-ink/60">Rider Name: {e.rider}</p>
+          <p className="text-xs text-ink/60">Resident Name: {e.resident}</p>
+          <p className="text-xs text-ink/60">Address: {e.address}</p>
+        </div>
+        <span className="text-[9px] font-bold px-3 py-1 rounded-full whitespace-nowrap" style={badgeBg[e.status]}>
+          {e.status}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Group summary badges (batch = 3, linked = Active/Departed) ──
+function GroupBadges({ g }) {
+  return (
+    <div className="flex gap-1 mt-2 flex-wrap">
+      <MiniBadge n={g.active} label="Active" color="#B4E4BE" />
+      {g.kind === 'batch' && <MiniBadge n={g.expected} label="Expected" color="#F1D88A" />}
+      <MiniBadge n={g.departed} label="Departed" color="#F3C9C9" />
+    </div>
+  );
+}
+
 // ── Batch / Linked summary card ──
 function GroupCard({ g, label, onOpen }) {
   return (
@@ -326,13 +347,9 @@ function GroupCard({ g, label, onOpen }) {
         <p className="text-xs text-ink/70"><span className="font-bold">Resident:</span> {g.resident}</p>
         {g.purpose && <p className="text-xs text-ink/70"><span className="font-bold">Purpose:</span> {g.purpose}</p>}
         <p className="text-xs text-ink/70"><span className="font-bold">Address:</span> {g.address}</p>
-        <div className="flex gap-1 mt-2 flex-wrap">
-          <MiniBadge n={g.active} label="Active" color="#B4E4BE" />
-          <MiniBadge n={g.expected} label="Expected" color="#F1D88A" />
-          <MiniBadge n={g.departed} label="Departed" color="#F3C9C9" />
-        </div>
+        <GroupBadges g={g} />
       </div>
-      <div className="w-9 h-9 rounded-xl bg-ink text-white flex items-center justify-center shrink-0 self-end">📋</div>
+      <div className="w-9 h-9 rounded-xl bg-ink text-white flex items-center justify-center shrink-0 self-end">✎</div>
     </button>
   );
 }
@@ -347,6 +364,10 @@ function MiniBadge({ n, label, color }) {
 
 // ── Detail modal (batch / linked) ──
 function DetailModal({ group, onClose }) {
+  const isLinked = group.kind === 'linked';
+  const anyActive = group.visitors.some((v) => v.status === 'ACTIVE');
+  const anyExpected = group.visitors.some((v) => v.status === 'EXPECTED');
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-5" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-sm max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
@@ -358,47 +379,66 @@ function DetailModal({ group, onClose }) {
           <div className="flex flex-col items-center shrink-0">
             <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center text-lg">👥</div>
             <p className="text-lg font-extrabold text-ink mt-1 leading-none">{group.visitors.length}</p>
-            <p className="text-[10px] text-ink/60">{group.kind === 'linked' ? 'Linked' : 'Visitors'}</p>
+            <p className="text-[10px] text-ink/60">{isLinked ? 'Linked' : 'Visitors'}</p>
           </div>
           <div className="flex-1">
             <p className="text-xs text-ink/70"><span className="font-bold">Resident:</span> {group.resident}</p>
             {group.purpose && <p className="text-xs text-ink/70"><span className="font-bold">Purpose:</span> {group.purpose}</p>}
             <p className="text-xs text-ink/70"><span className="font-bold">Address:</span> {group.address}</p>
-            <div className="flex gap-1 mt-2 flex-wrap">
-              <MiniBadge n={group.active} label="Active" color="#B4E4BE" />
-              <MiniBadge n={group.expected} label="Expected" color="#F1D88A" />
-              <MiniBadge n={group.departed} label="Departed" color="#F3C9C9" />
-            </div>
+            <GroupBadges g={group} />
           </div>
         </div>
 
-        <h3 className="text-center text-base font-extrabold text-ink my-3">
-          {group.kind === 'linked' ? 'LINKED VISITORS' : 'EXPECTED VISITORS'}
+        <hr className="border-gray-200 mb-3" />
+        <h3 className="text-center text-base font-extrabold text-ink mb-3">
+          {isLinked ? 'LINKED VISITORS' : 'EXPECTED VISITORS'}
         </h3>
 
-        <div className="max-h-[35vh] overflow-y-auto">
+        <div className="max-h-[38vh] overflow-y-auto">
           {group.visitors.map((v, i) => (
-            <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-100">
-              <span className="text-xs font-bold text-ink w-14 shrink-0 text-center">{v.start || '-----'}</span>
-              <div className="flex-1 border border-gray-200 rounded-xl px-3 py-2 flex items-center justify-between">
-                <span className="text-sm text-ink">{v.name}</span>
-                {v.status && (
-                  <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={badgeBg[v.status]}>{v.status}</span>
-                )}
+            isLinked ? (
+              // LINKED row — full details (time, type, purpose)
+              <div key={i} className="flex items-center gap-3 mb-3">
+                <div className="text-xs font-bold text-ink text-center w-14 shrink-0 leading-tight">
+                  {v.start}<br />to<br />{v.end || '-----'}
+                </div>
+                <div className="flex-1 border border-gray-200 rounded-xl p-3">
+                  <p className="font-bold text-ink text-sm">{v.name}</p>
+                  <p className="text-xs text-ink/60">{v.type || 'Visitor'}</p>
+                  <p className="text-xs text-ink/60">Purpose: {v.purpose || 'N/A'}</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              // BATCH row — name only
+              <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-100">
+                <span className="text-xs font-bold text-ink w-14 shrink-0 text-center">{v.start || '-----'}</span>
+                <div className="flex-1 border border-gray-200 rounded-xl px-3 py-2">
+                  <span className="text-sm text-ink">{v.name}</span>
+                </div>
+              </div>
+            )
           ))}
         </div>
 
+        {/* Buttons — linked (active) = VERIFY EXIT only; batch = both */}
         <div className="flex gap-3 mt-5">
-          <button onClick={() => alert('Verify Exit')}
-                  className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">
-            VERIFY EXIT
-          </button>
-          <button onClick={() => alert('Verify Entry')}
-                  className="flex-1 py-3 rounded-full text-white font-bold text-sm" style={{ backgroundColor: '#112D31' }}>
-            VERIFY ENTRY
-          </button>
+          {isLinked ? (
+            <button onClick={() => alert('Verify Exit')}
+                    className="flex-1 py-3 rounded-full text-white font-bold text-sm" style={{ backgroundColor: '#112D31' }}>
+              VERIFY EXIT
+            </button>
+          ) : (
+            <>
+              <button onClick={() => alert('Verify Exit')}
+                      className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">
+                VERIFY EXIT
+              </button>
+              <button onClick={() => alert('Verify Entry')}
+                      className="flex-1 py-3 rounded-full text-white font-bold text-sm" style={{ backgroundColor: '#112D31' }}>
+                VERIFY ENTRY
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

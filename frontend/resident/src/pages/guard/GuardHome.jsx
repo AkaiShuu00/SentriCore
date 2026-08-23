@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// import GuardBottomNav from '../../components/GuardBottomNav'; // gawin natin ang guard bottom nav
+import GuardBottomNav from '../../components/GuardBottomNav';
 
 export default function GuardHome() {
   const navigate = useNavigate();
@@ -202,25 +202,8 @@ export default function GuardHome() {
         </div>
       </div>
 
-      {/* Bottom nav (guard) — center = Verify/Scan */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white shadow-[0_-2px_12px_rgba(0,0,0,0.08)] flex items-center justify-around py-2 pb-4 z-40">
-        <button onClick={() => navigate('/guard-home')} className="flex flex-col items-center px-3">
-          <span className="text-2xl" style={{ color: '#0F6E6E' }}>🏠</span>
-          <span className="text-[10px] font-semibold" style={{ color: '#0F6E6E' }}>Home</span>
-        </button>
-        <button onClick={() => navigate('/guard-schedule')} className="flex flex-col items-center px-3">
-          <span className="text-2xl text-gray-400">📅</span>
-        </button>
-        <button onClick={() => alert('Verify / Scan')} className="w-14 h-14 rounded-full bg-ink text-white text-2xl flex items-center justify-center shadow-lg -mt-4">
-          🔓
-        </button>
-        <button onClick={() => alert('Logs')} className="flex flex-col items-center px-3">
-          <span className="text-2xl text-gray-400">📋</span>
-        </button>
-        <button onClick={() => navigate('/guard-profile')} className="flex flex-col items-center px-3">
-          <span className="text-2xl text-gray-400">👤</span>
-        </button>
-      </nav>
+      {/* Bottom nav (guard) */}
+      <GuardBottomNav active="home" />
     </div>
   );
 }
