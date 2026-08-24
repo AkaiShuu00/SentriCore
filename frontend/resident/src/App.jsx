@@ -27,6 +27,7 @@ import GuardHome from './pages/guard/GuardHome';
 import GuardSchedule from './pages/guard/GuardSchedule';
 import GuardProfile from './pages/guard/GuardProfile';
 import GuardLogs from './pages/guard/GuardLogs';
+import GuardVerify from './pages/guard/GuardVerify';
 
 function App() {
   return (
@@ -59,6 +60,7 @@ function App() {
         <Route path="/guard-schedule" element={<GuardSchedule />} /> 
         <Route path="/guard-profile" element={<GuardProfile />} />
         <Route path="/guard-logs" element={<GuardLogs />} />
+        <Route path="/guard-verify" element={<GuardVerify />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
