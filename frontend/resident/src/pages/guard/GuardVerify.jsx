@@ -6,6 +6,7 @@ const teal = '#0F6E6E';
 // Matched registration (sample — papalitan ng backend lookup after)
 const MATCHED = {
   passId: 'LNK 260602-2001',
+  category: 'SINGLE',
   regType: 'Single',
   resident: 'Marina Lewis',
   address: '34 Cancer St.',
@@ -24,8 +25,40 @@ const PREREG_POOL = [
   { name: 'Delia Samaco',       resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'Family gathering' },
 ];
 
+// Batch match (kapag personal visit na may sasakyan → tumugma sa batch registration)
+const MATCHED_BATCH = {
+  batchNo: '260602-1001',
+  category: 'BATCH',
+  passId: 'BTC 260602-1001-1',
+  regType: 'Batch',
+  resident: 'Reina Magpantay',
+  address: '207 Gemini St. Block A',
+  visitor: 'Tony Hawk',
+  purpose: 'Birthday celebration',
+  expectedDate: '06/02/2026',
+  subtitle: 'Batch 260602-1001 | Arrival 1',
+};
+
+// Ibang miyembro ng parehong batch (para sa Register Batch Visitors)
+const BATCH_POOL = [
+  { name: 'Madeleine Mina',   resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
+  { name: 'Angel Libunao',    resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
+  { name: 'Love Licuanan',    resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
+  { name: 'Jericho Gonzales', resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
+  { name: 'Jefferson Moong',  resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
+];
+
 // Scanned name mula OCR (placeholder muna)
 const SCANNED_NAME = 'Jon Snow';
+const DRIVER_NAME = 'Angelo Roman'; // scanned driver's ID (placeholder)
+
+// Active visitors sa loob ngayon (para sa pickup)
+const ACTIVE_VISITORS = [
+  { name: 'Jon Snow',           resident: 'Marina Lewis',    address: '34 Cancer St.',           purpose: 'Board night' },
+  { name: 'Rhaenyra Targaryen', resident: 'Marina Lewis',    address: '34 Cancer St.',           purpose: 'Board night' },
+  { name: 'Theon Greyjoy',      resident: 'Marina Lewis',    address: '34 Cancer St.',           purpose: 'Board night' },
+  { name: 'Joshua Mina',        resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'Visiting a friend' },
+];
 
 // Resident directory (para sa Contact Resident)
 const RESIDENT_LIST = [
@@ -86,7 +119,15 @@ export default function GuardVerify() {
   const [showCallResult, setShowCallResult] = useState(false);
   const [residentSearch, setResidentSearch] = useState('');
   const [blockFilter, setBlockFilter] = useState('All');
+  const [pickupTarget, setPickupTarget] = useState('');       // RESIDENT | VISITOR
+  const [pickedUpVisitor, setPickedUpVisitor] = useState(null);
+  const [activeSearch, setActiveSearch] = useState('');
   const fileRef = useRef(null);
+
+  const isPickup = drivePurpose === 'PICKUP';
+  // Demo trigger: personal visit na may sasakyan → batch match
+  const isBatchMatch = drivePurpose === 'PERSONAL VISIT';
+  const matchData = isBatchMatch ? MATCHED_BATCH : MATCHED;
 
   // Address filter options (blocks na nakuha mula sa data)
   const blocks = ['All', ...Array.from(new Set(
@@ -107,6 +148,29 @@ export default function GuardVerify() {
     setContactedResident(r);
     window.location.href = `tel:${r.contact.replace(/\s/g, '')}`; // bubukas ang phone app
     setShowCallResult(true);
+  };
+
+  // I-save ang na-approve na entry sa localStorage (para mag-reflect sa GuardSchedule)
+  const saveArrival = () => {
+    const now = new Date();
+    const timeIn = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const visitors = [entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].filter(Boolean);
+    const arrival = {
+      arrivalId: Date.now(),
+      category: entryInfo.category || 'SINGLE',
+      passId: entryInfo.passId,
+      batchNo: entryInfo.batchNo || null,
+      resident: entryInfo.resident || '',
+      address: entryInfo.address || '',
+      purpose: entryInfo.purpose || '',
+      expectedDate: entryInfo.expectedDate || '',
+      driver: entryInfo.driver || null,
+      visitors,
+      timeIn,
+      status: 'ACTIVE',
+    };
+    const existing = JSON.parse(localStorage.getItem('sentricore_arrivals') || '[]');
+    localStorage.setItem('sentricore_arrivals', JSON.stringify([arrival, ...existing]));
   };
 
   const toggleCompanion = (v) => {
@@ -194,6 +258,23 @@ export default function GuardVerify() {
                   </button>
                 ))}
               </div>
+
+              {/* Kapag PICKUP — sino ang susunduin? */}
+              {drivePurpose === 'PICKUP' && (
+                <>
+                  <p className="text-center text-xs text-ink/70 mb-2 border-t border-gray-100 pt-4">Who is being picked up?</p>
+                  <div className="flex gap-2 justify-center mb-5">
+                    {['RESIDENT', 'VISITOR'].map((t) => (
+                      <button key={t} onClick={() => setPickupTarget(t)}
+                              className={`px-5 py-2 rounded-full text-[11px] font-bold border ${pickupTarget === t ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
+                              style={pickupTarget === t ? { backgroundColor: '#CDE7DE' } : {}}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
               <p className="text-center text-xs text-ink/70 mb-2">Enter plate number of the vehicle</p>
               <input value={plate} onChange={(e) => setPlate(e.target.value)}
                      placeholder="DTF 102938573"
@@ -201,7 +282,9 @@ export default function GuardVerify() {
               <div className="flex justify-center">
                 <button onClick={() => {
                           if (!drivePurpose) { alert("Please select the driver's purpose."); return; }
+                          if (drivePurpose === 'PICKUP' && !pickupTarget) { alert('Please select who is being picked up.'); return; }
                           if (!plate.trim()) { alert('Please enter the plate number.'); return; }
+                          if (drivePurpose === 'PICKUP' && pickupTarget === 'VISITOR') { setStep('activeVisitors'); return; }
                           setStep('scan');
                         }}
                         className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
@@ -233,7 +316,7 @@ export default function GuardVerify() {
               <IDCardPlaceholder />
             </div>
             <p className="text-center text-xs text-ink mb-1">
-              PLACE <span className="font-bold">VISITOR'S IDENTIFICATION CARD</span> INSIDE THE BOX
+              PLACE <span className="font-bold">{isPickup ? "DRIVER'S" : "VISITOR'S"} IDENTIFICATION CARD</span> INSIDE THE BOX
             </p>
             <p className="text-center text-xs text-ink/50 mb-5">Ensure the ID is clear and readable</p>
             <div className="flex flex-col items-center gap-2">
@@ -274,51 +357,112 @@ export default function GuardVerify() {
 
         {/* VISITOR MATCHED */}
         {step === 'matched' && (
-          <div>
-            <div className="bg-white rounded-2xl p-3 shadow mb-4">
-              <IDCardPlaceholder name={MATCHED.visitor} />
-            </div>
+          isPickup ? (
+            /* ── DRIVER INFORMATION (pickup) ── */
+            <div>
+              <div className="bg-white rounded-2xl p-3 shadow mb-4">
+                <IDCardPlaceholder name={DRIVER_NAME} />
+              </div>
 
-            <h2 className="text-xl font-extrabold text-ink text-center mb-4">VISITOR MATCHED</h2>
+              <h2 className="text-xl font-extrabold text-ink text-center mb-4">DRIVER INFORMATION</h2>
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
-              {[
-                ['Registration Type', MATCHED.regType],
-                ['Resident Name', MATCHED.resident],
-                ['Address', MATCHED.address],
-                ['Visitor Name', MATCHED.visitor],
-                ['Purpose', MATCHED.purpose],
-                ['Expected Date', MATCHED.expectedDate],
-              ].map(([label, val]) => (
-                <div key={label} className="px-4 py-3">
-                  <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
+                {[
+                  ['Registration Type', 'Single'],
+                  ...(pickupTarget === 'VISITOR' ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]] : []),
+                  ['Address', pickedUpVisitor?.address || MATCHED.address],
+                  ['Driver Name', DRIVER_NAME],
+                  ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || SCANNED_NAME]] : []),
+                  ['Purpose', pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor'],
+                ].map(([label, val]) => (
+                  <div key={label} className="px-4 py-3">
+                    <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex gap-2 w-full">
+                  <button onClick={() => setStep('manualSearch')}
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
+                    MANUAL SEARCH
+                  </button>
+                  <button onClick={() => {
+                            setEntryInfo({
+                              passId: 'DRV-1001',
+                              category: 'DELIVERY',
+                              regType: 'Single',
+                              resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : '',
+                              address: pickedUpVisitor?.address || MATCHED.address,
+                              driver: DRIVER_NAME,
+                              visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || SCANNED_NAME) : '',
+                              purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
+                              expectedDate: '',
+                              title: 'DRIVER ENTRY CONFIRMED',
+                            });
+                            setSelectedCompanions([]);
+                            setStep('confirmed');
+                          }}
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                    CONFIRM MATCH
+                  </button>
                 </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex gap-2 w-full">
-                <button onClick={() => setStep('manualSearch')}
-                        className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
-                  MANUAL SEARCH
-                </button>
-                <button onClick={() => setShowAccompany(true)}
-                        className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                  CONFIRM MATCH
+                <button onClick={() => setStep('scan')}
+                        className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                  RETRY
                 </button>
               </div>
-              <button onClick={() => setStep('scan')}
-                      className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
-                RETRY
-              </button>
             </div>
-          </div>
+          ) : (
+            /* ── VISITOR MATCHED (regular) ── */
+            <div>
+              <div className="bg-white rounded-2xl p-3 shadow mb-4">
+                <IDCardPlaceholder name={matchData.visitor} />
+              </div>
+
+              <h2 className="text-xl font-extrabold text-ink text-center mb-4">VISITOR MATCHED</h2>
+
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
+                {[
+                  ['Registration Type', matchData.regType],
+                  ['Resident Name', matchData.resident],
+                  ['Address', matchData.address],
+                  ['Visitor Name', matchData.visitor],
+                  ['Purpose', matchData.purpose],
+                  ['Expected Date', matchData.expectedDate],
+                ].map(([label, val]) => (
+                  <div key={label} className="px-4 py-3">
+                    <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex gap-2 w-full">
+                  <button onClick={() => setStep('manualSearch')}
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
+                    MANUAL SEARCH
+                  </button>
+                  <button onClick={() => { setEntryInfo(matchData); setSelectedCompanions([]); setShowAccompany(true); }}
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                    CONFIRM MATCH
+                  </button>
+                </div>
+                <button onClick={() => setStep('scan')}
+                        className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                  RETRY
+                </button>
+              </div>
+            </div>
+          )
         )}
 
-        {/* REGISTER ADDITIONAL VISITORS (YES path) */}
+        {/* REGISTER ADDITIONAL / BATCH VISITORS (YES path) */}
         {step === 'additional' && (
           <div>
-            <h2 className="text-2xl font-extrabold text-ink text-center mb-4">REGISTER ADDITIONAL VISITORS</h2>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-4">
+              {isBatchMatch ? 'REGISTER BATCH VISITORS' : 'REGISTER ADDITIONAL VISITORS'}
+            </h2>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
               <span className="text-ink/40">🔍</span>
               <input value={addSearch} onChange={(e) => setAddSearch(e.target.value)}
@@ -327,9 +471,13 @@ export default function GuardVerify() {
             </div>
 
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
-              <p className="text-center text-sm font-semibold text-ink/70 mb-3">EXPECTED PRE-REGISTERED VISITORS AS OF TODAY</p>
+              <p className="text-center text-sm font-semibold text-ink/70 mb-3">
+                {isBatchMatch
+                  ? `EXPECTED BATCH ${MATCHED_BATCH.batchNo} VISITORS AS OF TODAY`
+                  : 'EXPECTED PRE-REGISTERED VISITORS AS OF TODAY'}
+              </p>
               <div className="max-h-[45vh] overflow-y-auto space-y-2">
-                {PREREG_POOL
+                {(isBatchMatch ? BATCH_POOL : PREREG_POOL)
                   .filter((v) => v.name.toLowerCase().includes(addSearch.toLowerCase()))
                   .map((v) => {
                     const selected = !!selectedCompanions.find((p) => p.name === v.name);
@@ -339,8 +487,8 @@ export default function GuardVerify() {
                               style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
                         <div>
                           <p className="font-bold text-ink text-sm">{v.name}</p>
-                          <p className="text-xs text-ink/60">{v.resident} | {v.address}</p>
-                          <p className="text-xs text-ink/60">Purpose: {v.purpose}</p>
+                          {!isBatchMatch && <p className="text-xs text-ink/60">{v.resident} | {v.address}</p>}
+                          {!isBatchMatch && <p className="text-xs text-ink/60">Purpose: {v.purpose}</p>}
                         </div>
                         <span className="w-4 h-4 rounded-full shrink-0"
                               style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
@@ -367,7 +515,66 @@ export default function GuardVerify() {
                       className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
                 ADD MANUAL REGISTRATION
               </button>
-              <button onClick={() => alert('Contact resident')}
+              <button onClick={() => setStep('residentList')}
+                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                CONTACT RESIDENT
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ACTIVE VISITORS — piliin kung sino ang susunduin (pickup) */}
+        {step === 'activeVisitors' && (
+          <div>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-4">ACTIVE VISITORS</h2>
+            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
+              <span className="text-ink/40">🔍</span>
+              <input value={activeSearch} onChange={(e) => setActiveSearch(e.target.value)}
+                     placeholder="Search visitor name"
+                     className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow mb-4">
+              <p className="text-center text-sm font-semibold text-ink/70 mb-3">ACTIVE VISITORS AS OF TODAY</p>
+              <div className="max-h-[42vh] overflow-y-auto space-y-2">
+                {ACTIVE_VISITORS
+                  .filter((v) => v.name.toLowerCase().includes(activeSearch.toLowerCase()))
+                  .map((v) => {
+                    const selected = pickedUpVisitor?.name === v.name;
+                    return (
+                      <button key={v.name} onClick={() => setPickedUpVisitor(v)}
+                              className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
+                              style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
+                        <div>
+                          <p className="font-bold text-ink text-sm">{v.name}</p>
+                          <p className="text-xs text-ink/60">{v.resident} | {v.address}</p>
+                          <p className="text-xs text-ink/60">Purpose: {v.purpose}</p>
+                        </div>
+                        <span className="w-4 h-4 rounded-full shrink-0"
+                              style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-center mb-6">
+              <button onClick={() => { setPickedUpVisitor(null); setStep('scan'); }}
+                      className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">
+                SKIP
+              </button>
+              <button onClick={() => {
+                        if (!pickedUpVisitor) { alert('Please select the visitor being picked up.'); return; }
+                        setStep('scan');
+                      }}
+                      className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                PROCEED
+              </button>
+            </div>
+
+            <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND VISITOR ON THE LIST?</p>
+            <div className="flex justify-center">
+              <button onClick={() => setStep('residentList')}
                       className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
                 CONTACT RESIDENT
               </button>
@@ -421,6 +628,7 @@ export default function GuardVerify() {
                         if (!manualSelected) { alert('Please select a visitor, or contact the resident.'); return; }
                         setEntryInfo({
                           passId: 'VST 260602-1001',
+                          category: 'SINGLE',
                           regType: 'Single',
                           resident: manualSelected.resident,
                           address: manualSelected.address,
@@ -539,6 +747,7 @@ export default function GuardVerify() {
               <button onClick={() => {
                         setEntryInfo({
                           passId: 'UNL 260602-0001',
+                          category: 'SINGLE',
                           regType: 'Single',
                           resident: contactedResident?.name || '',
                           address: contactedResident?.address || '',
@@ -556,18 +765,25 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* VISITOR ENTRY CONFIRMED (main + accompanying) */}
+        {/* VISITOR / DRIVER ENTRY CONFIRMED */}
         {step === 'confirmed' && (
           <div>
-            <h2 className="text-2xl font-extrabold text-ink text-center mb-4">VISITOR ENTRY CONFIRMED</h2>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">{entryInfo.title || 'VISITOR ENTRY CONFIRMED'}</h2>
+            {entryInfo.subtitle && (
+              <p className="text-center text-xs text-ink/60 mb-4">{entryInfo.subtitle}</p>
+            )}
+            {!entryInfo.subtitle && <div className="mb-4" />}
 
             <div className="space-y-4 max-h-[55vh] overflow-y-auto mb-4">
-              {[entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].map((vname, i) => (
+              {[entryInfo.visitor, ...selectedCompanions.map((c) => c.name)]
+                .filter((v, i) => i === 0 || v) // panatilihin ang unang card kahit walang visitor name (resident pickup)
+                .map((vname, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
                   {[
                     ['Pass ID', entryInfo.passId],
                     ['Resident Name', entryInfo.resident],
                     ['Address', entryInfo.address],
+                    ...(entryInfo.driver ? [['Driver Name', entryInfo.driver]] : []),
                     ['Visitor Name', vname],
                     ['Purpose', entryInfo.purpose],
                     ['Expected Date', entryInfo.expectedDate],
@@ -591,6 +807,7 @@ export default function GuardVerify() {
                 BACK
               </button>
               <button onClick={() => {
+                        saveArrival();
                         const total = 1 + selectedCompanions.length;
                         alert(`Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅`);
                         navigate('/guard-home');
