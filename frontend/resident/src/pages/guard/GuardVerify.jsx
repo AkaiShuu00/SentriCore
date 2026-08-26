@@ -50,7 +50,12 @@ const BATCH_POOL = [
 
 // Scanned name mula OCR (placeholder muna)
 const SCANNED_NAME = 'Jon Snow';
-const DRIVER_NAME = 'Angelo Roman'; // scanned driver's ID (placeholder)
+const DRIVER_NAME = 'Angelie Roman'; // scanned driver's ID (placeholder)
+
+// Residents na may inaasahang delivery ngayon (para sa delivery flow)
+const DELIVERY_RESIDENTS = [
+  { name: 'Reina Magpantay', address: '207 Gemini St. Block A', orderId: 'PH 268358905823K' },
+];
 
 // Active visitors sa loob ngayon (para sa pickup)
 const ACTIVE_VISITORS = [
@@ -122,9 +127,12 @@ export default function GuardVerify() {
   const [pickupTarget, setPickupTarget] = useState('');       // RESIDENT | VISITOR
   const [pickedUpVisitor, setPickedUpVisitor] = useState(null);
   const [activeSearch, setActiveSearch] = useState('');
+  const [deliveryResident, setDeliveryResident] = useState(null);
   const fileRef = useRef(null);
 
   const isPickup = drivePurpose === 'PICKUP';
+  const isDelivery = entryType === 'DELIVERY';
+  const isDriverFlow = isPickup || isDelivery; // parehong nag-scan ng DRIVER'S ID
   // Demo trigger: personal visit na may sasakyan → batch match
   const isBatchMatch = drivePurpose === 'PERSONAL VISIT';
   const matchData = isBatchMatch ? MATCHED_BATCH : MATCHED;
@@ -231,10 +239,10 @@ export default function GuardVerify() {
               {entryType && (
                 <>
                   <p className="text-center italic text-ink/70 mt-5 mb-3 border-t border-gray-100 pt-4">
-                    {entryType === 'VISITOR' ? 'visitor arrived with vehicle?' : 'delivery arrived with vehicle?'}
+                    {entryType === 'VISITOR' ? 'visitor arrived with vehicle?' : 'driver arrived with vehicle?'}
                   </p>
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => setStep('scan')}
+                    <button onClick={() => setStep(entryType === 'DELIVERY' ? 'deliveryResidents' : 'scan')}
                             className="px-6 py-2 rounded-full border border-gray-300 text-sm font-bold text-ink">NO</button>
                     <button onClick={() => setStep('vehicle')}
                             className="px-6 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: teal }}>YES</button>
@@ -246,51 +254,73 @@ export default function GuardVerify() {
 
           {step === 'vehicle' && (
             <>
-              <h2 className="text-base font-bold text-ink text-center mt-2 mb-4">
-                What is the driver's purpose of visit?
-              </h2>
-              <div className="flex gap-2 justify-center flex-wrap mb-5">
-                {['PERSONAL VISIT', 'PICKUP', 'DROP-OFF'].map((p) => (
-                  <button key={p} onClick={() => setDrivePurpose(p)}
-                          className={`px-3 py-2 rounded-full text-[11px] font-bold border ${drivePurpose === p ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
-                          style={drivePurpose === p ? { backgroundColor: '#CDE7DE' } : {}}>
-                    {p}
-                  </button>
-                ))}
-              </div>
-
-              {/* Kapag PICKUP — sino ang susunduin? */}
-              {drivePurpose === 'PICKUP' && (
+              {isDelivery ? (
+                /* ── DELIVERY: plate number lang ── */
                 <>
-                  <p className="text-center text-xs text-ink/70 mb-2 border-t border-gray-100 pt-4">Who is being picked up?</p>
-                  <div className="flex gap-2 justify-center mb-5">
-                    {['RESIDENT', 'VISITOR'].map((t) => (
-                      <button key={t} onClick={() => setPickupTarget(t)}
-                              className={`px-5 py-2 rounded-full text-[11px] font-bold border ${pickupTarget === t ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
-                              style={pickupTarget === t ? { backgroundColor: '#CDE7DE' } : {}}>
-                        {t}
+                  <p className="text-center text-xs text-ink/70 mb-2 mt-2">Enter plate number of the vehicle</p>
+                  <input value={plate} onChange={(e) => setPlate(e.target.value)}
+                         placeholder="DTF 102938573"
+                         className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center mb-5 outline-none focus:border-teal-600" />
+                  <div className="flex justify-center">
+                    <button onClick={() => {
+                              if (!plate.trim()) { alert('Please enter the plate number.'); return; }
+                              setStep('deliveryResidents');
+                            }}
+                            className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                      PROCEED
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* ── VISITOR: purpose + (pickup) + plate ── */
+                <>
+                  <h2 className="text-base font-bold text-ink text-center mt-2 mb-4">
+                    What is the driver's purpose of visit?
+                  </h2>
+                  <div className="flex gap-2 justify-center flex-wrap mb-5">
+                    {['PERSONAL VISIT', 'PICKUP', 'DROP-OFF'].map((p) => (
+                      <button key={p} onClick={() => setDrivePurpose(p)}
+                              className={`px-3 py-2 rounded-full text-[11px] font-bold border ${drivePurpose === p ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
+                              style={drivePurpose === p ? { backgroundColor: '#CDE7DE' } : {}}>
+                        {p}
                       </button>
                     ))}
                   </div>
+
+                  {/* Kapag PICKUP — sino ang susunduin? */}
+                  {drivePurpose === 'PICKUP' && (
+                    <>
+                      <p className="text-center text-xs text-ink/70 mb-2 border-t border-gray-100 pt-4">Who is being picked up?</p>
+                      <div className="flex gap-2 justify-center mb-5">
+                        {['RESIDENT', 'VISITOR'].map((t) => (
+                          <button key={t} onClick={() => setPickupTarget(t)}
+                                  className={`px-5 py-2 rounded-full text-[11px] font-bold border ${pickupTarget === t ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
+                                  style={pickupTarget === t ? { backgroundColor: '#CDE7DE' } : {}}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  <p className="text-center text-xs text-ink/70 mb-2">Enter plate number of the vehicle</p>
+                  <input value={plate} onChange={(e) => setPlate(e.target.value)}
+                         placeholder="DTF 102938573"
+                         className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center mb-5 outline-none focus:border-teal-600" />
+                  <div className="flex justify-center">
+                    <button onClick={() => {
+                              if (!drivePurpose) { alert("Please select the driver's purpose."); return; }
+                              if (drivePurpose === 'PICKUP' && !pickupTarget) { alert('Please select who is being picked up.'); return; }
+                              if (!plate.trim()) { alert('Please enter the plate number.'); return; }
+                              if (drivePurpose === 'PICKUP' && pickupTarget === 'VISITOR') { setStep('activeVisitors'); return; }
+                              setStep('scan');
+                            }}
+                            className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                      PROCEED
+                    </button>
+                  </div>
                 </>
               )}
-
-              <p className="text-center text-xs text-ink/70 mb-2">Enter plate number of the vehicle</p>
-              <input value={plate} onChange={(e) => setPlate(e.target.value)}
-                     placeholder="DTF 102938573"
-                     className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center mb-5 outline-none focus:border-teal-600" />
-              <div className="flex justify-center">
-                <button onClick={() => {
-                          if (!drivePurpose) { alert("Please select the driver's purpose."); return; }
-                          if (drivePurpose === 'PICKUP' && !pickupTarget) { alert('Please select who is being picked up.'); return; }
-                          if (!plate.trim()) { alert('Please enter the plate number.'); return; }
-                          if (drivePurpose === 'PICKUP' && pickupTarget === 'VISITOR') { setStep('activeVisitors'); return; }
-                          setStep('scan');
-                        }}
-                        className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                  PROCEED
-                </button>
-              </div>
             </>
           )}
         </div>
@@ -316,7 +346,7 @@ export default function GuardVerify() {
               <IDCardPlaceholder />
             </div>
             <p className="text-center text-xs text-ink mb-1">
-              PLACE <span className="font-bold">{isPickup ? "DRIVER'S" : "VISITOR'S"} IDENTIFICATION CARD</span> INSIDE THE BOX
+              PLACE <span className="font-bold">{isDriverFlow ? "DRIVER'S" : "VISITOR'S"} IDENTIFICATION CARD</span> INSIDE THE BOX
             </p>
             <p className="text-center text-xs text-ink/50 mb-5">Ensure the ID is clear and readable</p>
             <div className="flex flex-col items-center gap-2">
@@ -357,8 +387,8 @@ export default function GuardVerify() {
 
         {/* VISITOR MATCHED */}
         {step === 'matched' && (
-          isPickup ? (
-            /* ── DRIVER INFORMATION (pickup) ── */
+          isDriverFlow ? (
+            /* ── DRIVER INFORMATION (pickup / delivery) ── */
             <div>
               <div className="bg-white rounded-2xl p-3 shadow mb-4">
                 <IDCardPlaceholder name={DRIVER_NAME} />
@@ -367,14 +397,22 @@ export default function GuardVerify() {
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">DRIVER INFORMATION</h2>
 
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
-                {[
-                  ['Registration Type', 'Single'],
-                  ...(pickupTarget === 'VISITOR' ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]] : []),
-                  ['Address', pickedUpVisitor?.address || MATCHED.address],
-                  ['Driver Name', DRIVER_NAME],
-                  ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || SCANNED_NAME]] : []),
-                  ['Purpose', pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor'],
-                ].map(([label, val]) => (
+                {(isDelivery
+                  ? [
+                      ['Registration Type', 'Single'],
+                      ['Resident Name', deliveryResident?.name || ''],
+                      ['Address', deliveryResident?.address || ''],
+                      ['Purpose', 'Delivery'],
+                    ]
+                  : [
+                      ['Registration Type', 'Single'],
+                      ...(pickupTarget === 'VISITOR' ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]] : []),
+                      ['Address', pickedUpVisitor?.address || MATCHED.address],
+                      ['Driver Name', DRIVER_NAME],
+                      ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || SCANNED_NAME]] : []),
+                      ['Purpose', pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor'],
+                    ]
+                ).map(([label, val]) => (
                   <div key={label} className="px-4 py-3">
                     <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
                   </div>
@@ -388,18 +426,31 @@ export default function GuardVerify() {
                     MANUAL SEARCH
                   </button>
                   <button onClick={() => {
-                            setEntryInfo({
-                              passId: 'DRV-1001',
-                              category: 'DELIVERY',
-                              regType: 'Single',
-                              resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : '',
-                              address: pickedUpVisitor?.address || MATCHED.address,
-                              driver: DRIVER_NAME,
-                              visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || SCANNED_NAME) : '',
-                              purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
-                              expectedDate: '',
-                              title: 'DRIVER ENTRY CONFIRMED',
-                            });
+                            setEntryInfo(isDelivery
+                              ? {
+                                  passId: 'DRV-1001',
+                                  category: 'DELIVERY',
+                                  regType: 'Single',
+                                  resident: deliveryResident?.name || '',
+                                  address: deliveryResident?.address || '',
+                                  driver: DRIVER_NAME,
+                                  visitor: '',
+                                  purpose: 'Delivery',
+                                  expectedDate: '',
+                                  title: 'DRIVER ENTRY CONFIRMED',
+                                }
+                              : {
+                                  passId: 'DRV-1001',
+                                  category: 'DELIVERY',
+                                  regType: 'Single',
+                                  resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : '',
+                                  address: pickedUpVisitor?.address || MATCHED.address,
+                                  driver: DRIVER_NAME,
+                                  visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || SCANNED_NAME) : '',
+                                  purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
+                                  expectedDate: '',
+                                  title: 'DRIVER ENTRY CONFIRMED',
+                                });
                             setSelectedCompanions([]);
                             setStep('confirmed');
                           }}
@@ -510,6 +561,69 @@ export default function GuardVerify() {
             </div>
 
             <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND VISITOR ON THE LIST?</p>
+            <div className="flex flex-col items-center gap-2">
+              <button onClick={() => alert('Add manual registration — iko-connect after')}
+                      className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                ADD MANUAL REGISTRATION
+              </button>
+              <button onClick={() => setStep('residentList')}
+                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                CONTACT RESIDENT
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* DELIVERY — residents na may inaasahang delivery ngayon */}
+        {step === 'deliveryResidents' && (
+          <div>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-4">RESIDENT LIST</h2>
+            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
+              <span className="text-ink/40">🔍</span>
+              <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
+                     placeholder="Search resident name"
+                     className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow mb-4">
+              <p className="text-sm font-semibold text-ink/70 mb-3">All residents expecting a delivery today</p>
+              <div className="max-h-[45vh] overflow-y-auto space-y-2">
+                {DELIVERY_RESIDENTS
+                  .filter((r) => r.name.toLowerCase().includes(residentSearch.toLowerCase()))
+                  .map((r) => {
+                    const selected = deliveryResident?.name === r.name;
+                    return (
+                      <button key={r.name} onClick={() => setDeliveryResident(r)}
+                              className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
+                              style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
+                        <div>
+                          <p className="font-bold text-ink text-sm">{r.name}</p>
+                          <p className="text-xs text-ink/60">Address: {r.address}</p>
+                          <p className="text-xs text-ink/60">Order ID: {r.orderId}</p>
+                        </div>
+                        <span className="w-4 h-4 rounded-full shrink-0"
+                              style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-center mb-6">
+              <button onClick={() => setStep('choose')}
+                      className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">
+                BACK
+              </button>
+              <button onClick={() => {
+                        if (!deliveryResident) { alert('Please select the resident expecting the delivery.'); return; }
+                        setStep('scan');
+                      }}
+                      className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                PROCEED
+              </button>
+            </div>
+
+            <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND RESIDENT ON THE LIST?</p>
             <div className="flex flex-col items-center gap-2">
               <button onClick={() => alert('Add manual registration — iko-connect after')}
                       className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
