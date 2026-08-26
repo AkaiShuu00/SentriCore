@@ -108,10 +108,10 @@ export default function GuardHome() {
         <div className="bg-white rounded-3xl p-5 shadow">
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
-              { icon: '🔓', label: 'Verify Entry', bg: 'bg-teal-100', action: () => alert('Verify Entry') },
+              { icon: '🔓', label: 'Verify Entry', bg: 'bg-teal-100', action: () => navigate('/guard-verify') },
               { icon: '📅', label: 'Schedule', bg: 'bg-blue-100', action: () => navigate('/guard-schedule') },
               { icon: '📞', label: 'Contact Resident', bg: 'bg-purple-100', action: () => alert('Contact Resident') },
-              { icon: '📤', label: 'Verify Exit', bg: 'bg-red-100', action: () => alert('Verify Exit') },
+              { icon: '📤', label: 'Verify Exit', bg: 'bg-red-100', action: () => navigate('/guard-verify?mode=exit') },
             ].map((q) => (
               <button key={q.label} onClick={q.action} className="flex flex-col items-center">
                 <div className={`w-14 h-14 rounded-2xl ${q.bg} flex items-center justify-center text-2xl mb-1`}>

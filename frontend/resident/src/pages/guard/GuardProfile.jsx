@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
 
 export default function GuardProfile() {
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [showAnnouncements, setShowAnnouncements] = useState(false);
 
@@ -105,7 +107,12 @@ export default function GuardProfile() {
             <p className="font-bold text-ink text-sm">End your shift when your turnover is complete.</p>
             <p className="text-xs text-ink/60">This will log your time-out and update your status</p>
           </div>
-          <button onClick={() => alert('End shift — iko-connect sa backend')}
+          <button onClick={() => {
+                    if (!window.confirm('End your shift and log out?')) return;
+                    localStorage.removeItem('sentricore_token');
+                    localStorage.removeItem('sentricore_user');
+                    navigate('/signin');
+                  }}
                   className="text-white font-bold text-xs px-4 py-2 rounded-full shrink-0" style={{ backgroundColor: '#C0392B' }}>
             END SHIFT
           </button>

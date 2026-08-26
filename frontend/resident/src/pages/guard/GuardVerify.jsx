@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const teal = '#0F6E6E';
 
@@ -106,7 +106,9 @@ function IDCardPlaceholder({ name }) {
 
 export default function GuardVerify() {
   const navigate = useNavigate();
-  const [step, setStep] = useState('choose'); // choose | vehicle | scan | reading | matched
+  const [searchParams] = useSearchParams();
+  const isExit = searchParams.get('mode') === 'exit';
+  const [step, setStep] = useState(isExit ? 'scan' : 'choose'); // exit: start sa scan
   const [entryType, setEntryType] = useState(null); // VISITOR | DELIVERY
   const [drivePurpose, setDrivePurpose] = useState('');
   const [plate, setPlate] = useState('');
@@ -126,6 +128,7 @@ export default function GuardVerify() {
   const [blockFilter, setBlockFilter] = useState('All');
   const [pickupTarget, setPickupTarget] = useState('');       // RESIDENT | VISITOR
   const [pickedUpVisitor, setPickedUpVisitor] = useState(null);
+  const [pickupResident, setPickupResident] = useState(null);
   const [activeSearch, setActiveSearch] = useState('');
   const [deliveryResident, setDeliveryResident] = useState(null);
   const fileRef = useRef(null);
@@ -136,6 +139,11 @@ export default function GuardVerify() {
   // Demo trigger: personal visit na may sasakyan → batch match
   const isBatchMatch = drivePurpose === 'PERSONAL VISIT';
   const matchData = isBatchMatch ? MATCHED_BATCH : MATCHED;
+
+  // Pool para sa accompanying step (exit → active; batch → batch pool; else → prereg)
+  const additionalPool = isExit
+    ? ACTIVE_VISITORS.filter((v) => v.name !== entryInfo?.visitor)
+    : isBatchMatch ? BATCH_POOL : PREREG_POOL;
 
   // Address filter options (blocks na nakuha mula sa data)
   const blocks = ['All', ...Array.from(new Set(
@@ -181,6 +189,16 @@ export default function GuardVerify() {
     localStorage.setItem('sentricore_arrivals', JSON.stringify([arrival, ...existing]));
   };
 
+  // I-log ang exit — tanggalin ang lumabas na bisita sa active arrivals
+  const saveExit = () => {
+    const exiting = new Set([entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].filter(Boolean));
+    const existing = JSON.parse(localStorage.getItem('sentricore_arrivals') || '[]');
+    const updated = existing
+      .map((a) => ({ ...a, visitors: a.visitors.filter((n) => !exiting.has(n)) }))
+      .filter((a) => a.visitors.length > 0);
+    localStorage.setItem('sentricore_arrivals', JSON.stringify(updated));
+  };
+
   const toggleCompanion = (v) => {
     setSelectedCompanions((prev) =>
       prev.find((p) => p.name === v.name)
@@ -199,10 +217,16 @@ export default function GuardVerify() {
     // TODO (mamaya): dito ipapadala ang `file` sa PaddleOCR backend, tapos i-match ang pangalan
   };
 
+  // Saan pupunta pagkatapos ng reading (pickup-resident → pumili ng resident muna)
+  const afterReading = () => {
+    if (isPickup && pickupTarget === 'RESIDENT') return 'pickupResidents';
+    return 'matched';
+  };
+
   // Auto-advance ang "Reading ID..." pagkatapos ng ilang segundo
   useEffect(() => {
     if (step === 'reading') {
-      const t = setTimeout(() => setStep('matched'), 1800);
+      const t = setTimeout(() => setStep(afterReading()), 1800);
       return () => clearTimeout(t);
     }
   }, [step]);
@@ -378,7 +402,7 @@ export default function GuardVerify() {
             <div className="w-16 h-16 rounded-full border-4 border-ink border-t-transparent animate-spin mb-6" />
             <p className="text-lg font-bold text-ink">Reading ID...</p>
             <p className="text-sm text-ink/60 mb-6">Please wait a moment</p>
-            <button onClick={() => setStep('matched')}
+            <button onClick={() => setStep(afterReading())}
                     className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
               CONTINUE
             </button>
@@ -406,8 +430,10 @@ export default function GuardVerify() {
                     ]
                   : [
                       ['Registration Type', 'Single'],
-                      ...(pickupTarget === 'VISITOR' ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]] : []),
-                      ['Address', pickedUpVisitor?.address || MATCHED.address],
+                      ...(pickupTarget === 'VISITOR'
+                        ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]]
+                        : [['Resident Name', pickupResident?.name || '']]),
+                      ['Address', pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || '')],
                       ['Driver Name', DRIVER_NAME],
                       ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || SCANNED_NAME]] : []),
                       ['Purpose', pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor'],
@@ -443,8 +469,8 @@ export default function GuardVerify() {
                                   passId: 'DRV-1001',
                                   category: 'DELIVERY',
                                   regType: 'Single',
-                                  resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : '',
-                                  address: pickedUpVisitor?.address || MATCHED.address,
+                                  resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : (pickupResident?.name || ''),
+                                  address: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || ''),
                                   driver: DRIVER_NAME,
                                   visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || SCANNED_NAME) : '',
                                   purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
@@ -508,11 +534,11 @@ export default function GuardVerify() {
           )
         )}
 
-        {/* REGISTER ADDITIONAL / BATCH VISITORS (YES path) */}
+        {/* REGISTER ADDITIONAL / BATCH / ACTIVE VISITORS (accompanying) */}
         {step === 'additional' && (
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">
-              {isBatchMatch ? 'REGISTER BATCH VISITORS' : 'REGISTER ADDITIONAL VISITORS'}
+              {isExit ? 'ACTIVE VISITORS' : isBatchMatch ? 'REGISTER BATCH VISITORS' : 'REGISTER ADDITIONAL VISITORS'}
             </h2>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
               <span className="text-ink/40">🔍</span>
@@ -523,12 +549,14 @@ export default function GuardVerify() {
 
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <p className="text-center text-sm font-semibold text-ink/70 mb-3">
-                {isBatchMatch
-                  ? `EXPECTED BATCH ${MATCHED_BATCH.batchNo} VISITORS AS OF TODAY`
-                  : 'EXPECTED PRE-REGISTERED VISITORS AS OF TODAY'}
+                {isExit
+                  ? 'ACTIVE VISITORS AS OF TODAY'
+                  : isBatchMatch
+                    ? `EXPECTED BATCH ${MATCHED_BATCH.batchNo} VISITORS AS OF TODAY`
+                    : 'EXPECTED PRE-REGISTERED VISITORS AS OF TODAY'}
               </p>
               <div className="max-h-[45vh] overflow-y-auto space-y-2">
-                {(isBatchMatch ? BATCH_POOL : PREREG_POOL)
+                {additionalPool
                   .filter((v) => v.name.toLowerCase().includes(addSearch.toLowerCase()))
                   .map((v) => {
                     const selected = !!selectedCompanions.find((p) => p.name === v.name);
@@ -562,10 +590,12 @@ export default function GuardVerify() {
 
             <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND VISITOR ON THE LIST?</p>
             <div className="flex flex-col items-center gap-2">
-              <button onClick={() => alert('Add manual registration — iko-connect after')}
-                      className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                ADD MANUAL REGISTRATION
-              </button>
+              {!isExit && (
+                <button onClick={() => alert('Add manual registration — iko-connect after')}
+                        className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                  ADD MANUAL REGISTRATION
+                </button>
+              )}
               <button onClick={() => setStep('residentList')}
                       className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
                 CONTACT RESIDENT
@@ -573,6 +603,87 @@ export default function GuardVerify() {
             </div>
           </div>
         )}
+
+        {/* PICKUP RESIDENT — pumili kung sinong resident ang susunduin (Notify Gate = nasa taas) */}
+        {step === 'pickupResidents' && (() => {
+          const notifs = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
+          const waitingNames = notifs.map((n) => n.name);
+          // Notify-Gate residents muna, tapos ang iba
+          const waitingResidents = notifs.map((n) => ({
+            name: n.name, address: n.address, waiting: true, rideHailing: n.rideHailing, time: n.time,
+          }));
+          const others = RESIDENT_LIST
+            .filter((r) => !waitingNames.includes(r.name))
+            .map((r) => ({ ...r, waiting: false }));
+          const list = [...waitingResidents, ...others]
+            .filter((r) => r.name.toLowerCase().includes(residentSearch.toLowerCase()));
+          return (
+            <div>
+              <h2 className="text-2xl font-extrabold text-ink text-center mb-1">RESIDENT LIST</h2>
+              <p className="text-center text-xs text-ink/60 mb-4">Who is being picked up?</p>
+              <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
+                <span className="text-ink/40">🔍</span>
+                <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
+                       placeholder="Search resident name"
+                       className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
+              </div>
+
+              <div className="bg-white rounded-3xl p-4 shadow mb-4">
+                <div className="max-h-[45vh] overflow-y-auto space-y-2">
+                  {list.map((r) => {
+                    const selected = pickupResident?.name === r.name;
+                    return (
+                      <button key={r.name} onClick={() => setPickupResident(r)}
+                              className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
+                              style={{ borderColor: selected ? '#2f6b34' : (r.waiting ? '#F1D88A' : '#eee') }}>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-ink text-sm">{r.name}</p>
+                            {r.waiting && (
+                              <span className="text-[8px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#F1D88A', color: '#8a6d12' }}>
+                                WAITING FOR PICK-UP
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-ink/60">Address: {r.address}</p>
+                          {r.waiting && (
+                            <p className="text-[10px] text-ink/50">
+                              {r.rideHailing ? 'Ride-hailing' : 'Personal pickup'} · notified {r.time}
+                            </p>
+                          )}
+                        </div>
+                        <span className="w-4 h-4 rounded-full shrink-0"
+                              style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-center mb-6">
+                <button onClick={() => setStep('scan')}
+                        className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">
+                  BACK
+                </button>
+                <button onClick={() => {
+                          if (!pickupResident) { alert('Please select the resident being picked up.'); return; }
+                          setStep('matched');
+                        }}
+                        className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                  PROCEED
+                </button>
+              </div>
+
+              <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND RESIDENT ON THE LIST?</p>
+              <div className="flex justify-center">
+                <button onClick={() => setStep('residentList')}
+                        className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                  CONTACT RESIDENT
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* DELIVERY — residents na may inaasahang delivery ngayon */}
         {step === 'deliveryResidents' && (
@@ -882,7 +993,9 @@ export default function GuardVerify() {
         {/* VISITOR / DRIVER ENTRY CONFIRMED */}
         {step === 'confirmed' && (
           <div>
-            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">{entryInfo.title || 'VISITOR ENTRY CONFIRMED'}</h2>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">
+              {isExit ? 'VISITOR EXIT CONFIRMED' : (entryInfo.title || 'VISITOR ENTRY CONFIRMED')}
+            </h2>
             {entryInfo.subtitle && (
               <p className="text-center text-xs text-ink/60 mb-4">{entryInfo.subtitle}</p>
             )}
@@ -912,7 +1025,9 @@ export default function GuardVerify() {
 
             <div className="rounded-xl px-4 py-3 text-center text-xs font-medium mb-5"
                  style={{ backgroundColor: '#DCF3E4', color: '#1e6b2e' }}>
-              Time in will automatically be logged when guard approves of entry
+              {isExit
+                ? 'Time out will automatically be logged when guard approves of exit'
+                : 'Time in will automatically be logged when guard approves of entry'}
             </div>
 
             <div className="flex gap-3 justify-center">
@@ -921,13 +1036,18 @@ export default function GuardVerify() {
                 BACK
               </button>
               <button onClick={() => {
-                        saveArrival();
                         const total = 1 + selectedCompanions.length;
-                        alert(`Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅`);
+                        if (isExit) {
+                          saveExit();
+                          alert(`Exit approved for ${total} visitor${total > 1 ? 's' : ''}! Time-out logged. ✅`);
+                        } else {
+                          saveArrival();
+                          alert(`Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅`);
+                        }
                         navigate('/guard-home');
                       }}
                       className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                APPROVE ENTRY
+                {isExit ? 'APPROVE EXIT' : 'APPROVE ENTRY'}
               </button>
             </div>
           </div>

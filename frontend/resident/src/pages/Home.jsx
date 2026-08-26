@@ -10,6 +10,8 @@ export default function Home() {
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [showAnnouncements, setShowAnnouncements] = useState(false);
+  const [showNotifyGate, setShowNotifyGate] = useState(false);
+  const [rideHailing, setRideHailing] = useState(null); // true | false | null
 
   // ── Announcements (sample muna — ikokonekta sa backend after) ──
   const announcements = [
@@ -113,6 +115,17 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Notify Gate — para sa mga nagmamadaling residente na naghihintay ng pickup */}
+        <button onClick={() => { setRideHailing(null); setShowNotifyGate(true); }}
+                className="w-full mt-4 rounded-3xl p-5 shadow flex items-center gap-4 active:scale-[0.99] transition"
+                style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shrink-0">🚪</div>
+          <div className="text-left">
+            <p className="text-white font-extrabold text-lg leading-tight">Notify Gate</p>
+            <p className="text-white/80 text-xs">Tell the guard you're waiting for a pick-up</p>
+          </div>
+        </button>
+
         {/* Stat cards */}
         <div className="grid grid-cols-3 gap-3 mt-6">
           <div className="bg-teal-100 rounded-3xl p-4 shadow">
@@ -211,6 +224,57 @@ export default function Home() {
       <BottomNav active="home" />
 
       {showAnnouncements && <AnnouncementsModal onClose={() => setShowAnnouncements(false)} />}
+
+      {/* Notify Gate modal */}
+      {showNotifyGate && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center">
+            <div className="text-5xl mb-3">🚪</div>
+            <h3 className="text-xl font-extrabold text-ink mb-2">Are you waiting for a pick-up?</h3>
+            <p className="text-ink/60 text-sm mb-5">
+              This will notify the guard that you're waiting at the gate.
+            </p>
+
+            <p className="text-sm font-bold text-ink mb-2">Is this a ride-hailing pickup?</p>
+            <div className="flex gap-2 justify-center mb-6">
+              <button onClick={() => setRideHailing(true)}
+                      className={`px-6 py-2 rounded-full text-sm font-bold border ${rideHailing === true ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
+                      style={rideHailing === true ? { backgroundColor: '#CDE7DE' } : {}}>
+                YES
+              </button>
+              <button onClick={() => setRideHailing(false)}
+                      className={`px-6 py-2 rounded-full text-sm font-bold border ${rideHailing === false ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
+                      style={rideHailing === false ? { backgroundColor: '#CDE7DE' } : {}}>
+                NO
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setShowNotifyGate(false)}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
+                CANCEL
+              </button>
+              <button onClick={() => {
+                        if (rideHailing === null) { alert('Please select if this is a ride-hailing pickup.'); return; }
+                        const notif = {
+                          id: Date.now(),
+                          name: user.name || 'Resident',
+                          address: user.address || '',
+                          rideHailing,
+                          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+                        };
+                        const existing = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
+                        localStorage.setItem('sentricore_gate_notifications', JSON.stringify([notif, ...existing]));
+                        setShowNotifyGate(false);
+                        alert('Gate notified! The guard has been informed that you are waiting for a pick-up. ✅');
+                      }}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                NOTIFY GATE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
