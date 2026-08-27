@@ -10,8 +10,8 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showForgot, setShowForgot] = useState(false);       // left modal
-  const [showNoAccount, setShowNoAccount] = useState(false); // right modal
+  const [showForgot, setShowForgot] = useState(false);
+  const [showNoAccount, setShowNoAccount] = useState(false);
 
   async function handleSignIn() {
     setError('');
@@ -21,14 +21,20 @@ export default function SignIn() {
     }
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/auth/login`, {
-        username,
-        password,
-        role: 'Guard',
-      });
+      // Walang hardcoded role — ang backend na ang magsasabi kung Resident o Guard
+      const res = await axios.post(`${API}/auth/login`, { username, password });
+
+      const user = res.data.user;
       localStorage.setItem('sentricore_token', res.data.token);
-      localStorage.setItem('sentricore_user', JSON.stringify(res.data.user));
-      navigate('/guard-home'); // TODO: palitan kung iba ang guard dashboard route mo
+      localStorage.setItem('sentricore_user', JSON.stringify(user));
+
+      // Role-based redirect
+      const role = (user.role || '').toLowerCase();
+      if (role === 'guard') {
+        navigate('/guard-home');
+      } else {
+        navigate('/home');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Sign in failed. Please try again.');
       setLoading(false);
@@ -55,7 +61,7 @@ export default function SignIn() {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="guard1"
+            placeholder="username"
             className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30 mb-5"
           />
 
@@ -69,7 +75,7 @@ export default function SignIn() {
             className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30 mb-2"
           />
 
-          {/* Forgot password → LEFT modal (not a separate page) */}
+          {/* Forgot password → modal */}
           <div className="text-right mb-4">
             <button onClick={() => setShowForgot(true)} className="text-ink underline text-sm">
               Forgot your password?
@@ -88,7 +94,7 @@ export default function SignIn() {
             {loading ? 'SIGNING IN...' : 'SIGN IN'}
           </button>
 
-          {/* Sign up → RIGHT modal */}
+          {/* Sign up → modal */}
           <p className="text-center text-ink mt-5 mb-10">
             Don't have an account?{' '}
             <button onClick={() => setShowNoAccount(true)} className="font-bold underline">
@@ -97,7 +103,7 @@ export default function SignIn() {
           </p>
         </div>
 
-        {/* ── LEFT modal: Forgot password ── */}
+        {/* Forgot password modal */}
         {showForgot && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
             <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full">
@@ -116,7 +122,7 @@ export default function SignIn() {
           </div>
         )}
 
-        {/* ── RIGHT modal: Don't have an account ── */}
+        {/* No account modal */}
         {showNoAccount && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
             <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full">
@@ -139,17 +145,12 @@ export default function SignIn() {
   );
 }
 
-// ─── Icons (ink, matching the mockup) ───────────────────────────────────────
+// ─── Icons ───────────────────────────────────────────────────────────────────
 function ForgotIcon() {
   return (
     <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* shackle */}
       <path d="M24 30v-6a12 12 0 0 1 24 0v6" stroke="#112D31" strokeWidth="5" strokeLinecap="round" />
-      {/* lock body */}
-      <rect x="18" y="12" width="4" height="0" fill="none" />
-      <rect x="24" y="6" width="24" height="0" fill="none" />
       <circle cx="36" cy="20" r="8" fill="#112D31" />
-      {/* asterisk field box */}
       <rect x="12" y="30" width="48" height="20" rx="4" fill="#112D31" />
       <text x="36" y="45" fontSize="16" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="monospace">✱✱✱✱</text>
     </svg>
@@ -159,13 +160,9 @@ function ForgotIcon() {
 function NoAccountIcon() {
   return (
     <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* person head */}
       <circle cx="36" cy="27" r="9" fill="#112D31" />
-      {/* person shoulders */}
       <path d="M20 52c0-9 7-16 16-16s16 7 16 16" fill="#112D31" />
-      {/* prohibition circle */}
       <circle cx="36" cy="36" r="30" stroke="#112D31" strokeWidth="5" fill="none" />
-      {/* slash */}
       <line x1="16" y1="16" x2="56" y2="56" stroke="#112D31" strokeWidth="5" strokeLinecap="round" />
     </svg>
   );
