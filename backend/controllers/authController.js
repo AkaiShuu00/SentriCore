@@ -7,10 +7,11 @@ const { logAction } = require('../config/audit');
 // POST /api/auth/login
 async function login(req, res) {
   try {
-    const { username, password, role } = req.body;
+    // ✅ Walang role — username + password lang. Ang account mismo ang may alam ng role nito.
+    const { username, password } = req.body;
 
-    if (!username || !password || !role) {
-      return res.status(400).json({ message: 'Username, password, and role are required.' });
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required.' });
     }
 
     const [rows] = await pool.query(
@@ -36,9 +37,7 @@ async function login(req, res) {
       return res.status(403).json({ message: 'This account is inactive.' });
     }
 
-    if (user.role_name !== role) {
-      return res.status(403).json({ message: `No ${role.toLowerCase()} account found for these credentials.` });
-    }
+    // ✅ Inalis ang role cross-check. Ang role_name mula sa DB ang gagamitin.
 
     let profile = { userId: user.user_id, role: user.role_name, username: user.username };
 
