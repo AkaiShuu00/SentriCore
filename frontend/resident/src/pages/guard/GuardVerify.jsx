@@ -48,9 +48,9 @@ const BATCH_POOL = [
   { name: 'Jefferson Moong',  resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
 ];
 
-// Scanned name mula OCR (placeholder muna)
-const SCANNED_NAME = 'Jon Snow';
-const DRIVER_NAME = 'Angelie Roman'; // scanned driver's ID (placeholder)
+// Fallback names kung walang OCR result (hal. manual entry o pumalya ang OCR)
+const DEFAULT_SCANNED_NAME = 'Jon Snow';
+const DEFAULT_DRIVER_NAME = 'Angelie Roman';
 
 // Residents na may inaasahang delivery ngayon (para sa delivery flow)
 const DELIVERY_RESIDENTS = [
@@ -132,6 +132,9 @@ export default function GuardVerify() {
   const [activeSearch, setActiveSearch] = useState('');
   const [deliveryResident, setDeliveryResident] = useState(null);
   const fileRef = useRef(null);
+  const [scannedName, setScannedName] = useState(DEFAULT_SCANNED_NAME);
+  const [driverName, setDriverName] = useState(DEFAULT_DRIVER_NAME);
+  const [ocrError, setOcrError] = useState('');
 
   const isPickup = drivePurpose === 'PICKUP';
   const isDelivery = entryType === 'DELIVERY';
@@ -207,14 +210,48 @@ export default function GuardVerify() {
     );
   };
 
-  // Kapag may nakuhang litrato ng ID → i-preview at pumunta sa Reading step
-  const handlePhoto = (e) => {
+  // Kapag may nakuhang litrato ng ID → i-preview, tumawag sa OCR, tapos pumunta sa Reading step
+    const handlePhoto = async (e) => {
+    console.log('🔵 handlePhoto triggered');
     const file = e.target.files?.[0];
-    if (!file) return;
+    console.log('🔵 file:', file);
+    if (!file) { console.log('🔴 no file — stopped'); return; }
     setPhotoFile(file);
     setPhoto(URL.createObjectURL(file));
+    setOcrError('');
     setStep('reading');
-    // TODO (mamaya): dito ipapadala ang `file` sa PaddleOCR backend, tapos i-match ang pangalan
+
+    // Ipadala ang ID image sa OCR backend (name extraction only — walang image na naka-store)
+    try {
+      const token = localStorage.getItem('sentricore_token');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      console.log('🔵 calling OCR...', 'token:', token ? 'yes' : 'no', 'isDriverFlow:', isDriverFlow);
+      const res = await fetch('http://localhost:3000/api/ocr/scan', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      console.log('🟢 OCR response:', data);
+
+        if (data.success && data.suggestedName) {
+        // Driver flow → driver ID ang na-scan; kung hindi → visitor
+        if (isDriverFlow) {
+          setDriverName(data.suggestedName);
+        } else {
+          setScannedName(data.suggestedName);
+        }
+      } else {
+        setOcrError('Could not read the name clearly. Please verify or type it manually.');
+      }
+    } catch (err) {
+      setOcrError('OCR service unavailable. Please type the name manually.');
+    } finally {
+      // Advance ONLY after OCR finishes (tama ang timing — hindi na maaga)
+      setStep(afterReading());
+    }
   };
 
   // Saan pupunta pagkatapos ng reading (pickup-resident → pumili ng resident muna)
@@ -223,14 +260,14 @@ export default function GuardVerify() {
     return 'matched';
   };
 
-  // Auto-advance ang "Reading ID..." pagkatapos ng ilang segundo
+  // Auto-advance para sa MANUAL entry lang (walang photo/OCR). Kung may photo, ang handlePhoto na ang mag-a-advance.
   useEffect(() => {
-    if (step === 'reading') {
-      const t = setTimeout(() => setStep(afterReading()), 1800);
+    if (step === 'reading' && !photoFile) {
+      const t = setTimeout(() => setStep(afterReading()), 1200);
       return () => clearTimeout(t);
     }
-  }, [step]);
-
+  }, [step, photoFile]);
+  
   const close = () => navigate('/guard-home');
 
   // ── Modal steps (choose / vehicle) ──
@@ -402,6 +439,9 @@ export default function GuardVerify() {
             <div className="w-16 h-16 rounded-full border-4 border-ink border-t-transparent animate-spin mb-6" />
             <p className="text-lg font-bold text-ink">Reading ID...</p>
             <p className="text-sm text-ink/60 mb-6">Please wait a moment</p>
+            {ocrError && (
+              <p className="text-xs text-center text-red-700 bg-red-100 rounded-xl px-4 py-2 mb-4 max-w-xs">{ocrError}</p>
+            )}
             <button onClick={() => setStep(afterReading())}
                     className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
               CONTINUE
@@ -415,7 +455,7 @@ export default function GuardVerify() {
             /* ── DRIVER INFORMATION (pickup / delivery) ── */
             <div>
               <div className="bg-white rounded-2xl p-3 shadow mb-4">
-                <IDCardPlaceholder name={DRIVER_NAME} />
+                <IDCardPlaceholder name={driverName} />
               </div>
 
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">DRIVER INFORMATION</h2>
@@ -434,8 +474,8 @@ export default function GuardVerify() {
                         ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]]
                         : [['Resident Name', pickupResident?.name || '']]),
                       ['Address', pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || '')],
-                      ['Driver Name', DRIVER_NAME],
-                      ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || SCANNED_NAME]] : []),
+                      ['Driver Name', driverName],
+                      ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || scannedName]] : []),
                       ['Purpose', pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor'],
                     ]
                 ).map(([label, val]) => (
@@ -459,7 +499,7 @@ export default function GuardVerify() {
                                   regType: 'Single',
                                   resident: deliveryResident?.name || '',
                                   address: deliveryResident?.address || '',
-                                  driver: DRIVER_NAME,
+                                  driver: driverName,
                                   visitor: '',
                                   purpose: 'Delivery',
                                   expectedDate: '',
@@ -471,8 +511,8 @@ export default function GuardVerify() {
                                   regType: 'Single',
                                   resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : (pickupResident?.name || ''),
                                   address: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || ''),
-                                  driver: DRIVER_NAME,
-                                  visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || SCANNED_NAME) : '',
+                                  driver: driverName,
+                                  visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || scannedName) : '',
                                   purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
                                   expectedDate: '',
                                   title: 'DRIVER ENTRY CONFIRMED',
@@ -811,7 +851,7 @@ export default function GuardVerify() {
         {step === 'manualSearch' && (
           <div>
             <div className="bg-white rounded-2xl p-3 shadow mb-4">
-              <IDCardPlaceholder name={SCANNED_NAME} />
+              <IDCardPlaceholder name={scannedName} />
             </div>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
               <span className="text-ink/40">🔍</span>
@@ -949,7 +989,7 @@ export default function GuardVerify() {
         {step === 'unlisted' && (
           <div>
             <div className="bg-white rounded-2xl p-3 shadow mb-4">
-              <IDCardPlaceholder name={SCANNED_NAME} />
+              <IDCardPlaceholder name={scannedName} />
             </div>
             <h2 className="text-xl font-extrabold text-ink text-center mb-4">UNLISTED VISITOR INFORMATION</h2>
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
@@ -957,7 +997,7 @@ export default function GuardVerify() {
                 ['Registration Type', 'Single'],
                 ['Resident Name', contactedResident?.name || ''],
                 ['Address', contactedResident?.address || ''],
-                ['Visitor Name', SCANNED_NAME],
+                ['Visitor Name', scannedName],
               ].map(([label, val]) => (
                 <div key={label} className="px-4 py-3">
                   <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
@@ -976,7 +1016,7 @@ export default function GuardVerify() {
                           regType: 'Single',
                           resident: contactedResident?.name || '',
                           address: contactedResident?.address || '',
-                          visitor: SCANNED_NAME,
+                          visitor: scannedName,
                           purpose: '',
                           expectedDate: '',
                         });

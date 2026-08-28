@@ -21,7 +21,7 @@ async function scanId(req, res) {
       headers: form.getHeaders(),
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
-      timeout: 30000,
+      timeout: 60000,
     });
 
     // Python returns { success, suggestedName, allLines }.
