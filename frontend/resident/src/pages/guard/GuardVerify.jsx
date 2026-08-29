@@ -141,7 +141,12 @@ export default function GuardVerify() {
   const isDriverFlow = isPickup || isDelivery; // parehong nag-scan ng DRIVER'S ID
   // Demo trigger: personal visit na may sasakyan → batch match
   const isBatchMatch = drivePurpose === 'PERSONAL VISIT';
-  const matchData = isBatchMatch ? MATCHED_BATCH : MATCHED;
+  const [matchData, setMatchData] = useState(MATCHED);
+
+  // Panatilihin ang tamang default match data (batch demo vs normal) kapag walang OCR match pa
+  useEffect(() => {
+    setMatchData(isBatchMatch ? MATCHED_BATCH : MATCHED);
+  }, [isBatchMatch]);
 
   // Pool para sa accompanying step (exit → active; batch → batch pool; else → prereg)
   const additionalPool = isExit
@@ -242,6 +247,36 @@ export default function GuardVerify() {
           setDriverName(data.suggestedName);
         } else {
           setScannedName(data.suggestedName);
+          // Hanapin ang scanned name sa expected registrations (real matching)
+          try {
+            const matchRes = await fetch(
+              `http://localhost:3000/api/entry/match?name=${encodeURIComponent(data.suggestedName)}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const matchJson = await matchRes.json();
+            console.log('🟣 match result:', matchJson);
+
+            if (matchJson.matched && matchJson.candidates.length > 0) {
+              const c = matchJson.candidates[0]; // best match
+              const dateStr = c.expectedDate
+                ? new Date(c.expectedDate).toLocaleDateString('en-US')
+                : '';
+              setMatchData({
+                registrationId: c.registrationId,
+                passId: 'VST ' + String(c.registrationId).padStart(6, '0'),
+                category: (c.registrationType || 'Single').toUpperCase(),
+                regType: c.registrationType || 'Single',
+                resident: c.residentName || '',
+                address: c.residentAddress || '',
+                visitor: c.registeredName || data.suggestedName,
+                purpose: c.purpose || 'N/A',
+                expectedDate: dateStr,
+                residentId: c.residentId,
+              });
+            }
+          } catch (mErr) {
+            console.log('match error:', mErr);
+          }
         }
       } else {
         setOcrError('Could not read the name clearly. Please verify or type it manually.');
@@ -530,11 +565,11 @@ export default function GuardVerify() {
                 </button>
               </div>
             </div>
-          ) : (
+                     ) : (
             /* ── VISITOR MATCHED (regular) ── */
             <div>
               <div className="bg-white rounded-2xl p-3 shadow mb-4">
-                <IDCardPlaceholder name={matchData.visitor} />
+                <IDCardPlaceholder name={scannedName} />
               </div>
 
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">VISITOR MATCHED</h2>
@@ -544,7 +579,7 @@ export default function GuardVerify() {
                   ['Registration Type', matchData.regType],
                   ['Resident Name', matchData.resident],
                   ['Address', matchData.address],
-                  ['Visitor Name', matchData.visitor],
+                  ['Visitor Name', scannedName],
                   ['Purpose', matchData.purpose],
                   ['Expected Date', matchData.expectedDate],
                 ].map(([label, val]) => (
@@ -560,7 +595,7 @@ export default function GuardVerify() {
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                     MANUAL SEARCH
                   </button>
-                  <button onClick={() => { setEntryInfo(matchData); setSelectedCompanions([]); setShowAccompany(true); }}
+                  <button onClick={() => { setEntryInfo({ ...matchData, visitor: scannedName }); setSelectedCompanions([]); setShowAccompany(true); }}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
                     CONFIRM MATCH
                   </button>

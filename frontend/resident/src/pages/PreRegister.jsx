@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
+const API = 'http://localhost:3000/api';
 
 const COLORS = {
   ink:   '#112D31',
@@ -342,6 +345,7 @@ export default function PreRegister() {
   const [regType, setRegType] = useState('');
   const [savedCount, setSavedCount] = useState(0);
   const [form, setForm] = useState({ name: '', purpose: '', date: '', names: [''], orderId: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleClose = () => navigate('/home');
 
@@ -383,43 +387,56 @@ export default function PreRegister() {
     setStep(3);
   };
 
-  // Save to localStorage — batch saves EACH name as a separate expected entry
-  const handleConfirmEntry = () => {
-    const existing = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
-    let newEntries = [];
+  // Save to the BACKEND (database) via POST /api/registrations
+  const handleConfirmEntry = async () => {
+    console.log('🔵 handleConfirmEntry called, submitting:', submitting, 'regType:', regType);
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('sentricore_token');
+      console.log('🔵 token:', token ? 'yes' : 'NO TOKEN');
 
-    if (regType === 'Batch') {
-      const validNames = form.names.map(n => n.trim()).filter(Boolean);
-      newEntries = validNames.map((nm, i) => ({
-        id: Date.now() + i,
-        regType: 'Batch',
-        name: nm,
-        purpose: form.purpose,
-        date: form.date,
-      }));
-    } else if (regType === 'Delivery') {
-      newEntries = [{
-        id: Date.now(),
-        regType: 'Delivery',
-        // display name: rider name kung meron, kung wala gamitin ang Order ID
-        name: form.name.trim() || form.orderId.trim(),
-        orderId: form.orderId,
-        purpose: form.purpose || 'Delivery',
-        date: form.date,
-      }];
-    } else {
-      newEntries = [{
-        id: Date.now(),
-        regType,
-        name: form.name,
-        purpose: form.purpose,
-        date: form.date,
-      }];
+      // Build the payload that the backend expects
+      let payload;
+      if (regType === 'Batch') {
+        const validNames = form.names.map(n => n.trim()).filter(Boolean);
+        payload = {
+          registrationType: 'Batch',
+          batchName: form.batchName || null,
+          purpose: form.purpose || null,
+          expectedDate: form.date,
+          visitorNames: validNames,
+        };
+      } else if (regType === 'Delivery') {
+        payload = {
+          registrationType: 'Delivery',
+          orderId: form.orderId.trim(),
+          purpose: form.purpose || 'Delivery',
+          expectedDate: form.date,
+          visitorNames: form.name.trim() ? [form.name.trim()] : [],
+        };
+      } else {
+        payload = {
+          registrationType: 'Single',
+          purpose: form.purpose || null,
+          expectedDate: form.date,
+          visitorNames: [form.name.trim()],
+        };
+      }
+
+      const res = await axios.post(`${API}/registrations`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log('🟢 SUCCESS, response:', res.data);
+      setSavedCount(res.data.visitorCount || 1);
+      setStep(4);
+    } catch (err) {
+      console.log('🔴 ERROR:', err.response?.status, err.response?.data || err.message);
+      alert(err.response?.data?.message || 'Failed to save registration. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-
-    localStorage.setItem('sentricore_expected', JSON.stringify([...newEntries, ...existing]));
-    setSavedCount(newEntries.length);
-    setStep(4);
   };
 
   const handleCancel = () => {
