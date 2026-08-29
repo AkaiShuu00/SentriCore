@@ -20,7 +20,7 @@ import FAQs from './pages/FAQs';
 import Terms from './pages/Terms';
 import ContactGuard from './pages/ContactGuard';
 import Complaints from './pages/Complaints';
-import PreRegister from './pages/Preregister';
+import PreRegister from './pages/PreRegister';
 
 // ── Guard pages (gagawin natin — palitan/idagdag habang binubuo) ──
 import GuardHome from './pages/guard/GuardHome';
