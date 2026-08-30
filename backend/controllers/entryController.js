@@ -109,7 +109,7 @@ async function getActiveVisitors(req, res) {
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.arrival_id,
-              res.full_name AS resident_name
+              res.resident_id, res.full_name AS resident_name, res.unit_address
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
        WHERE t.status = 'Active'
@@ -118,6 +118,21 @@ async function getActiveVisitors(req, res) {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching active visitors.', error: err.message });
+  }
+}
+
+// GET /api/entry/residents  (Guard) - residents directory para sa pickup/delivery/contact
+async function getResidentsForGuard(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT resident_id, full_name, unit_address, contact_number
+       FROM Residents
+       WHERE status = 'Active'
+       ORDER BY full_name ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching residents.', error: err.message });
   }
 }
 
@@ -148,4 +163,4 @@ async function recordExit(req, res) {
   }
 }
 
-module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, recordExit };
+module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, recordExit, getResidentsForGuard };

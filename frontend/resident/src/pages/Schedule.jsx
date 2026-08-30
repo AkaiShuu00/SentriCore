@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
+import { getMyRegistrations } from '../api';
 
-const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED', 'DEPARTED'];
 
 export default function Schedule() {
@@ -11,55 +11,70 @@ export default function Schedule() {
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
 
-  // ── Real data: pre-registered visitors (galing sa PreRegister → localStorage) ──
-  const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
-  const items = registered.map((r) => ({
-    start: '-----',
-    end: '',
-    name: r.name,
-    type: r.regType === 'Delivery' ? 'Delivery' : 'Visitor',
-    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'N/A'),
-    status: 'EXPECTED',
-  }));
+  // ── Real data from DB ──
+  const [registrations, setRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
+  useEffect(() => {
+    getMyRegistrations()
+      .then((res) => setRegistrations(res.data || []))
+      .catch((err) => setError(err.response?.data?.message || 'Failed to load your visitors.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // I-flatten ang registrations → isang row bawat visitor
+  const allRows = registrations.flatMap((r) => {
+    const isDelivery = r.registration_type === 'Delivery';
+    const expDate = (r.expected_date || '').slice(0, 10);
+    const names = r.visitors && r.visitors.length ? r.visitors : [isDelivery ? 'Delivery Driver' : '—'];
+    return names.map((name) => ({
+      name,
+      type: isDelivery ? 'Delivery' : 'Visitor',
+      purpose: r.purpose || (isDelivery ? 'Delivery' : 'N/A'),
+      status: (r.status || 'Expected').toUpperCase(),
+      expectedDate: expDate,
+      regType: r.registration_type,
+    }));
+  });
+
+  // ── Counts para sa summary ──
   const counts = {
-    TOTAL: items.length,
-    ACTIVE: items.filter(i => i.status === 'ACTIVE').length,
-    EXPECTED: items.filter(i => i.status === 'EXPECTED').length,
-    DEPARTED: items.filter(i => i.status === 'DEPARTED').length,
+    ALL: allRows.length,
+    ACTIVE: allRows.filter((s) => s.status === 'ACTIVE').length,
+    EXPECTED: allRows.filter((s) => s.status === 'EXPECTED').length,
+    DEPARTED: allRows.filter((s) => s.status === 'DEPARTED').length,
   };
 
-  // Build ALL days of the current month with correct day labels (scrollable)
+  const statusStyle = {
+    ACTIVE: { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
+    EXPECTED: { backgroundColor: '#F1D88A', color: '#8a6d12' },
+    DEPARTED: { backgroundColor: '#F3C9C9', color: '#8a2b2b' },
+  };
+
+  // Day strip
+  const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const year = today.getFullYear();
   const month = today.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthDays = [];
   for (let i = 1; i <= daysInMonth; i++) {
     const dateObj = new Date(year, month, i);
-    monthDays.push({ dayNum: i, dayLabel: DAYS[dateObj.getDay()] });
+    monthDays.push({ dayNum: i, dayLabel: DAY_LABELS[dateObj.getDay()] });
   }
-
-  const monthYear = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
-
-  const badgeBg = {
-    ACTIVE: '#B4E4BE',
-    EXPECTED: '#F1D88A',
-    DEPARTED: '#F3C9C9',
-  };
-
-  const filtered = items
-    .filter(i => filter === 'ALL' || i.status === filter)
-    .filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-
-  const showBadge = filter === 'ALL'; // panelist revision: hide badge in filtered tabs
+  const monthYear = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const scrollDates = (dir) => {
     const el = document.getElementById('sched-day-scroll');
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
 
+  const filtered = allRows
+    .filter((s) => filter === 'ALL' || s.status === filter)
+    .filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
+
   return (
-    <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto">
+    <div className="min-h-screen bg-cream pb-24 max-w-md mx-auto">
       {/* Header */}
       <header className="bg-ink px-5 py-6">
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
@@ -69,14 +84,14 @@ export default function Schedule() {
       </header>
 
       <div className="px-4">
-        {/* Teal gradient summary card */}
+        {/* Summary card */}
         <div className="rounded-3xl p-6 shadow-lg text-white mt-4"
              style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
-          <p className="font-bold tracking-wide">{monthYear}</p>
-          <h1 className="text-4xl font-extrabold mb-5">Today's Schedule</h1>
+          <p className="font-bold tracking-wide">{monthYear.toUpperCase()}</p>
+          <h1 className="text-3xl font-extrabold mb-5">Expected Visitors</h1>
           <div className="flex gap-2">
             {[
-              { label: 'TOTAL', val: counts.TOTAL },
+              { label: 'ALL', val: counts.ALL },
               { label: 'ACTIVE', val: counts.ACTIVE },
               { label: 'EXPECTED', val: counts.EXPECTED },
               { label: 'DEPARTED', val: counts.DEPARTED },
@@ -89,13 +104,12 @@ export default function Schedule() {
           </div>
         </div>
 
-        {/* Day calendar — scrollable full month */}
+        {/* Day calendar */}
         <div className="bg-white rounded-3xl p-4 shadow mt-5">
           <div className="flex items-center gap-2">
             <button onClick={() => scrollDates(-1)}
                     className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">‹</button>
-            <div id="sched-day-scroll" className="flex gap-2 overflow-x-auto flex-1"
-                 style={{ scrollbarWidth: 'none' }}>
+            <div id="sched-day-scroll" className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
               {monthDays.map((d) => {
                 const isActive = d.dayNum === selectedDay;
                 return (
@@ -122,10 +136,10 @@ export default function Schedule() {
         </div>
 
         {/* Filter chips */}
-        <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
+        <div className="flex gap-2 mt-4 justify-center">
           {FILTERS.map((f) => (
             <button key={f} onClick={() => setFilter(f)}
-                    className={`px-5 py-2 rounded-full text-sm font-bold shadow shrink-0 ${filter === f ? 'text-white' : 'bg-white text-ink'}`}
+                    className={`px-5 py-2 rounded-full text-sm font-bold shadow ${filter === f ? 'text-white' : 'bg-white text-ink'}`}
                     style={filter === f ? { backgroundColor: '#0F6E6E' } : {}}>
               {f}
             </button>
@@ -133,41 +147,35 @@ export default function Schedule() {
         </div>
 
         {/* List */}
-        <div className="bg-white rounded-3xl p-4 shadow mt-4 max-h-[45vh] overflow-y-auto">
-          {filtered.length === 0 ? (
-            <div className="text-center py-8">
+        <div className="bg-white rounded-3xl p-4 shadow mt-4 mb-4">
+          {loading ? (
+            <div className="text-center py-10 text-ink/50">Loading your visitors…</div>
+          ) : error ? (
+            <div className="text-center py-10 text-red-600 text-sm">{error}</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-10">
               <p className="text-4xl mb-2">📭</p>
-              <p className="text-ink/60 font-semibold">
-                {filter === 'ALL' ? 'No visitors scheduled yet' : `No ${filter.toLowerCase()} visitors`}
-              </p>
-              <p className="text-ink/40 text-sm mt-1">
-                {filter === 'ALL' ? 'Pre-register a visitor to see them here.' : 'Try another filter or pre-register a visitor.'}
-              </p>
+              <p className="text-ink/60 font-semibold">No visitors here</p>
+              <p className="text-ink/40 text-sm mt-1">Pre-register a visitor to see them here.</p>
             </div>
           ) : (
             <>
-              {filtered.map((it, i) => (
-                <div key={i} className="flex items-center gap-3 mb-3">
-                  <div className="text-xs font-bold text-ink text-center w-16 shrink-0 leading-tight">
-                    {it.start}
-                    {it.end && <><br />to<br />{it.end}</>}
+              {filtered.map((s, i) => (
+                <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3 flex items-center gap-3">
+                  <div className="text-xs font-bold text-ink text-center w-16 shrink-0">-----</div>
+                  <div className="flex-1">
+                    <p className="font-bold text-ink">{s.name}</p>
+                    <p className="text-sm text-ink/60">{s.type}</p>
+                    <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
                   </div>
-                  <div className="flex-1 border border-gray-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-ink">{it.name}</p>
-                      <p className="text-sm text-ink/60">{it.type}</p>
-                      <p className="text-sm text-ink/60">Purpose: {it.purpose}</p>
-                    </div>
-                    {showBadge && (
-                      <span className="text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap"
-                            style={{ backgroundColor: badgeBg[it.status], color: '#333' }}>
-                        {it.status}
-                      </span>
-                    )}
-                  </div>
+                  {filter === 'ALL' && (
+                    <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={statusStyle[s.status] || { backgroundColor: '#eee', color: '#666' }}>
+                      {s.status}
+                    </span>
+                  )}
                 </div>
               ))}
-              <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
+              <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
             </>
           )}
         </div>

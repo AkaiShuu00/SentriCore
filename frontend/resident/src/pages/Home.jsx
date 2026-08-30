@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import AnnouncementsModal from '../components/AnnouncementsModal';
+import { getMyRegistrations } from '../api';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -11,7 +12,19 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [showNotifyGate, setShowNotifyGate] = useState(false);
-  const [rideHailing, setRideHailing] = useState(null); // true | false | null
+  const [rideHailing, setRideHailing] = useState(null);
+
+  // ── Real data from DB ──
+  const [registrations, setRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getMyRegistrations()
+      .then((res) => setRegistrations(res.data || []))
+      .catch((err) => setError(err.response?.data?.message || 'Failed to load your visitors.'))
+      .finally(() => setLoading(false));
+  }, []);
 
   // ── Announcements (sample muna — ikokonekta sa backend after) ──
   const announcements = [
@@ -21,21 +34,29 @@ export default function Home() {
     { icon: '🧑', bg: 'bg-red-100', text: 'Homeowners meeting today at clubhouse, 10:30 AM' },
   ];
 
-  // ── Real data: pre-registered visitors (galing sa PreRegister → localStorage) ──
-  const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
-  const schedule = registered.map((r) => ({
-    time: '-----',
-    name: r.name,
-    type: r.regType === 'Delivery' ? 'Delivery' : 'Visitor',
-    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'N/A'),
-    status: 'EXPECTED',
-    expectedDate: r.date,
-  }));
+  const isoToday = today.toISOString().slice(0, 10);
 
-  // ── Derived counts para sa stat cards (totoong data na) ──
+  // I-flatten ang registrations → isang row bawat visitor
+  const allRows = registrations.flatMap((r) => {
+    const isDelivery = r.registration_type === 'Delivery';
+    const expDate = (r.expected_date || '').slice(0, 10);
+    const names = r.visitors && r.visitors.length ? r.visitors : [isDelivery ? 'Delivery Driver' : '—'];
+    return names.map((name) => ({
+      name,
+      type: isDelivery ? 'Delivery' : 'Visitor',
+      purpose: r.purpose || (isDelivery ? 'Delivery' : 'N/A'),
+      status: (r.status || 'Expected').toUpperCase(),
+      expectedDate: expDate,
+    }));
+  });
+
+  // "Today's Schedule" = mga naka-schedule ngayong araw
+  const schedule = allRows.filter((s) => s.expectedDate === isoToday);
+
+  // ── Derived counts para sa stat cards ──
   const todaysVisitorsCount = schedule.filter((s) => s.status === 'ACTIVE').length;
   const expectedTodayCount = schedule.filter((s) => s.status === 'EXPECTED').length;
-  const visitHistoryCount = 0; // walang history source pa — 0 muna hanggang backend
+  const visitHistoryCount = allRows.filter((s) => s.status === 'DEPARTED').length;
 
   // Build ALL days of the current month with correct day labels
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -115,7 +136,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Notify Gate — para sa mga nagmamadaling residente na naghihintay ng pickup */}
+        {/* Notify Gate */}
         <button onClick={() => { setRideHailing(null); setShowNotifyGate(true); }}
                 className="w-full mt-4 rounded-3xl p-5 shadow flex items-center gap-4 active:scale-[0.99] transition"
                 style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
@@ -154,7 +175,7 @@ export default function Home() {
         </div>
         <p className="text-lg font-semibold text-ink mb-3">{monthYear}</p>
 
-        {/* Day calendar — scrollable full month */}
+        {/* Day calendar */}
         <div className="flex items-center gap-2">
           <button onClick={() => scrollDates(-1)} className="text-ink/40 text-2xl shrink-0">‹</button>
           <div id="day-scroll" className="flex gap-2 overflow-x-auto flex-1 pb-1"
@@ -184,23 +205,27 @@ export default function Home() {
 
         {/* Schedule list */}
         <div className="bg-white rounded-3xl p-4 shadow mt-4 max-h-96 overflow-y-auto">
-          {filteredSchedule.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8 text-ink/50">Loading your visitors…</div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600 text-sm">{error}</div>
+          ) : filteredSchedule.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-4xl mb-2">📭</p>
-              <p className="text-ink/60 font-semibold">No visitors scheduled yet</p>
+              <p className="text-ink/60 font-semibold">No visitors scheduled today</p>
               <p className="text-ink/40 text-sm mt-1">Pre-register a visitor to see them here.</p>
             </div>
           ) : (
             <>
               {filteredSchedule.map((s, i) => (
                 <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3 flex items-center gap-3">
-                  <div className="text-xs font-bold text-ink whitespace-pre-line text-center w-16 shrink-0">{s.time}</div>
+                  <div className="text-xs font-bold text-ink whitespace-pre-line text-center w-16 shrink-0">-----</div>
                   <div className="flex-1">
                     <p className="font-bold text-ink">{s.name}</p>
                     <p className="text-sm text-ink/60">{s.type}</p>
                     <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
                   </div>
-                  <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${statusStyle[s.status]}`}>
+                  <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${statusStyle[s.status] || 'bg-gray-100 text-gray-600'}`}>
                     {s.status}
                   </span>
                 </div>

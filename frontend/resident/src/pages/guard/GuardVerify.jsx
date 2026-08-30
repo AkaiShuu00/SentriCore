@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const teal = '#0F6E6E';
+const API = 'http://localhost:3000/api';
 
 // Matched registration (sample — papalitan ng backend lookup after)
 const MATCHED = {
@@ -113,12 +114,9 @@ export default function GuardVerify() {
   const [drivePurpose, setDrivePurpose] = useState('');
   const [plate, setPlate] = useState('');
   const [photo, setPhoto] = useState(null);       // preview URL
-  const [photoFile, setPhotoFile] = useState(null); // aktwal na File (para sa OCR mamaya)
+  const [photoFile, setPhotoFile] = useState(null); // aktwal na File
   const [showAccompany, setShowAccompany] = useState(false);
-  // Pre-selected: mga bisitang kaparehong resident ng matched (auto-suggest na kasama)
-  const [selectedCompanions, setSelectedCompanions] = useState(
-    PREREG_POOL.filter((v) => v.resident === MATCHED.resident)
-  );
+  const [selectedCompanions, setSelectedCompanions] = useState([]);
   const [addSearch, setAddSearch] = useState('');
   const [entryInfo, setEntryInfo] = useState(MATCHED);         // details na ipapakita sa confirmed
   const [manualSelected, setManualSelected] = useState(null);  // napiling visitor sa manual search
@@ -135,13 +133,15 @@ export default function GuardVerify() {
   const [scannedName, setScannedName] = useState(DEFAULT_SCANNED_NAME);
   const [driverName, setDriverName] = useState(DEFAULT_DRIVER_NAME);
   const [ocrError, setOcrError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const isPickup = drivePurpose === 'PICKUP';
   const isDelivery = entryType === 'DELIVERY';
   const isDriverFlow = isPickup || isDelivery; // parehong nag-scan ng DRIVER'S ID
-  // Demo trigger: personal visit na may sasakyan → batch match
   const isBatchMatch = drivePurpose === 'PERSONAL VISIT';
   const [matchData, setMatchData] = useState(MATCHED);
+
+  const token = () => localStorage.getItem('sentricore_token');
 
   // Panatilihin ang tamang default match data (batch demo vs normal) kapag walang OCR match pa
   useEffect(() => {
@@ -174,37 +174,50 @@ export default function GuardVerify() {
     setShowCallResult(true);
   };
 
-  // I-save ang na-approve na entry sa localStorage (para mag-reflect sa GuardSchedule)
-  const saveArrival = () => {
-    const now = new Date();
-    const timeIn = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    const visitors = [entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].filter(Boolean);
-    const arrival = {
-      arrivalId: Date.now(),
-      category: entryInfo.category || 'SINGLE',
-      passId: entryInfo.passId,
-      batchNo: entryInfo.batchNo || null,
-      resident: entryInfo.resident || '',
-      address: entryInfo.address || '',
-      purpose: entryInfo.purpose || '',
-      expectedDate: entryInfo.expectedDate || '',
-      driver: entryInfo.driver || null,
-      visitors,
-      timeIn,
-      status: 'ACTIVE',
-    };
-    const existing = JSON.parse(localStorage.getItem('sentricore_arrivals') || '[]');
-    localStorage.setItem('sentricore_arrivals', JSON.stringify([arrival, ...existing]));
+  // ── I-save ang na-approve na entry sa DATABASE (POST /api/entry/group) ──
+  const saveArrival = async () => {
+    const names = [entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].filter(Boolean);
+    // Kung driver-only (walang visitor name, hal. pickup resident/delivery), gamitin ang driver
+    const entryNames = names.length ? names : (entryInfo.driver ? [entryInfo.driver] : []);
+
+    const visitors = entryNames.map((name) => ({
+      residentId: entryInfo.residentId || null,
+      registrationId: entryInfo.registrationId || null,
+      visitorName: name,
+      visitorType: entryInfo.driver ? 'Driver' : (entryInfo.category === 'DELIVERY' ? 'Delivery' : 'Visitor'),
+      purpose: entryInfo.purpose || null,
+      plateNumber: plate || null,
+      passNumber: entryInfo.passId || null,
+      status: 'Active',
+    }));
+
+    const res = await fetch(`${API}/entry/group`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ visitors }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to record entry.');
+    }
   };
 
-  // I-log ang exit — tanggalin ang lumabas na bisita sa active arrivals
-  const saveExit = () => {
-    const exiting = new Set([entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].filter(Boolean));
-    const existing = JSON.parse(localStorage.getItem('sentricore_arrivals') || '[]');
-    const updated = existing
-      .map((a) => ({ ...a, visitors: a.visitors.filter((n) => !exiting.has(n)) }))
-      .filter((a) => a.visitors.length > 0);
-    localStorage.setItem('sentricore_arrivals', JSON.stringify(updated));
+  // ── I-log ang exit sa DATABASE (POST /api/entry/:id/exit) ──
+  const saveExit = async () => {
+    const exitingIds = [entryInfo.transactionId, ...selectedCompanions.map((c) => c.transactionId)].filter(Boolean);
+    if (exitingIds.length === 0) {
+      throw new Error('No active transaction to exit. (Exit matching needs the active-visitor list from the database.)');
+    }
+    for (const id of exitingIds) {
+      const res = await fetch(`${API}/entry/${id}/exit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to record exit.');
+      }
+    }
   };
 
   const toggleCompanion = (v) => {
@@ -215,34 +228,29 @@ export default function GuardVerify() {
     );
   };
 
-  // Kapag may nakuhang litrato ng ID → i-preview, tumawag sa OCR, tapos pumunta sa Reading step
-    const handlePhoto = async (e) => {
+  // Kapag may nakuhang litrato ng ID → i-preview, tumawag sa OCR, tapos i-match sa DB
+  const handlePhoto = async (e) => {
     console.log('🔵 handlePhoto triggered');
     const file = e.target.files?.[0];
-    console.log('🔵 file:', file);
     if (!file) { console.log('🔴 no file — stopped'); return; }
     setPhotoFile(file);
     setPhoto(URL.createObjectURL(file));
     setOcrError('');
     setStep('reading');
 
-    // Ipadala ang ID image sa OCR backend (name extraction only — walang image na naka-store)
     try {
-      const token = localStorage.getItem('sentricore_token');
       const formData = new FormData();
       formData.append('file', file);
 
-      console.log('🔵 calling OCR...', 'token:', token ? 'yes' : 'no', 'isDriverFlow:', isDriverFlow);
-      const res = await fetch('http://localhost:3000/api/ocr/scan', {
+      const res = await fetch(`${API}/ocr/scan`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token()}` },
         body: formData,
       });
       const data = await res.json();
       console.log('🟢 OCR response:', data);
 
-        if (data.success && data.suggestedName) {
-        // Driver flow → driver ID ang na-scan; kung hindi → visitor
+      if (data.success && data.suggestedName) {
         if (isDriverFlow) {
           setDriverName(data.suggestedName);
         } else {
@@ -250,8 +258,8 @@ export default function GuardVerify() {
           // Hanapin ang scanned name sa expected registrations (real matching)
           try {
             const matchRes = await fetch(
-              `http://localhost:3000/api/entry/match?name=${encodeURIComponent(data.suggestedName)}`,
-              { headers: { Authorization: `Bearer ${token}` } }
+              `${API}/entry/match?name=${encodeURIComponent(data.suggestedName)}`,
+              { headers: { Authorization: `Bearer ${token()}` } }
             );
             const matchJson = await matchRes.json();
             console.log('🟣 match result:', matchJson);
@@ -284,7 +292,6 @@ export default function GuardVerify() {
     } catch (err) {
       setOcrError('OCR service unavailable. Please type the name manually.');
     } finally {
-      // Advance ONLY after OCR finishes (tama ang timing — hindi na maaga)
       setStep(afterReading());
     }
   };
@@ -295,15 +302,36 @@ export default function GuardVerify() {
     return 'matched';
   };
 
-  // Auto-advance para sa MANUAL entry lang (walang photo/OCR). Kung may photo, ang handlePhoto na ang mag-a-advance.
+  // Auto-advance para sa MANUAL entry lang (walang photo/OCR)
   useEffect(() => {
     if (step === 'reading' && !photoFile) {
       const t = setTimeout(() => setStep(afterReading()), 1200);
       return () => clearTimeout(t);
     }
   }, [step, photoFile]);
-  
+
   const close = () => navigate('/guard-home');
+
+  // Handler ng APPROVE (entry o exit) — DB save + error handling
+  const handleApprove = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const total = 1 + selectedCompanions.length;
+    try {
+      if (isExit) {
+        await saveExit();
+        alert(`Exit approved for ${total} visitor${total > 1 ? 's' : ''}! Time-out logged. ✅`);
+      } else {
+        await saveArrival();
+        alert(`Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅`);
+      }
+      navigate('/guard-home');
+    } catch (err) {
+      alert(err.message || 'Failed to save. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // ── Modal steps (choose / vehicle) ──
   if (step === 'choose' || step === 'vehicle') {
@@ -331,7 +359,6 @@ export default function GuardVerify() {
                 </button>
               </div>
 
-              {/* Vehicle question — lumalabas kapag may napiling type */}
               {entryType && (
                 <>
                   <p className="text-center italic text-ink/70 mt-5 mb-3 border-t border-gray-100 pt-4">
@@ -351,7 +378,6 @@ export default function GuardVerify() {
           {step === 'vehicle' && (
             <>
               {isDelivery ? (
-                /* ── DELIVERY: plate number lang ── */
                 <>
                   <p className="text-center text-xs text-ink/70 mb-2 mt-2">Enter plate number of the vehicle</p>
                   <input value={plate} onChange={(e) => setPlate(e.target.value)}
@@ -368,7 +394,6 @@ export default function GuardVerify() {
                   </div>
                 </>
               ) : (
-                /* ── VISITOR: purpose + (pickup) + plate ── */
                 <>
                   <h2 className="text-base font-bold text-ink text-center mt-2 mb-4">
                     What is the driver's purpose of visit?
@@ -383,7 +408,6 @@ export default function GuardVerify() {
                     ))}
                   </div>
 
-                  {/* Kapag PICKUP — sino ang susunduin? */}
                   {drivePurpose === 'PICKUP' && (
                     <>
                       <p className="text-center text-xs text-ink/70 mb-2 border-t border-gray-100 pt-4">Who is being picked up?</p>
@@ -424,10 +448,9 @@ export default function GuardVerify() {
     );
   }
 
-  // ── Full-screen steps (scan / reading / matched) ──
+  // ── Full-screen steps (scan / reading / matched / ...) ──
   return (
     <div className="min-h-screen bg-cream max-w-md mx-auto">
-      {/* Sub-page header */}
       <header className="bg-ink px-5 py-5 flex items-center gap-3">
         <button onClick={close} className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-ink font-bold">‹</button>
         <span className="text-white font-bold text-lg">Back to Home</span>
@@ -446,7 +469,6 @@ export default function GuardVerify() {
             </p>
             <p className="text-center text-xs text-ink/50 mb-5">Ensure the ID is clear and readable</p>
             <div className="flex flex-col items-center gap-2">
-              {/* Hidden camera/file input — kukuha ng ID photo */}
               <input ref={fileRef} type="file" accept="image/*" capture="environment"
                      onChange={handlePhoto} style={{ display: 'none' }} />
               <button onClick={() => fileRef.current?.click()}
@@ -484,10 +506,9 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* VISITOR MATCHED */}
+        {/* VISITOR MATCHED / DRIVER INFORMATION */}
         {step === 'matched' && (
           isDriverFlow ? (
-            /* ── DRIVER INFORMATION (pickup / delivery) ── */
             <div>
               <div className="bg-white rounded-2xl p-3 shadow mb-4">
                 <IDCardPlaceholder name={driverName} />
@@ -534,6 +555,7 @@ export default function GuardVerify() {
                                   regType: 'Single',
                                   resident: deliveryResident?.name || '',
                                   address: deliveryResident?.address || '',
+                                  residentId: deliveryResident?.residentId || null,
                                   driver: driverName,
                                   visitor: '',
                                   purpose: 'Delivery',
@@ -546,6 +568,7 @@ export default function GuardVerify() {
                                   regType: 'Single',
                                   resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : (pickupResident?.name || ''),
                                   address: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || ''),
+                                  residentId: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.residentId || null) : (pickupResident?.residentId || null),
                                   driver: driverName,
                                   visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || scannedName) : '',
                                   purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
@@ -565,8 +588,7 @@ export default function GuardVerify() {
                 </button>
               </div>
             </div>
-                     ) : (
-            /* ── VISITOR MATCHED (regular) ── */
+          ) : (
             <div>
               <div className="bg-white rounded-2xl p-3 shadow mb-4">
                 <IDCardPlaceholder name={scannedName} />
@@ -679,11 +701,10 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* PICKUP RESIDENT — pumili kung sinong resident ang susunduin (Notify Gate = nasa taas) */}
+        {/* PICKUP RESIDENT — Notify Gate residents nasa taas */}
         {step === 'pickupResidents' && (() => {
           const notifs = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
           const waitingNames = notifs.map((n) => n.name);
-          // Notify-Gate residents muna, tapos ang iba
           const waitingResidents = notifs.map((n) => ({
             name: n.name, address: n.address, waiting: true, rideHailing: n.rideHailing, time: n.time,
           }));
@@ -882,7 +903,7 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* MANUAL SEARCH — no match / mali ang scan (hanapin sa expected list) */}
+        {/* MANUAL SEARCH */}
         {step === 'manualSearch' && (
           <div>
             <div className="bg-white rounded-2xl p-3 shadow mb-4">
@@ -932,6 +953,8 @@ export default function GuardVerify() {
                           regType: 'Single',
                           resident: manualSelected.resident,
                           address: manualSelected.address,
+                          residentId: manualSelected.residentId || null,
+                          registrationId: manualSelected.registrationId || null,
                           visitor: manualSelected.name,
                           purpose: manualSelected.purpose,
                           expectedDate: '06/02/2026',
@@ -954,7 +977,7 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* RESIDENT LIST — para tawagan ang resident (unregistered visitor) */}
+        {/* RESIDENT LIST — Contact Resident */}
         {step === 'residentList' && (
           <div>
             <div className="rounded-2xl px-4 py-3 mb-4 flex items-center justify-between" style={{ backgroundColor: '#FBE0E0' }}>
@@ -977,7 +1000,6 @@ export default function GuardVerify() {
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
             </div>
 
-            {/* Address filter (by block) */}
             <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
               {blocks.map((b) => (
                 <button key={b} onClick={() => setBlockFilter(b)}
@@ -1020,7 +1042,7 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* UNLISTED VISITOR INFORMATION — pagkatapos i-approve ng resident */}
+        {/* UNLISTED VISITOR INFORMATION */}
         {step === 'unlisted' && (
           <div>
             <div className="bg-white rounded-2xl p-3 shadow mb-4">
@@ -1051,6 +1073,7 @@ export default function GuardVerify() {
                           regType: 'Single',
                           resident: contactedResident?.name || '',
                           address: contactedResident?.address || '',
+                          residentId: contactedResident?.residentId || null,
                           visitor: scannedName,
                           purpose: '',
                           expectedDate: '',
@@ -1065,7 +1088,7 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* VISITOR / DRIVER ENTRY CONFIRMED */}
+        {/* VISITOR / DRIVER ENTRY CONFIRMED / EXIT CONFIRMED */}
         {step === 'confirmed' && (
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-1">
@@ -1078,7 +1101,7 @@ export default function GuardVerify() {
 
             <div className="space-y-4 max-h-[55vh] overflow-y-auto mb-4">
               {[entryInfo.visitor, ...selectedCompanions.map((c) => c.name)]
-                .filter((v, i) => i === 0 || v) // panatilihin ang unang card kahit walang visitor name (resident pickup)
+                .filter((v, i) => i === 0 || v)
                 .map((vname, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
                   {[
@@ -1110,26 +1133,16 @@ export default function GuardVerify() {
                       className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                 BACK
               </button>
-              <button onClick={() => {
-                        const total = 1 + selectedCompanions.length;
-                        if (isExit) {
-                          saveExit();
-                          alert(`Exit approved for ${total} visitor${total > 1 ? 's' : ''}! Time-out logged. ✅`);
-                        } else {
-                          saveArrival();
-                          alert(`Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅`);
-                        }
-                        navigate('/guard-home');
-                      }}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                {isExit ? 'APPROVE EXIT' : 'APPROVE ENTRY'}
+              <button onClick={handleApprove} disabled={submitting}
+                      className="px-8 py-3 rounded-full text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: '#112D31' }}>
+                {submitting ? 'SAVING...' : (isExit ? 'APPROVE EXIT' : 'APPROVE ENTRY')}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Accompanying visitors modal (pagkatapos ng Confirm Match) */}
+      {/* Accompanying visitors modal */}
       {showAccompany && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm">
@@ -1138,12 +1151,10 @@ export default function GuardVerify() {
             </h2>
             <hr className="border-gray-100 mb-5" />
             <div className="flex gap-3 justify-center">
-              {/* NO — walang kasama */}
               <button onClick={() => { setSelectedCompanions([]); setShowAccompany(false); setStep('confirmed'); }}
                       className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300">
                 NO
               </button>
-              {/* YES — pumili ng accompanying visitors */}
               <button onClick={() => { setShowAccompany(false); setStep('additional'); }}
                       className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
                 YES
@@ -1153,7 +1164,7 @@ export default function GuardVerify() {
         </div>
       )}
 
-      {/* CALL RESULT modal (pagkatapos tawagan ang resident) */}
+      {/* CALL RESULT modal */}
       {showCallResult && contactedResident && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm relative">
@@ -1170,7 +1181,6 @@ export default function GuardVerify() {
 
             <div className="flex gap-2 mb-2">
               <button onClick={() => {
-                        // TODO: i-note sa DB na DENIED
                         alert('Entry denied by resident — noted in records.');
                         navigate('/guard-home');
                       }}

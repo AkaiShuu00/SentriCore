@@ -35,5 +35,6 @@ export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');
 export const createGroupEntry = (data) => api.post('/entry/group', data);
 export const recordExit = (id, data) => api.post(`/entry/${id}/exit`, data);
+export const getResidentsForGuard = () => api.get('/entry/residents');
 
 export default api;
