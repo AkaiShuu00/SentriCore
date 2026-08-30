@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { getResidentsForGuard, getActiveVisitors } from '../../api';
 
 const teal = '#0F6E6E';
 const API = 'http://localhost:3000/api';
@@ -135,6 +136,33 @@ export default function GuardVerify() {
   const [ocrError, setOcrError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Real data mula DB ──
+  const [residentsDB, setResidentsDB] = useState([]);     // para sa delivery/pickup/contact
+  const [activeDB, setActiveDB] = useState([]);           // active visitors (para sa exit/pickup)
+
+  // Kunin ang residents directory (guard) at active visitors
+  useEffect(() => {
+    getResidentsForGuard()
+      .then((res) => setResidentsDB((res.data || []).map((r) => ({
+        residentId: r.resident_id,
+        name: r.full_name,
+        address: r.unit_address,
+        contact: r.contact_number || '',
+      }))))
+      .catch(() => setResidentsDB([]));
+
+    getActiveVisitors()
+      .then((res) => setActiveDB((res.data || []).map((t) => ({
+        transactionId: t.transaction_id,
+        name: t.visitor_name,
+        resident: t.resident_name,
+        address: t.unit_address,
+        residentId: t.resident_id,
+        purpose: t.purpose || 'N/A',
+      }))))
+      .catch(() => setActiveDB([]));
+  }, []);
+
   const isPickup = drivePurpose === 'PICKUP';
   const isDelivery = entryType === 'DELIVERY';
   const isDriverFlow = isPickup || isDelivery; // parehong nag-scan ng DRIVER'S ID
@@ -148,23 +176,23 @@ export default function GuardVerify() {
     setMatchData(isBatchMatch ? MATCHED_BATCH : MATCHED);
   }, [isBatchMatch]);
 
-  // Pool para sa accompanying step (exit → active; batch → batch pool; else → prereg)
+  // Pool para sa accompanying step (exit → active mula DB; batch → batch pool; else → prereg)
   const additionalPool = isExit
-    ? ACTIVE_VISITORS.filter((v) => v.name !== entryInfo?.visitor)
+    ? activeDB.filter((v) => v.name !== entryInfo?.visitor)
     : isBatchMatch ? BATCH_POOL : PREREG_POOL;
 
-  // Address filter options (blocks na nakuha mula sa data)
+  // Address filter options (blocks na nakuha mula sa DB residents)
   const blocks = ['All', ...Array.from(new Set(
-    RESIDENT_LIST.map((r) => {
-      const m = r.address.match(/Block\s+([A-Za-z0-9]+)/);
+    residentsDB.map((r) => {
+      const m = (r.address || '').match(/Block\s+([A-Za-z0-9]+)/);
       return m ? `Block ${m[1]}` : null;
     }).filter(Boolean)
   ))];
 
-  const filteredResidents = RESIDENT_LIST.filter((r) => {
+  const filteredResidents = residentsDB.filter((r) => {
     const q = residentSearch.toLowerCase();
-    const matchQ = r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q);
-    const matchBlock = blockFilter === 'All' || r.address.includes(blockFilter);
+    const matchQ = r.name.toLowerCase().includes(q) || (r.address || '').toLowerCase().includes(q);
+    const matchBlock = blockFilter === 'All' || (r.address || '').includes(blockFilter);
     return matchQ && matchBlock;
   });
 
@@ -617,7 +645,13 @@ export default function GuardVerify() {
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                     MANUAL SEARCH
                   </button>
-                  <button onClick={() => { setEntryInfo({ ...matchData, visitor: scannedName }); setSelectedCompanions([]); setShowAccompany(true); }}
+                  <button onClick={() => {
+                            // Sa EXIT, hanapin ang transactionId ng na-scan na bisita mula active list
+                            const act = isExit ? activeDB.find((v) => v.name === scannedName) : null;
+                            setEntryInfo({ ...matchData, visitor: scannedName, transactionId: act?.transactionId || null });
+                            setSelectedCompanions([]);
+                            setShowAccompany(true);
+                          }}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
                     CONFIRM MATCH
                   </button>
@@ -705,10 +739,17 @@ export default function GuardVerify() {
         {step === 'pickupResidents' && (() => {
           const notifs = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
           const waitingNames = notifs.map((n) => n.name);
-          const waitingResidents = notifs.map((n) => ({
-            name: n.name, address: n.address, waiting: true, rideHailing: n.rideHailing, time: n.time,
-          }));
-          const others = RESIDENT_LIST
+          // I-match ang notify-gate sa DB residents para makuha ang residentId + address
+          const waitingResidents = notifs.map((n) => {
+            const db = residentsDB.find((r) => r.name === n.name) || {};
+            return {
+              residentId: db.residentId || null,
+              name: n.name,
+              address: db.address || n.address || '',
+              waiting: true, rideHailing: n.rideHailing, time: n.time,
+            };
+          });
+          const others = residentsDB
             .filter((r) => !waitingNames.includes(r.name))
             .map((r) => ({ ...r, waiting: false }));
           const list = [...waitingResidents, ...others]
@@ -795,18 +836,17 @@ export default function GuardVerify() {
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <p className="text-sm font-semibold text-ink/70 mb-3">All residents expecting a delivery today</p>
               <div className="max-h-[45vh] overflow-y-auto space-y-2">
-                {DELIVERY_RESIDENTS
+                {residentsDB
                   .filter((r) => r.name.toLowerCase().includes(residentSearch.toLowerCase()))
                   .map((r) => {
                     const selected = deliveryResident?.name === r.name;
                     return (
-                      <button key={r.name} onClick={() => setDeliveryResident(r)}
+                      <button key={r.residentId} onClick={() => setDeliveryResident(r)}
                               className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
                               style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
                         <div>
                           <p className="font-bold text-ink text-sm">{r.name}</p>
                           <p className="text-xs text-ink/60">Address: {r.address}</p>
-                          <p className="text-xs text-ink/60">Order ID: {r.orderId}</p>
                         </div>
                         <span className="w-4 h-4 rounded-full shrink-0"
                               style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
@@ -858,12 +898,12 @@ export default function GuardVerify() {
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <p className="text-center text-sm font-semibold text-ink/70 mb-3">ACTIVE VISITORS AS OF TODAY</p>
               <div className="max-h-[42vh] overflow-y-auto space-y-2">
-                {ACTIVE_VISITORS
+                {activeDB
                   .filter((v) => v.name.toLowerCase().includes(activeSearch.toLowerCase()))
                   .map((v) => {
                     const selected = pickedUpVisitor?.name === v.name;
                     return (
-                      <button key={v.name} onClick={() => setPickedUpVisitor(v)}
+                      <button key={v.transactionId} onClick={() => setPickedUpVisitor(v)}
                               className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
                               style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
                         <div>
@@ -876,6 +916,9 @@ export default function GuardVerify() {
                       </button>
                     );
                   })}
+                {activeDB.length === 0 && (
+                  <p className="text-center text-ink/50 py-6 text-sm">No active visitors right now.</p>
+                )}
               </div>
             </div>
 
@@ -1017,7 +1060,7 @@ export default function GuardVerify() {
                   <p className="text-center text-ink/50 py-6 text-sm">No resident found.</p>
                 ) : (
                   filteredResidents.map((r) => (
-                    <div key={r.name} className="rounded-2xl p-3 border border-gray-200 shadow-sm flex items-center justify-between gap-2">
+                    <div key={r.residentId} className="rounded-2xl p-3 border border-gray-200 shadow-sm flex items-center justify-between gap-2">
                       <div>
                         <p className="font-bold text-ink text-sm">{r.name}</p>
                         <p className="text-xs text-ink/60">Address: {r.address}</p>
