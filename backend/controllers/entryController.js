@@ -78,6 +78,7 @@ async function createGroupEntry(req, res) {
     }
 
     const created = [];
+    const touchedRegs = new Set();
     for (const v of visitors) {
       const [tx] = await conn.query(
         `INSERT INTO VisitorTransactions
@@ -91,6 +92,15 @@ async function createGroupEntry(req, res) {
         ]
       );
       created.push(tx.insertId);
+      if (v.registrationId) touchedRegs.add(v.registrationId);
+    }
+
+    // I-update ang registration status → Active (para makita ng resident na "Active")
+    for (const regId of touchedRegs) {
+      await conn.query(
+        `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
+        [regId]
+      );
     }
 
     await conn.commit();
@@ -109,15 +119,39 @@ async function getActiveVisitors(req, res) {
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.arrival_id,
-              res.resident_id, res.full_name AS resident_name, res.unit_address
+              t.registration_id,
+              res.resident_id, res.full_name AS resident_name, res.unit_address,
+              vr.registration_type, vr.batch_name
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
+       LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
        WHERE t.status = 'Active'
        ORDER BY t.transaction_id DESC`
     );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching active visitors.', error: err.message });
+  }
+}
+
+// GET /api/entry/history  (Guard) - completed/departed transactions
+async function getHistory(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
+              t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status,
+              t.registration_id,
+              res.full_name AS resident_name, res.unit_address,
+              vr.registration_type
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
+       WHERE t.status = 'Completed'
+       ORDER BY t.exit_time DESC, t.transaction_id DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching history.', error: err.message });
   }
 }
 
@@ -138,29 +172,53 @@ async function getResidentsForGuard(req, res) {
 
 // POST /api/entry/:id/exit  (Guard) - record a visitor's exit
 async function recordExit(req, res) {
+  const conn = await pool.getConnection();
   try {
     const { id } = req.params;
     const exitGuardId = req.user.guardId;
 
-    const [rows] = await pool.query(
-      `SELECT transaction_id FROM VisitorTransactions WHERE transaction_id = ? AND status = 'Active'`,
+    const [rows] = await conn.query(
+      `SELECT transaction_id, registration_id FROM VisitorTransactions
+       WHERE transaction_id = ? AND status = 'Active'`,
       [id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Active visitor not found.' });
     }
+    const regId = rows[0].registration_id;
 
-    await pool.query(
+    await conn.beginTransaction();
+
+    await conn.query(
       `UPDATE VisitorTransactions
        SET status = 'Completed', exit_time = NOW(), exit_guard_id = ?
        WHERE transaction_id = ?`,
       [exitGuardId, id]
     );
 
+    // Kung wala nang active na transaction sa registration → Departed na
+    if (regId) {
+      const [stillActive] = await conn.query(
+        `SELECT transaction_id FROM VisitorTransactions
+         WHERE registration_id = ? AND status = 'Active' LIMIT 1`,
+        [regId]
+      );
+      if (stillActive.length === 0) {
+        await conn.query(
+          `UPDATE VisitorRegistrations SET status = 'Departed' WHERE registration_id = ?`,
+          [regId]
+        );
+      }
+    }
+
+    await conn.commit();
     res.json({ message: 'Exit recorded.' });
   } catch (err) {
+    await conn.rollback();
     res.status(500).json({ message: 'Error recording exit.', error: err.message });
+  } finally {
+    conn.release();
   }
 }
 
-module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, recordExit, getResidentsForGuard };
+module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, getHistory, recordExit, getResidentsForGuard };

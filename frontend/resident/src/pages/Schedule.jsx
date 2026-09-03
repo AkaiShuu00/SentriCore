@@ -23,22 +23,24 @@ export default function Schedule() {
       .finally(() => setLoading(false));
   }, []);
 
+  const year = today.getFullYear();
+  const month = today.getMonth();
+
   // I-flatten ang registrations → isang row bawat visitor
   const allRows = registrations.flatMap((r) => {
     const isDelivery = r.registration_type === 'Delivery';
     const expDate = (r.expected_date || '').slice(0, 10);
-    const names = r.visitors && r.visitors.length ? r.visitors : [isDelivery ? 'Delivery Driver' : '—'];
+    const names = r.visitors && r.visitors.length ? r.visitors : [isDelivery ? 'Delivery Rider' : '—'];
     return names.map((name) => ({
       name,
       type: isDelivery ? 'Delivery' : 'Visitor',
       purpose: r.purpose || (isDelivery ? 'Delivery' : 'N/A'),
       status: (r.status || 'Expected').toUpperCase(),
       expectedDate: expDate,
-      regType: r.registration_type,
     }));
   });
 
-  // ── Counts para sa summary ──
+  // ── Counts para sa summary (buong listahan) ──
   const counts = {
     ALL: allRows.length,
     ACTIVE: allRows.filter((s) => s.status === 'ACTIVE').length,
@@ -54,8 +56,6 @@ export default function Schedule() {
 
   // Day strip
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  const year = today.getFullYear();
-  const month = today.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthDays = [];
   for (let i = 1; i <= daysInMonth; i++) {
@@ -69,9 +69,17 @@ export default function Schedule() {
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
 
+  // Napiling petsa (YYYY-MM-DD) base sa day strip
+  const selectedISO = new Date(year, month, selectedDay).toISOString().slice(0, 10);
+
   const filtered = allRows
+    .filter((s) => s.expectedDate === selectedISO)              // filter by selected day
     .filter((s) => filter === 'ALL' || s.status === filter)
     .filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
+
+  const prettyDate = new Date(year, month, selectedDay).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
 
   return (
     <div className="min-h-screen bg-cream pb-24 max-w-md mx-auto">
@@ -146,8 +154,11 @@ export default function Schedule() {
           ))}
         </div>
 
+        {/* Selected day label */}
+        <p className="text-sm font-semibold text-ink/70 mt-4 mb-2">{prettyDate}</p>
+
         {/* List */}
-        <div className="bg-white rounded-3xl p-4 shadow mt-4 mb-4">
+        <div className="bg-white rounded-3xl p-4 shadow mb-4">
           {loading ? (
             <div className="text-center py-10 text-ink/50">Loading your visitors…</div>
           ) : error ? (
@@ -155,8 +166,8 @@ export default function Schedule() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-4xl mb-2">📭</p>
-              <p className="text-ink/60 font-semibold">No visitors here</p>
-              <p className="text-ink/40 text-sm mt-1">Pre-register a visitor to see them here.</p>
+              <p className="text-ink/60 font-semibold">No visitors on this day</p>
+              <p className="text-ink/40 text-sm mt-1">Pick another date or pre-register a visitor.</p>
             </div>
           ) : (
             <>

@@ -1,15 +1,28 @@
-// Reusable announcements modal — magagamit sa guard at resident home
-const DEFAULT_ANNOUNCEMENTS = [
-  { icon: '🔥', bg: 'bg-white',        text: 'Fire incident happening at Gemini Street' },
-  { icon: '🛑', bg: 'bg-white',        text: 'Gate 1 temporarily closed' },
-  { icon: '💧', bg: 'bg-yellow-100',   text: 'Water interruption at 11:00 PM today, June 2, 2026' },
-  { icon: '🧑', bg: 'bg-red-100',      text: 'Homeowners meeting today at clubhouse, 10:30 AM' },
-  { icon: '🛑', bg: 'bg-white',        text: 'CCTV maintenance ongoing at Gate 1' },
-  { icon: '⚡', bg: 'bg-yellow-100',   text: 'Power interruption on June 6, 9:00 AM - 3:00 PM' },
-  { icon: '🧑', bg: 'bg-red-100',      text: 'Election of HOA officers scheduled next month' },
-];
+import { useState, useEffect } from 'react';
+import { getAnnouncements } from '../api';
 
-export default function AnnouncementsModal({ items = DEFAULT_ANNOUNCEMENTS, onClose }) {
+// Umiikot na icon depende sa nilalaman (visual lang; walang hardcoded na text)
+function iconFor(text) {
+  const t = (text || '').toLowerCase();
+  if (t.includes('fire')) return { icon: '🔥', bg: 'bg-white' };
+  if (t.includes('water')) return { icon: '💧', bg: 'bg-yellow-100' };
+  if (t.includes('power') || t.includes('electric')) return { icon: '⚡', bg: 'bg-yellow-100' };
+  if (t.includes('gate') || t.includes('cctv') || t.includes('closed')) return { icon: '🛑', bg: 'bg-white' };
+  if (t.includes('meeting') || t.includes('election') || t.includes('homeowner')) return { icon: '🧑', bg: 'bg-red-100' };
+  return { icon: '📢', bg: 'bg-white' };
+}
+
+export default function AnnouncementsModal({ onClose }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getAnnouncements()
+      .then((res) => setItems(res.data || []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div
@@ -19,17 +32,32 @@ export default function AnnouncementsModal({ items = DEFAULT_ANNOUNCEMENTS, onCl
       >
         <h2 className="text-2xl font-extrabold text-ink text-center mb-5">ANNOUNCEMENTS</h2>
 
-        {items.map((a, i) => (
-          <div key={i}>
-            <div className="flex items-center gap-4 py-4">
-              <div className={`w-11 h-11 rounded-full ${a.bg} flex items-center justify-center text-xl shrink-0 shadow-sm`}>
-                {a.icon}
-              </div>
-              <p className="font-semibold text-sm text-ink">{a.text}</p>
-            </div>
-            {i < items.length - 1 && <div className="border-b border-ink/10" />}
+        {loading ? (
+          <p className="text-center text-ink/50 py-8">Loading…</p>
+        ) : items.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-4xl mb-2">📭</p>
+            <p className="text-ink/60 font-semibold">No announcements yet</p>
           </div>
-        ))}
+        ) : (
+          items.map((a, i) => {
+            const { icon, bg } = iconFor(a.title + ' ' + a.content);
+            return (
+              <div key={a.announcement_id || i}>
+                <div className="flex items-center gap-4 py-4">
+                  <div className={`w-11 h-11 rounded-full ${bg} flex items-center justify-center text-xl shrink-0 shadow-sm`}>
+                    {icon}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-ink">{a.title}</p>
+                    {a.content && <p className="text-xs text-ink/70">{a.content}</p>}
+                  </div>
+                </div>
+                {i < items.length - 1 && <div className="border-b border-ink/10" />}
+              </div>
+            );
+          })
+        )}
 
         <button
           onClick={onClose}

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import GuardBottomNav from '../../components/GuardBottomNav';
+import { getHistory } from '../../api';
 
 const FILTERS = ['ALL', 'SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
 
@@ -8,17 +9,8 @@ const statusBg = {
   EXPIRED:  { backgroundColor: '#D9D9D9', color: '#555' },
 };
 
-// ── Sample history data (community-wide — papalitan ng backend after) ──
-const RESIDENT = 'Reina Magpantay';
-const ADDRESS  = '207 Gemini St. Block A';
-
-const RECORDS = [
-  { dateISO: '2026-06-02', date: 'June 2, 2026',  time: '6:00 PM to 6:30 PM',  name: 'Delivery Rider',     kind: 'Delivery', plate: 'HPP 657',  resident: RESIDENT, address: ADDRESS, status: 'DEPARTED', entryId: 'DLV 260602-1001', type: 'DELIVERY' },
-  { dateISO: '2026-06-02', date: 'June 2, 2026',  time: '8:45 PM to 10:23 PM', name: 'Joeffrey Lannister', kind: 'Visitor',  plate: 'ATK 999',  resident: RESIDENT, address: ADDRESS, status: 'DEPARTED', entryId: 'LNK 260602-1002', type: 'LINKED'   },
-  { dateISO: '2026-05-31', date: 'May 31, 2026',  time: '3:00 PM to 8:00 PM',  name: 'Maria Santos',       kind: 'Visitor',  plate: 'ABC 1234', resident: RESIDENT, address: ADDRESS, status: 'DEPARTED', entryId: 'VST 260531-1001', type: 'SINGLE'   },
-  { dateISO: '2026-05-07', date: 'May 7, 2026',   time: '8:45 PM to 9:15 PM',  name: 'Pedro Pascal',       kind: 'Delivery', plate: 'DEF 345',  resident: RESIDENT, address: ADDRESS, status: 'DEPARTED', entryId: 'DLV 260507-1001', type: 'DELIVERY' },
-  { dateISO: '2026-06-01', date: 'June 1, 2026',  time: '-----',               name: 'Francesca Fruto',    kind: 'Visitor',  plate: '',         resident: RESIDENT, address: ADDRESS, status: 'EXPIRED',  entryId: 'VST 260601-1001', type: 'SINGLE'   },
-];
+const fmtTime = (ts) =>
+  ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
 
 export default function GuardLogs() {
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
@@ -30,6 +22,36 @@ export default function GuardLogs() {
   const [sortOpen, setSortOpen] = useState(false);
   const [sortBy, setSortBy] = useState('Newest first');
 
+  // ── History mula DB ──
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getHistory()
+      .then((res) => {
+        const mapped = (res.data || []).map((t) => {
+          const type = (t.registration_type || 'Single').toUpperCase(); // SINGLE/BATCH/DELIVERY
+          const prefix = type === 'DELIVERY' ? 'DLV' : type === 'BATCH' ? 'BTC' : 'VST';
+          return {
+            dateISO: (t.entry_time || t.exit_time || '').slice(0, 10),
+            date: t.entry_time ? new Date(t.entry_time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '-----',
+            time: `${fmtTime(t.entry_time)} to ${fmtTime(t.exit_time)}`,
+            name: t.visitor_name,
+            kind: t.visitor_type || 'Visitor',
+            plate: t.plate_number || '',
+            resident: t.resident_name || '',
+            address: t.unit_address || '',
+            status: 'DEPARTED',
+            entryId: t.pass_number || `${prefix} ${t.transaction_id}`,
+            type,
+          };
+        });
+        setRecords(mapped);
+      })
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   const fmtShort = (iso) => {
     if (!iso) return '';
     const d = new Date(iso + 'T00:00:00');
@@ -37,7 +59,7 @@ export default function GuardLogs() {
   };
 
   // ── Filtering ──
-  let filtered = RECORDS
+  let filtered = records
     .filter((r) => filter === 'ALL' || r.type === filter)
     .filter((r) => {
       const q = search.toLowerCase();
@@ -60,14 +82,12 @@ export default function GuardLogs() {
     return 0;
   });
 
-  // ── Stat counts (base sa filtered) ──
   const counts = {
     TOTAL: filtered.length,
     DEPARTED: filtered.filter((r) => r.status === 'DEPARTED').length,
     EXPIRED: filtered.filter((r) => r.status === 'EXPIRED').length,
   };
 
-  // ── Export to CSV ──
   const exportCSV = () => {
     if (filtered.length === 0) { alert('No records to export.'); return; }
     const header = ['Date', 'Time', 'Name', 'Type', 'Plate', 'Resident', 'Address', 'Status', 'Entry ID'];
@@ -94,7 +114,7 @@ export default function GuardLogs() {
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
         <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
-          <span className="font-bold text-ink">{user.name || 'Guard One'}</span>
+          <span className="font-bold text-ink">{user.name || 'Guard'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👮</div>
         </div>
       </header>
@@ -200,11 +220,13 @@ export default function GuardLogs() {
           </div>
 
           <div className="max-h-[55vh] overflow-y-auto">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-10 text-ink/50">Loading history…</div>
+            ) : filtered.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-4xl mb-2">🗂️</p>
                 <p className="text-ink/60 font-semibold">No records found</p>
-                <p className="text-ink/40 text-sm mt-1">Try a different filter or date range.</p>
+                <p className="text-ink/40 text-sm mt-1">Completed visits will appear here.</p>
               </div>
             ) : (
               filtered.map((r, i) => (

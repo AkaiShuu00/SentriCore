@@ -30,9 +30,16 @@ export const getMyRegistrations = () => api.get('/registrations');
 export const updateRegistration = (id, data) => api.put(`/registrations/${id}`, data);
 export const deleteRegistration = (id) => api.delete(`/registrations/${id}`);
 
+// ── Resident profile ──
+export const getMyProfile = () => api.get('/residents/me');
+
+// ── Announcements (all logged-in) ──
+export const getAnnouncements = () => api.get('/announcements');
+
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');
+export const getHistory = () => api.get('/entry/history');
 export const createGroupEntry = (data) => api.post('/entry/group', data);
 export const recordExit = (id, data) => api.post(`/entry/${id}/exit`, data);
 export const getResidentsForGuard = () => api.get('/entry/residents');

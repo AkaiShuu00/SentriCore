@@ -28,7 +28,7 @@ export default function History() {
     ACTIVE: { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
   };
 
-  const monthYear = 'JUNE 2026';
+  const monthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
 
   // Format YYYY-MM-DD → "Aug 21" (short, clean)
   const fmtShort = (iso) => {

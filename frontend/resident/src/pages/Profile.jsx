@@ -1,9 +1,18 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
+import { getMyProfile } from '../api';
 
 export default function Profile() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    getMyProfile()
+      .then((res) => setProfile(res.data || null))
+      .catch(() => setProfile(null));
+  }, []);
 
   function handleLogout() {
     localStorage.removeItem('sentricore_token');
@@ -11,10 +20,16 @@ export default function Profile() {
     navigate('/signin');
   }
 
+  // Kunin mula profile (DB) na may fallback sa token — robust sa field names
+  const name    = profile?.full_name || profile?.name || user.name || 'Resident';
+  const email   = profile?.email || user.email || '—';
+  const address = profile?.unit_address || profile?.address || '—';
+  const contact = profile?.contact_number || profile?.contact || profile?.phone || '—';
+
   const personalInfo = [
-    { icon: '🏠', bg: 'bg-teal-100', main: user.address || '207 Gemini St. Block A', sub: 'DABBA Subdivision' },
-    { icon: '📞', bg: 'bg-yellow-100', main: user.phone || '+63 912 456 3857', sub: 'Primary number' },
-    { icon: '✉️', bg: 'bg-red-100', main: user.email || 'reinamagpantay123@gmail.com', sub: 'Linked email' },
+    { icon: '🏠', bg: 'bg-teal-100', main: address, sub: 'Unit address' },
+    { icon: '📞', bg: 'bg-yellow-100', main: contact, sub: 'Contact number' },
+    { icon: '✉️', bg: 'bg-red-100', main: email, sub: 'Email address' },
   ];
 
   const settings = [
@@ -49,9 +64,9 @@ export default function Profile() {
               <div className="w-24 h-24 rounded-full bg-yellow-300 border-4 border-white flex items-center justify-center text-4xl shrink-0">
                 👩
               </div>
-              <h2 className="text-2xl font-extrabold text-white mb-14">{(user.name || 'Reina Magpantay').toUpperCase()}</h2>
+              <h2 className="text-2xl font-extrabold text-white mb-14">{name.toUpperCase()}</h2>
             </div>
-            <p className="text-ink/70 mt-2">{user.email || 'reinamagpantay123@gmail.com'}</p>
+            <p className="text-ink/70 mt-2">{email}</p>
           </div>
         </div>
 
