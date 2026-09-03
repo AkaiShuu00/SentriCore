@@ -17,7 +17,6 @@ async function matchVisitor(req, res) {
       return res.json({ matched: false, candidates: [] });
     }
 
-    // Get expected registrations that have NO gate activity yet
     const [regs] = await pool.query(
       `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose,
               r.expected_date, res.resident_id, res.full_name AS resident_name, res.unit_address,
@@ -32,7 +31,7 @@ async function matchVisitor(req, res) {
     for (const reg of regs) {
       const regTokens = tokenize(reg.visitor_name);
       const score = regTokens.filter(t => searchTokens.includes(t)).length;
-      const required = regTokens.length >= 2 ? 2 : 1; // surname alone must not match
+      const required = regTokens.length >= 2 ? 2 : 1;
       if (score >= required) {
         candidates.push({
           registrationId: reg.registration_id,
@@ -62,7 +61,7 @@ async function createGroupEntry(req, res) {
   try {
     const guardId = req.user.guardId;
     const gateId = req.user.gateId;
-    const { visitors } = req.body; // array of visitor objects
+    const { visitors } = req.body;
 
     if (!Array.isArray(visitors) || visitors.length === 0) {
       return res.status(400).json({ message: 'No visitors to log.' });
@@ -70,7 +69,6 @@ async function createGroupEntry(req, res) {
 
     await conn.beginTransaction();
 
-    // If more than one visitor, they share an arrival
     let arrivalId = null;
     if (visitors.length >= 2) {
       const [arr] = await conn.query(`INSERT INTO Arrivals () VALUES ()`);
@@ -95,7 +93,6 @@ async function createGroupEntry(req, res) {
       if (v.registrationId) touchedRegs.add(v.registrationId);
     }
 
-    // I-update ang registration status → Active (para makita ng resident na "Active")
     for (const regId of touchedRegs) {
       await conn.query(
         `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
@@ -155,13 +152,13 @@ async function getHistory(req, res) {
   }
 }
 
-// GET /api/entry/residents  (Guard) - residents directory para sa pickup/delivery/contact
+// GET /api/entry/residents  (Guard) - residents directory
 async function getResidentsForGuard(req, res) {
   try {
+    // TAMANG COLUMN: phone_number (hindi contact_number). Walang 'status' column ang Residents.
     const [rows] = await pool.query(
-      `SELECT resident_id, full_name, unit_address, contact_number
+      `SELECT resident_id, full_name, unit_address, phone_number AS contact_number, email
        FROM Residents
-       WHERE status = 'Active'
        ORDER BY full_name ASC`
     );
     res.json(rows);
@@ -172,12 +169,11 @@ async function getResidentsForGuard(req, res) {
 
 // POST /api/entry/:id/exit  (Guard) - record a visitor's exit
 async function recordExit(req, res) {
-  const conn = await pool.getConnection();
   try {
     const { id } = req.params;
     const exitGuardId = req.user.guardId;
 
-    const [rows] = await conn.query(
+    const [rows] = await pool.query(
       `SELECT transaction_id, registration_id FROM VisitorTransactions
        WHERE transaction_id = ? AND status = 'Active'`,
       [id]
@@ -187,37 +183,37 @@ async function recordExit(req, res) {
     }
     const regId = rows[0].registration_id;
 
-    await conn.beginTransaction();
-
-    await conn.query(
+    // 1) ESSENTIAL: markahan ang transaction bilang Completed
+    await pool.query(
       `UPDATE VisitorTransactions
        SET status = 'Completed', exit_time = NOW(), exit_guard_id = ?
        WHERE transaction_id = ?`,
       [exitGuardId, id]
     );
 
-    // Kung wala nang active na transaction sa registration → Departed na
+    // 2) OPTIONAL: registration → Departed (hindi sisira ang exit kung pumalya ang enum)
     if (regId) {
-      const [stillActive] = await conn.query(
-        `SELECT transaction_id FROM VisitorTransactions
-         WHERE registration_id = ? AND status = 'Active' LIMIT 1`,
-        [regId]
-      );
-      if (stillActive.length === 0) {
-        await conn.query(
-          `UPDATE VisitorRegistrations SET status = 'Departed' WHERE registration_id = ?`,
+      try {
+        const [stillActive] = await pool.query(
+          `SELECT transaction_id FROM VisitorTransactions
+           WHERE registration_id = ? AND status = 'Active' LIMIT 1`,
           [regId]
         );
+        if (stillActive.length === 0) {
+          await pool.query(
+            `UPDATE VisitorRegistrations SET status = 'Departed' WHERE registration_id = ?`,
+            [regId]
+          );
+        }
+      } catch (regErr) {
+        console.warn('Registration status update skipped:', regErr.message);
       }
     }
 
-    await conn.commit();
     res.json({ message: 'Exit recorded.' });
   } catch (err) {
-    await conn.rollback();
+    console.error('Error recording exit:', err);
     res.status(500).json({ message: 'Error recording exit.', error: err.message });
-  } finally {
-    conn.release();
   }
 }
 
