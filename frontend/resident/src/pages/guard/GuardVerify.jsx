@@ -5,80 +5,9 @@ import { getResidentsForGuard, getActiveVisitors } from '../../api';
 const teal = '#0F6E6E';
 const API = 'http://localhost:3000/api';
 
-// Matched registration (sample — papalitan ng backend lookup after)
-const MATCHED = {
-  passId: 'LNK 260602-2001',
-  category: 'SINGLE',
-  regType: 'Single',
-  resident: 'Marina Lewis',
-  address: '34 Cancer St.',
-  visitor: 'Jon Snow',
-  purpose: 'Board night',
-  expectedDate: '06/02/2026',
-};
-
-// Pool ng expected pre-registered visitors (para sa accompanying visitors)
-const PREREG_POOL = [
-  { name: 'Rhaenyra Targaryen', resident: 'Marina Lewis',    address: '34 Cancer St',            purpose: 'Board night' },
-  { name: 'Theon Greyjoy',      resident: 'Marina Lewis',    address: '34 Cancer St',            purpose: 'Board night' },
-  { name: 'Juan Dela Cruz',     resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'Visiting a friend' },
-  { name: 'Adrianne Pawhay',    resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'N/A' },
-  { name: 'Naveah Lim',         resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'Casual visit' },
-  { name: 'Delia Samaco',       resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'Family gathering' },
-];
-
-// Batch match (kapag personal visit na may sasakyan → tumugma sa batch registration)
-const MATCHED_BATCH = {
-  batchNo: '260602-1001',
-  category: 'BATCH',
-  passId: 'BTC 260602-1001-1',
-  regType: 'Batch',
-  resident: 'Reina Magpantay',
-  address: '207 Gemini St. Block A',
-  visitor: 'Tony Hawk',
-  purpose: 'Birthday celebration',
-  expectedDate: '06/02/2026',
-  subtitle: 'Batch 260602-1001 | Arrival 1',
-};
-
-// Ibang miyembro ng parehong batch (para sa Register Batch Visitors)
-const BATCH_POOL = [
-  { name: 'Madeleine Mina',   resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
-  { name: 'Angel Libunao',    resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
-  { name: 'Love Licuanan',    resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
-  { name: 'Jericho Gonzales', resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
-  { name: 'Jefferson Moong',  resident: 'Reina Magpantay', address: '207 Gemini St. Block A', purpose: 'Birthday celebration' },
-];
-
-// Fallback names kung walang OCR result (hal. manual entry o pumalya ang OCR)
-const DEFAULT_SCANNED_NAME = 'Jon Snow';
-const DEFAULT_DRIVER_NAME = 'Angelie Roman';
-
-// Residents na may inaasahang delivery ngayon (para sa delivery flow)
-const DELIVERY_RESIDENTS = [
-  { name: 'Reina Magpantay', address: '207 Gemini St. Block A', orderId: 'PH 268358905823K' },
-];
-
-// Active visitors sa loob ngayon (para sa pickup)
-const ACTIVE_VISITORS = [
-  { name: 'Jon Snow',           resident: 'Marina Lewis',    address: '34 Cancer St.',           purpose: 'Board night' },
-  { name: 'Rhaenyra Targaryen', resident: 'Marina Lewis',    address: '34 Cancer St.',           purpose: 'Board night' },
-  { name: 'Theon Greyjoy',      resident: 'Marina Lewis',    address: '34 Cancer St.',           purpose: 'Board night' },
-  { name: 'Joshua Mina',        resident: 'Reina Magpantay', address: '207 Gemini St. Block A',  purpose: 'Visiting a friend' },
-];
-
-// Resident directory (para sa Contact Resident)
-const RESIDENT_LIST = [
-  { name: 'Reina Magpantay',   address: '207 Gemini St. Block A', contact: '0912 456 3857' },
-  { name: 'Marina Lewis',      address: '34 Cancer St.',          contact: '0956 395 7985' },
-  { name: 'Stemis Bardheon',   address: '108 Cypress St. Block D', contact: '0870 409 1236' },
-  { name: 'Petyr Baelish',     address: '65 Taurus St.',          contact: '0818 448 1968' },
-  { name: 'Padrick Payne',     address: '31 Pisces St. Block D',  contact: '0664 159 7569' },
-  { name: 'Olenna Tyrell',     address: '74 Gemini St. Block B',  contact: '0644 154 2495' },
-  { name: 'Maester Aemon',     address: '870 Leo St. Block E',    contact: '0919 653 8895' },
-  { name: 'Jeor Mormont',      address: '745 Sagittarius St.',    contact: '0929 307 9889' },
-  { name: 'Daenerys Targaryen',address: '89 Pisces St. Block C',  contact: '0656 760 5454' },
-];
+// Fallback names kung walang OCR result / manual entry
+const DEFAULT_SCANNED_NAME = '';
+const DEFAULT_DRIVER_NAME = '';
 
 // Stylized ID-card placeholder (hindi totoong ID)
 function IDCardPlaceholder({ name }) {
@@ -106,6 +35,16 @@ function IDCardPlaceholder({ name }) {
   );
 }
 
+// Name token matcher (para sa OCR ↔ DB name matching)
+const nameTokens = (s) => (s || '').toUpperCase().replace(/[.,\-]/g, ' ').split(/\s+/).filter((w) => w.length >= 2);
+const nameMatches = (scanned, dbName) => {
+  const a = nameTokens(scanned);
+  const b = nameTokens(dbName);
+  if (a.length === 0 || b.length === 0) return false;
+  const hits = b.filter((w) => a.includes(w)).length;
+  return hits >= Math.min(2, b.length);
+};
+
 export default function GuardVerify() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -114,18 +53,18 @@ export default function GuardVerify() {
   const [entryType, setEntryType] = useState(null); // VISITOR | DELIVERY
   const [drivePurpose, setDrivePurpose] = useState('');
   const [plate, setPlate] = useState('');
-  const [photo, setPhoto] = useState(null);       // preview URL
-  const [photoFile, setPhotoFile] = useState(null); // aktwal na File
+  const [photo, setPhoto] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
   const [showAccompany, setShowAccompany] = useState(false);
   const [selectedCompanions, setSelectedCompanions] = useState([]);
   const [addSearch, setAddSearch] = useState('');
-  const [entryInfo, setEntryInfo] = useState(MATCHED);         // details na ipapakita sa confirmed
-  const [manualSelected, setManualSelected] = useState(null);  // napiling visitor sa manual search
+  const [entryInfo, setEntryInfo] = useState({});
+  const [manualSelected, setManualSelected] = useState(null);
   const [contactedResident, setContactedResident] = useState(null);
   const [showCallResult, setShowCallResult] = useState(false);
   const [residentSearch, setResidentSearch] = useState('');
   const [blockFilter, setBlockFilter] = useState('All');
-  const [pickupTarget, setPickupTarget] = useState('');       // RESIDENT | VISITOR
+  const [pickupTarget, setPickupTarget] = useState('');
   const [pickedUpVisitor, setPickedUpVisitor] = useState(null);
   const [pickupResident, setPickupResident] = useState(null);
   const [activeSearch, setActiveSearch] = useState('');
@@ -135,12 +74,30 @@ export default function GuardVerify() {
   const [driverName, setDriverName] = useState(DEFAULT_DRIVER_NAME);
   const [ocrError, setOcrError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [matchData, setMatchData] = useState({});
 
   // ── Real data mula DB ──
-  const [residentsDB, setResidentsDB] = useState([]);     // para sa delivery/pickup/contact
-  const [activeDB, setActiveDB] = useState([]);           // active visitors (para sa exit/pickup)
+  const [residentsDB, setResidentsDB] = useState([]);
+  const [activeDB, setActiveDB] = useState([]);
 
-  // Kunin ang residents directory (guard) at active visitors
+  const token = () => localStorage.getItem('sentricore_token');
+
+  const loadActive = () =>
+    getActiveVisitors().then((res) => {
+      const list = (res.data || []).map((t) => ({
+        transactionId: t.transaction_id,
+        name: t.visitor_name,
+        resident: t.resident_name,
+        address: t.unit_address,
+        residentId: t.resident_id,
+        purpose: t.purpose || 'N/A',
+        regType: t.registration_type || 'Single',
+        passNumber: t.pass_number,
+      }));
+      setActiveDB(list);
+      return list;
+    }).catch(() => { setActiveDB([]); return []; });
+
   useEffect(() => {
     getResidentsForGuard()
       .then((res) => setResidentsDB((res.data || []).map((r) => ({
@@ -151,37 +108,18 @@ export default function GuardVerify() {
       }))))
       .catch(() => setResidentsDB([]));
 
-    getActiveVisitors()
-      .then((res) => setActiveDB((res.data || []).map((t) => ({
-        transactionId: t.transaction_id,
-        name: t.visitor_name,
-        resident: t.resident_name,
-        address: t.unit_address,
-        residentId: t.resident_id,
-        purpose: t.purpose || 'N/A',
-      }))))
-      .catch(() => setActiveDB([]));
+    loadActive();
   }, []);
 
   const isPickup = drivePurpose === 'PICKUP';
   const isDelivery = entryType === 'DELIVERY';
-  const isDriverFlow = isPickup || isDelivery; // parehong nag-scan ng DRIVER'S ID
-  const isBatchMatch = drivePurpose === 'PERSONAL VISIT';
-  const [matchData, setMatchData] = useState(MATCHED);
+  const isDriverFlow = isPickup || isDelivery;
 
-  const token = () => localStorage.getItem('sentricore_token');
-
-  // Panatilihin ang tamang default match data (batch demo vs normal) kapag walang OCR match pa
-  useEffect(() => {
-    setMatchData(isBatchMatch ? MATCHED_BATCH : MATCHED);
-  }, [isBatchMatch]);
-
-  // Pool para sa accompanying step (exit → active mula DB; batch → batch pool; else → prereg)
+  // Pool para sa accompanying step (exit → active mula DB; else → active para sa entry companions)
   const additionalPool = isExit
     ? activeDB.filter((v) => v.name !== entryInfo?.visitor)
-    : isBatchMatch ? BATCH_POOL : PREREG_POOL;
+    : activeDB.filter((v) => v.name !== entryInfo?.visitor);
 
-  // Address filter options (blocks na nakuha mula sa DB residents)
   const blocks = ['All', ...Array.from(new Set(
     residentsDB.map((r) => {
       const m = (r.address || '').match(/Block\s+([A-Za-z0-9]+)/);
@@ -198,16 +136,14 @@ export default function GuardVerify() {
 
   const callResident = (r) => {
     setContactedResident(r);
-    window.location.href = `tel:${r.contact.replace(/\s/g, '')}`; // bubukas ang phone app
+    window.location.href = `tel:${(r.contact || '').replace(/\s/g, '')}`;
     setShowCallResult(true);
   };
 
-  // ── I-save ang na-approve na entry sa DATABASE (POST /api/entry/group) ──
+  // ── I-save ang na-approve na entry sa DATABASE ──
   const saveArrival = async () => {
     const names = [entryInfo.visitor, ...selectedCompanions.map((c) => c.name)].filter(Boolean);
-    // Kung driver-only (walang visitor name, hal. pickup resident/delivery), gamitin ang driver
     const entryNames = names.length ? names : (entryInfo.driver ? [entryInfo.driver] : []);
-
     const visitors = entryNames.map((name) => ({
       residentId: entryInfo.residentId || null,
       registrationId: entryInfo.registrationId || null,
@@ -230,11 +166,11 @@ export default function GuardVerify() {
     }
   };
 
-  // ── I-log ang exit sa DATABASE (POST /api/entry/:id/exit) ──
+  // ── I-log ang exit sa DATABASE ──
   const saveExit = async () => {
     const exitingIds = [entryInfo.transactionId, ...selectedCompanions.map((c) => c.transactionId)].filter(Boolean);
     if (exitingIds.length === 0) {
-      throw new Error('No active transaction to exit. (Exit matching needs the active-visitor list from the database.)');
+      throw new Error('No active transaction to exit. Please scan an active visitor.');
     }
     for (const id of exitingIds) {
       const res = await fetch(`${API}/entry/${id}/exit`, {
@@ -256,11 +192,10 @@ export default function GuardVerify() {
     );
   };
 
-  // Kapag may nakuhang litrato ng ID → i-preview, tumawag sa OCR, tapos i-match sa DB
+  // Kapag may nakuhang litrato ng ID → OCR, tapos i-match (exit=active, entry=expected)
   const handlePhoto = async (e) => {
-    console.log('🔵 handlePhoto triggered');
     const file = e.target.files?.[0];
-    if (!file) { console.log('🔴 no file — stopped'); return; }
+    if (!file) return;
     setPhotoFile(file);
     setPhoto(URL.createObjectURL(file));
     setOcrError('');
@@ -269,7 +204,6 @@ export default function GuardVerify() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-
       const res = await fetch(`${API}/ocr/scan`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token()}` },
@@ -279,24 +213,49 @@ export default function GuardVerify() {
       console.log('🟢 OCR response:', data);
 
       if (data.success && data.suggestedName) {
-        if (isDriverFlow) {
-          setDriverName(data.suggestedName);
-        } else {
-          setScannedName(data.suggestedName);
-          // Hanapin ang scanned name sa expected registrations (real matching)
+        const scanned = data.suggestedName;
+
+        // ── EXIT: i-match sa ACTIVE visitors (nasa loob na) ──
+        if (isExit) {
+          setScannedName(scanned);
+          const list = await loadActive(); // fresh na active list
+          console.log('🟣 active list:', list);
+          const found = list.find((t) => nameMatches(scanned, t.name));
+          if (found) {
+            setMatchData({
+              transactionId: found.transactionId,
+              passId: found.passNumber || ('VST ' + found.transactionId),
+              category: (found.regType || 'Single').toUpperCase(),
+              regType: found.regType || 'Single',
+              resident: found.resident || '',
+              address: found.address || '',
+              visitor: found.name,
+              purpose: found.purpose || 'N/A',
+              expectedDate: '',
+              residentId: found.residentId,
+            });
+            setScannedName(found.name);
+          } else {
+            setOcrError('This visitor is not currently active inside. Please verify or use manual search.');
+          }
+        }
+        // ── ENTRY: driver flow ──
+        else if (isDriverFlow) {
+          setDriverName(scanned);
+        }
+        // ── ENTRY: visitor → match sa EXPECTED registrations ──
+        else {
+          setScannedName(scanned);
           try {
             const matchRes = await fetch(
-              `${API}/entry/match?name=${encodeURIComponent(data.suggestedName)}`,
+              `${API}/entry/match?name=${encodeURIComponent(scanned)}`,
               { headers: { Authorization: `Bearer ${token()}` } }
             );
             const matchJson = await matchRes.json();
             console.log('🟣 match result:', matchJson);
-
             if (matchJson.matched && matchJson.candidates.length > 0) {
-              const c = matchJson.candidates[0]; // best match
-              const dateStr = c.expectedDate
-                ? new Date(c.expectedDate).toLocaleDateString('en-US')
-                : '';
+              const c = matchJson.candidates[0];
+              const dateStr = c.expectedDate ? new Date(c.expectedDate).toLocaleDateString('en-US') : '';
               setMatchData({
                 registrationId: c.registrationId,
                 passId: 'VST ' + String(c.registrationId).padStart(6, '0'),
@@ -304,11 +263,13 @@ export default function GuardVerify() {
                 regType: c.registrationType || 'Single',
                 resident: c.residentName || '',
                 address: c.residentAddress || '',
-                visitor: c.registeredName || data.suggestedName,
+                visitor: c.registeredName || scanned,
                 purpose: c.purpose || 'N/A',
                 expectedDate: dateStr,
                 residentId: c.residentId,
               });
+            } else {
+              setOcrError('No matching registration found. Please use manual search or contact the resident.');
             }
           } catch (mErr) {
             console.log('match error:', mErr);
@@ -324,13 +285,11 @@ export default function GuardVerify() {
     }
   };
 
-  // Saan pupunta pagkatapos ng reading (pickup-resident → pumili ng resident muna)
   const afterReading = () => {
     if (isPickup && pickupTarget === 'RESIDENT') return 'pickupResidents';
     return 'matched';
   };
 
-  // Auto-advance para sa MANUAL entry lang (walang photo/OCR)
   useEffect(() => {
     if (step === 'reading' && !photoFile) {
       const t = setTimeout(() => setStep(afterReading()), 1200);
@@ -340,7 +299,6 @@ export default function GuardVerify() {
 
   const close = () => navigate('/guard-home');
 
-  // Handler ng APPROVE (entry o exit) — DB save + error handling
   const handleApprove = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -476,7 +434,7 @@ export default function GuardVerify() {
     );
   }
 
-  // ── Full-screen steps (scan / reading / matched / ...) ──
+  // ── Full-screen steps ──
   return (
     <div className="min-h-screen bg-cream max-w-md mx-auto">
       <header className="bg-ink px-5 py-5 flex items-center gap-3">
@@ -507,9 +465,9 @@ export default function GuardVerify() {
                       className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
                 TYPE INFO MANUALLY
               </button>
-              <button onClick={() => setStep('choose')}
+              <button onClick={() => setStep(isExit ? 'reading' : 'choose')}
                       className="px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
-                BACK
+                {isExit ? 'MANUAL SEARCH' : 'BACK'}
               </button>
             </div>
           </div>
@@ -555,9 +513,9 @@ export default function GuardVerify() {
                   : [
                       ['Registration Type', 'Single'],
                       ...(pickupTarget === 'VISITOR'
-                        ? [['Resident Name', pickedUpVisitor?.resident || MATCHED.resident]]
+                        ? [['Resident Name', pickedUpVisitor?.resident || '']]
                         : [['Resident Name', pickupResident?.name || '']]),
-                      ['Address', pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || '')],
+                      ['Address', pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || '') : (pickupResident?.address || '')],
                       ['Driver Name', driverName],
                       ...(pickupTarget === 'VISITOR' ? [['Visitor Name', pickedUpVisitor?.name || scannedName]] : []),
                       ['Purpose', pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor'],
@@ -571,7 +529,7 @@ export default function GuardVerify() {
 
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
-                  <button onClick={() => setStep('manualSearch')}
+                  <button onClick={() => setStep('residentList')}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                     MANUAL SEARCH
                   </button>
@@ -594,8 +552,8 @@ export default function GuardVerify() {
                                   passId: 'DRV-1001',
                                   category: 'DELIVERY',
                                   regType: 'Single',
-                                  resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || MATCHED.resident) : (pickupResident?.name || ''),
-                                  address: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || MATCHED.address) : (pickupResident?.address || ''),
+                                  resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || '') : (pickupResident?.name || ''),
+                                  address: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || '') : (pickupResident?.address || ''),
                                   residentId: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.residentId || null) : (pickupResident?.residentId || null),
                                   driver: driverName,
                                   visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || scannedName) : '',
@@ -622,37 +580,47 @@ export default function GuardVerify() {
                 <IDCardPlaceholder name={scannedName} />
               </div>
 
-              <h2 className="text-xl font-extrabold text-ink text-center mb-4">VISITOR MATCHED</h2>
+              <h2 className="text-xl font-extrabold text-ink text-center mb-4">
+                {isExit ? 'ACTIVE VISITOR' : 'VISITOR MATCHED'}
+              </h2>
 
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
-                {[
-                  ['Registration Type', matchData.regType],
-                  ['Resident Name', matchData.resident],
-                  ['Address', matchData.address],
-                  ['Visitor Name', scannedName],
-                  ['Purpose', matchData.purpose],
-                  ['Expected Date', matchData.expectedDate],
-                ].map(([label, val]) => (
-                  <div key={label} className="px-4 py-3">
-                    <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
-                  </div>
-                ))}
-              </div>
+              {matchData.visitor ? (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
+                  {[
+                    ['Registration Type', matchData.regType],
+                    ['Resident Name', matchData.resident],
+                    ['Address', matchData.address],
+                    ['Visitor Name', matchData.visitor || scannedName],
+                    ['Purpose', matchData.purpose],
+                    ...(isExit ? [] : [['Expected Date', matchData.expectedDate]]),
+                  ].filter(([, v]) => v).map(([label, val]) => (
+                    <div key={label} className="px-4 py-3">
+                      <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 text-center">
+                  <p className="text-sm font-bold text-red-700">No match found</p>
+                  <p className="text-xs text-red-600 mt-1">
+                    {isExit ? 'This visitor is not active inside.' : 'No matching registration.'} Use manual search or contact the resident.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
-                  <button onClick={() => setStep('manualSearch')}
+                  <button onClick={() => setStep('residentList')}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
-                    MANUAL SEARCH
+                    {isExit ? 'MANUAL SEARCH' : 'MANUAL SEARCH'}
                   </button>
-                  <button onClick={() => {
-                            // Sa EXIT, hanapin ang transactionId ng na-scan na bisita mula active list
-                            const act = isExit ? activeDB.find((v) => v.name === scannedName) : null;
-                            setEntryInfo({ ...matchData, visitor: scannedName, transactionId: act?.transactionId || null });
+                  <button disabled={!matchData.visitor}
+                          onClick={() => {
+                            setEntryInfo({ ...matchData, visitor: matchData.visitor || scannedName, transactionId: matchData.transactionId || null });
                             setSelectedCompanions([]);
-                            setShowAccompany(true);
+                            if (isExit) setStep('confirmed'); else setShowAccompany(true);
                           }}
-                          className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-40" style={{ backgroundColor: '#112D31' }}>
                     CONFIRM MATCH
                   </button>
                 </div>
@@ -665,11 +633,11 @@ export default function GuardVerify() {
           )
         )}
 
-        {/* REGISTER ADDITIONAL / BATCH / ACTIVE VISITORS (accompanying) */}
+        {/* ACCOMPANYING / EXIT-TOGETHER VISITORS (mula sa active list) */}
         {step === 'additional' && (
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">
-              {isExit ? 'ACTIVE VISITORS' : isBatchMatch ? 'REGISTER BATCH VISITORS' : 'REGISTER ADDITIONAL VISITORS'}
+              {isExit ? 'ACTIVE VISITORS' : 'ACCOMPANYING VISITORS'}
             </h2>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
               <span className="text-ink/40">🔍</span>
@@ -679,26 +647,22 @@ export default function GuardVerify() {
             </div>
 
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
-              <p className="text-center text-sm font-semibold text-ink/70 mb-3">
-                {isExit
-                  ? 'ACTIVE VISITORS AS OF TODAY'
-                  : isBatchMatch
-                    ? `EXPECTED BATCH ${MATCHED_BATCH.batchNo} VISITORS AS OF TODAY`
-                    : 'EXPECTED PRE-REGISTERED VISITORS AS OF TODAY'}
-              </p>
+              <p className="text-center text-sm font-semibold text-ink/70 mb-3">ACTIVE VISITORS AS OF TODAY</p>
               <div className="max-h-[45vh] overflow-y-auto space-y-2">
-                {additionalPool
+                {additionalPool.length === 0 ? (
+                  <p className="text-center text-ink/50 py-6 text-sm">No other active visitors.</p>
+                ) : additionalPool
                   .filter((v) => v.name.toLowerCase().includes(addSearch.toLowerCase()))
                   .map((v) => {
                     const selected = !!selectedCompanions.find((p) => p.name === v.name);
                     return (
-                      <button key={v.name} onClick={() => toggleCompanion(v)}
+                      <button key={v.transactionId || v.name} onClick={() => toggleCompanion(v)}
                               className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
                               style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
                         <div>
                           <p className="font-bold text-ink text-sm">{v.name}</p>
-                          {!isBatchMatch && <p className="text-xs text-ink/60">{v.resident} | {v.address}</p>}
-                          {!isBatchMatch && <p className="text-xs text-ink/60">Purpose: {v.purpose}</p>}
+                          <p className="text-xs text-ink/60">{v.resident} | {v.address}</p>
+                          <p className="text-xs text-ink/60">Purpose: {v.purpose}</p>
                         </div>
                         <span className="w-4 h-4 rounded-full shrink-0"
                               style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
@@ -720,13 +684,7 @@ export default function GuardVerify() {
             </div>
 
             <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND VISITOR ON THE LIST?</p>
-            <div className="flex flex-col items-center gap-2">
-              {!isExit && (
-                <button onClick={() => alert('Add manual registration — iko-connect after')}
-                        className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                  ADD MANUAL REGISTRATION
-                </button>
-              )}
+            <div className="flex justify-center">
               <button onClick={() => setStep('residentList')}
                       className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
                 CONTACT RESIDENT
@@ -739,7 +697,6 @@ export default function GuardVerify() {
         {step === 'pickupResidents' && (() => {
           const notifs = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
           const waitingNames = notifs.map((n) => n.name);
-          // I-match ang notify-gate sa DB residents para makuha ang residentId + address
           const waitingResidents = notifs.map((n) => {
             const db = residentsDB.find((r) => r.name === n.name) || {};
             return {
@@ -871,11 +828,7 @@ export default function GuardVerify() {
             </div>
 
             <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND RESIDENT ON THE LIST?</p>
-            <div className="flex flex-col items-center gap-2">
-              <button onClick={() => alert('Add manual registration — iko-connect after')}
-                      className="w-72 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                ADD MANUAL REGISTRATION
-              </button>
+            <div className="flex justify-center">
               <button onClick={() => setStep('residentList')}
                       className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
                 CONTACT RESIDENT
@@ -898,7 +851,9 @@ export default function GuardVerify() {
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <p className="text-center text-sm font-semibold text-ink/70 mb-3">ACTIVE VISITORS AS OF TODAY</p>
               <div className="max-h-[42vh] overflow-y-auto space-y-2">
-                {activeDB
+                {activeDB.length === 0 ? (
+                  <p className="text-center text-ink/50 py-6 text-sm">No active visitors right now.</p>
+                ) : activeDB
                   .filter((v) => v.name.toLowerCase().includes(activeSearch.toLowerCase()))
                   .map((v) => {
                     const selected = pickedUpVisitor?.name === v.name;
@@ -916,9 +871,6 @@ export default function GuardVerify() {
                       </button>
                     );
                   })}
-                {activeDB.length === 0 && (
-                  <p className="text-center text-ink/50 py-6 text-sm">No active visitors right now.</p>
-                )}
               </div>
             </div>
 
@@ -935,92 +887,10 @@ export default function GuardVerify() {
                 PROCEED
               </button>
             </div>
-
-            <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND VISITOR ON THE LIST?</p>
-            <div className="flex justify-center">
-              <button onClick={() => setStep('residentList')}
-                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                CONTACT RESIDENT
-              </button>
-            </div>
           </div>
         )}
 
-        {/* MANUAL SEARCH */}
-        {step === 'manualSearch' && (
-          <div>
-            <div className="bg-white rounded-2xl p-3 shadow mb-4">
-              <IDCardPlaceholder name={scannedName} />
-            </div>
-            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
-              <span className="text-ink/40">🔍</span>
-              <input value={addSearch} onChange={(e) => setAddSearch(e.target.value)}
-                     placeholder="Search visitor name"
-                     className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
-            </div>
-
-            <div className="bg-white rounded-3xl p-4 shadow mb-4">
-              <p className="text-center text-sm font-semibold text-ink/70 mb-3">EXPECTED PRE-REGISTERED VISITORS AS OF TODAY</p>
-              <div className="max-h-[42vh] overflow-y-auto space-y-2">
-                {PREREG_POOL
-                  .filter((v) => v.name.toLowerCase().includes(addSearch.toLowerCase()))
-                  .map((v) => {
-                    const selected = manualSelected?.name === v.name;
-                    return (
-                      <button key={v.name} onClick={() => setManualSelected(v)}
-                              className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
-                              style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
-                        <div>
-                          <p className="font-bold text-ink text-sm">{v.name}</p>
-                          <p className="text-xs text-ink/60">{v.resident} | {v.address}</p>
-                          <p className="text-xs text-ink/60">Purpose: {v.purpose}</p>
-                        </div>
-                        <span className="w-4 h-4 rounded-full shrink-0"
-                              style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-center mb-6">
-              <button onClick={() => setStep('matched')}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">
-                BACK
-              </button>
-              <button onClick={() => {
-                        if (!manualSelected) { alert('Please select a visitor, or contact the resident.'); return; }
-                        setEntryInfo({
-                          passId: 'VST 260602-1001',
-                          category: 'SINGLE',
-                          regType: 'Single',
-                          resident: manualSelected.resident,
-                          address: manualSelected.address,
-                          residentId: manualSelected.residentId || null,
-                          registrationId: manualSelected.registrationId || null,
-                          visitor: manualSelected.name,
-                          purpose: manualSelected.purpose,
-                          expectedDate: '06/02/2026',
-                        });
-                        setSelectedCompanions([]);
-                        setStep('confirmed');
-                      }}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                PROCEED
-              </button>
-            </div>
-
-            <p className="text-center text-xs font-semibold text-ink/60 mb-3">CAN'T FIND VISITOR ON THE LIST?</p>
-            <div className="flex justify-center">
-              <button onClick={() => setStep('residentList')}
-                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                CONTACT RESIDENT
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* RESIDENT LIST — Contact Resident */}
+        {/* RESIDENT LIST — Contact Resident / Manual search */}
         {step === 'residentList' && (
           <div>
             <div className="rounded-2xl px-4 py-3 mb-4 flex items-center justify-between" style={{ backgroundColor: '#FBE0E0' }}>
@@ -1077,7 +947,7 @@ export default function GuardVerify() {
             </div>
 
             <div className="flex justify-center mb-4">
-              <button onClick={() => setStep('manualSearch')}
+              <button onClick={() => setStep(isExit ? 'scan' : 'matched')}
                       className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">
                 BACK
               </button>
@@ -1111,14 +981,14 @@ export default function GuardVerify() {
               </button>
               <button onClick={() => {
                         setEntryInfo({
-                          passId: 'UNL 260602-0001',
+                          passId: '',
                           category: 'SINGLE',
                           regType: 'Single',
                           resident: contactedResident?.name || '',
                           address: contactedResident?.address || '',
                           residentId: contactedResident?.residentId || null,
                           visitor: scannedName,
-                          purpose: '',
+                          purpose: 'Unlisted visit',
                           expectedDate: '',
                         });
                         setSelectedCompanions([]);
@@ -1218,15 +1088,11 @@ export default function GuardVerify() {
             <div className="border border-gray-200 rounded-xl p-3 mb-4">
               <p className="font-bold text-ink text-sm">{contactedResident.name}</p>
               <p className="text-xs text-ink/60">Address: {contactedResident.address}</p>
-              <p className="text-xs text-ink/60">Date Contacted: 06/02/2026</p>
               <p className="text-xs text-ink/60 italic mt-1">Visitor Verification Status: (choose below)</p>
             </div>
 
             <div className="flex gap-2 mb-2">
-              <button onClick={() => {
-                        alert('Entry denied by resident — noted in records.');
-                        navigate('/guard-home');
-                      }}
+              <button onClick={() => { alert('Entry denied by resident — noted in records.'); navigate('/guard-home'); }}
                       className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
                 DENY ENTRY
               </button>
