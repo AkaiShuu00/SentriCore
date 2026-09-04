@@ -155,7 +155,6 @@ async function getHistory(req, res) {
 // GET /api/entry/residents  (Guard) - residents directory
 async function getResidentsForGuard(req, res) {
   try {
-    // TAMANG COLUMN: phone_number (hindi contact_number). Walang 'status' column ang Residents.
     const [rows] = await pool.query(
       `SELECT resident_id, full_name, unit_address, phone_number AS contact_number, email
        FROM Residents
@@ -164,6 +163,70 @@ async function getResidentsForGuard(req, res) {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching residents.', error: err.message });
+  }
+}
+
+// GET /api/entry/companions  (Guard)
+//   ?registrationId=X  → BATCH: ibang miyembro ng same batch na HINDI PA pumapasok
+//   ?single=1          → SINGLE: expected single visitors (hindi pa pumapasok)
+async function getCompanions(req, res) {
+  try {
+    const { registrationId, single } = req.query;
+
+    // ── BATCH ──
+    if (registrationId) {
+      const [members] = await pool.query(
+        `SELECT d.visitor_name, r.registration_id, r.purpose,
+                res.resident_id, res.full_name AS resident_name, res.unit_address
+         FROM VisitorRegistrationDetails d
+         JOIN VisitorRegistrations r ON r.registration_id = d.registration_id
+         JOIN Residents res ON res.resident_id = r.resident_id
+         WHERE d.registration_id = ?`,
+        [registrationId]
+      );
+      const [active] = await pool.query(
+        `SELECT visitor_name FROM VisitorTransactions
+         WHERE registration_id = ? AND status = 'Active'`,
+        [registrationId]
+      );
+      const activeNames = new Set(active.map((a) => (a.visitor_name || '').toUpperCase()));
+      const result = members
+        .filter((m) => !activeNames.has((m.visitor_name || '').toUpperCase()))
+        .map((m) => ({
+          name: m.visitor_name,
+          registrationId: m.registration_id,
+          residentId: m.resident_id,
+          resident: m.resident_name,
+          address: m.unit_address,
+          purpose: m.purpose,
+        }));
+      return res.json(result);
+    }
+
+    // ── SINGLE ──
+    if (single) {
+      const [rows] = await pool.query(
+        `SELECT d.visitor_name, r.registration_id, r.purpose,
+                res.resident_id, res.full_name AS resident_name, res.unit_address
+         FROM VisitorRegistrations r
+         JOIN VisitorRegistrationDetails d ON d.registration_id = r.registration_id
+         JOIN Residents res ON res.resident_id = r.resident_id
+         WHERE r.registration_type = 'Single' AND r.status = 'Expected'`
+      );
+      const result = rows.map((m) => ({
+        name: m.visitor_name,
+        registrationId: m.registration_id,
+        residentId: m.resident_id,
+        resident: m.resident_name,
+        address: m.unit_address,
+        purpose: m.purpose,
+      }));
+      return res.json(result);
+    }
+
+    res.json([]);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching companions.', error: err.message });
   }
 }
 
@@ -217,4 +280,4 @@ async function recordExit(req, res) {
   }
 }
 
-module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, getHistory, recordExit, getResidentsForGuard };
+module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, getHistory, recordExit, getResidentsForGuard, getCompanions };

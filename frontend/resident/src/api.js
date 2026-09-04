@@ -43,5 +43,7 @@ export const getHistory = () => api.get('/entry/history');
 export const createGroupEntry = (data) => api.post('/entry/group', data);
 export const recordExit = (id, data) => api.post(`/entry/${id}/exit`, data);
 export const getResidentsForGuard = () => api.get('/entry/residents');
+export const getCompanions = (params) => api.get('/entry/companions', { params });
+export const getSchedule = () => api.get('/entry/schedule');
 
 export default api;

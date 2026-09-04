@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { getActiveVisitors } from '../../api';
+import { getSchedule } from '../../api';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const TABS = ['SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
@@ -24,81 +24,89 @@ export default function GuardSchedule() {
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
 
-  // ── Active data mula DB ──
-  const [activeDB, setActiveDB] = useState([]);
+  // ── Schedule mula DB (expected + active + departed) ──
+  const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getActiveVisitors()
-      .then((res) => setActiveDB(res.data || []))
-      .catch(() => setActiveDB([]))
+    getSchedule()
+      .then((res) => setSchedule(res.data || []))
+      .catch(() => setSchedule([]))
       .finally(() => setLoading(false));
   }, []);
 
-  // Map DB rows → common shape
-  const rows = activeDB.map((t) => ({
-    transactionId: t.transaction_id,
-    name: t.visitor_name,
-    type: t.visitor_type || 'Visitor',
-    purpose: t.purpose || 'N/A',
-    resident: t.resident_name || '',
-    address: t.unit_address || '',
-    start: fmtTime(t.entry_time),
-    end: '-----',
-    status: 'ACTIVE',
-    arrivalId: t.arrival_id,
-    regType: t.registration_type,
-    registrationId: t.registration_id,
-    passNumber: t.pass_number,
-    plate: t.plate_number,
-  }));
+  const countByStatus = (visitors, s) => visitors.filter((v) => v.status === s).length;
 
-  const isDeliveryRow = (r) => r.type === 'Delivery' || r.type === 'Driver' || r.regType === 'Delivery';
-  const deliveryRows = rows.filter(isDeliveryRow);
-  const nonDelivery = rows.filter((r) => !isDeliveryRow(r));
-
-  // BATCH: regType Batch, group by registrationId
-  const batchMap = {};
-  nonDelivery.filter((r) => r.regType === 'Batch').forEach((r) => {
-    const key = r.registrationId || r.arrivalId || r.name;
-    (batchMap[key] = batchMap[key] || []).push(r);
+  // ── SINGLE: type Single → isang row bawat visitor ──
+  const singleRows = [];
+  schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
+    r.visitors.forEach((v) => {
+      singleRows.push({
+        name: v.name,
+        resident: r.resident,
+        address: r.address,
+        purpose: r.purpose || 'N/A',
+        status: v.status,
+        start: v.timeIn ? fmtTime(v.timeIn) : '-----',
+        end: v.timeOut ? fmtTime(v.timeOut) : '',
+        arrivalId: v.arrivalId,
+      });
+    });
   });
-  const batchGroups = Object.entries(batchMap).map(([key, vis]) => ({
+
+  // ── BATCH: type Batch → group card + arrival modal ──
+  const batchGroups = schedule.filter((r) => r.registrationType === 'Batch').map((r) => ({
     kind: 'batch',
-    id: 'BTC ' + String(key),
-    resident: vis[0].resident,
-    address: vis[0].address,
-    purpose: vis[0].purpose,
-    active: vis.length, expected: 0, departed: 0,
-    visitors: vis.map((v) => ({ name: v.name, start: v.start, status: 'ACTIVE' })),
+    id: r.batchName ? `BTC ${r.batchName}` : `BTC ${r.registrationId}`,
+    resident: r.resident,
+    address: r.address,
+    purpose: r.purpose,
+    active: countByStatus(r.visitors, 'ACTIVE'),
+    expected: countByStatus(r.visitors, 'EXPECTED'),
+    departed: countByStatus(r.visitors, 'DEPARTED'),
+    visitors: r.visitors,
   }));
 
-  // LINKED: non-batch, may arrival_id, 2+ na magkasama
-  const linkedMap = {};
-  nonDelivery.filter((r) => r.regType !== 'Batch' && r.arrivalId).forEach((r) => {
-    (linkedMap[r.arrivalId] = linkedMap[r.arrivalId] || []).push(r);
+  // ── LINKED: single visitors na naka-ACTIVE at sabay dumating (same arrival_id, 2+) ──
+  const activeSingles = [];
+  schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
+    r.visitors.filter((v) => v.status === 'ACTIVE' && v.arrivalId).forEach((v) => {
+      activeSingles.push({ ...v, resident: r.resident, address: r.address, purpose: r.purpose });
+    });
   });
+  const linkedMap = {};
+  activeSingles.forEach((v) => { (linkedMap[v.arrivalId] = linkedMap[v.arrivalId] || []).push(v); });
   const linkedGroups = Object.entries(linkedMap)
     .filter(([, vis]) => vis.length >= 2)
     .map(([key, vis]) => ({
       kind: 'linked',
-      id: 'LNK ' + String(key),
+      id: `LNK ${key}`,
       resident: vis[0].resident,
       address: vis[0].address,
       active: vis.length, expected: 0, departed: 0,
-      visitors: vis.map((v) => ({ name: v.name, start: v.start, end: v.end, type: v.type, purpose: v.purpose, status: 'ACTIVE' })),
+      visitors: vis.map((v) => ({ name: v.name, status: 'ACTIVE', timeIn: v.timeIn, timeOut: v.timeOut, purpose: v.purpose })),
     }));
-  const linkedArrivalIds = new Set(
-    Object.entries(linkedMap).filter(([, v]) => v.length >= 2).map(([k]) => k)
-  );
 
-  // SINGLE: non-delivery, non-batch, hindi kasama sa linked group
-  const singleRows = nonDelivery.filter(
-    (r) => r.regType !== 'Batch' && !(r.arrivalId && linkedArrivalIds.has(String(r.arrivalId)))
-  );
+  // ── DELIVERY: type Delivery ──
+  const deliveryRows = [];
+  schedule.filter((r) => r.registrationType === 'Delivery').forEach((r) => {
+    r.visitors.forEach((v) => {
+      deliveryRows.push({
+        name: v.name, resident: r.resident, address: r.address,
+        status: v.status, start: v.timeIn ? fmtTime(v.timeIn) : '-----',
+        end: v.timeOut ? fmtTime(v.timeOut) : '',
+      });
+    });
+  });
 
-  // Summary counts (ACTIVE mula DB; EXPECTED/DEPARTED = kailangan ng endpoint)
-  const SUMMARY = { TOTAL: rows.length, ACTIVE: rows.length, EXPECTED: 0, DEPARTED: 0 };
+  // ── Summary counts (buong schedule) ──
+  const allVisitors = schedule.flatMap((r) => r.visitors);
+  const SUMMARY = {
+    TOTAL: allVisitors.length,
+    ACTIVE: countByStatus(allVisitors, 'ACTIVE'),
+    EXPECTED: countByStatus(allVisitors, 'EXPECTED'),
+    DEPARTED: countByStatus(allVisitors, 'DEPARTED'),
+  };
 
   // Day strip
   const year = today.getFullYear();
@@ -124,13 +132,12 @@ export default function GuardSchedule() {
   };
 
   const singles = sortList(singleRows.filter((e) => matchSearch(e.name)));
-  const deliveries = deliveryRows.filter((e) => matchSearch(e.name) || matchSearch(e.passNumber));
+  const deliveries = deliveryRows.filter((e) => matchSearch(e.name));
   const batches = batchGroups.filter((g) => matchSearch(g.id) || g.visitors.some((v) => matchSearch(v.name)));
   const linked = linkedGroups.filter((g) => matchSearch(g.id) || g.visitors.some((v) => matchSearch(v.name)));
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
-      {/* Header */}
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
         <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
@@ -209,7 +216,6 @@ export default function GuardSchedule() {
           </div>
         </div>
 
-        {/* Info banner (LINKED only) */}
         {tab === 'LINKED' && (
           <div className="mt-4 rounded-2xl px-4 py-3 text-center text-xs font-medium"
                style={{ backgroundColor: '#DCF3E4', color: '#1e6b2e' }}>
@@ -229,7 +235,7 @@ export default function GuardSchedule() {
           ))}
         </div>
 
-        {/* ── LIST AREA ── */}
+        {/* LIST AREA */}
         <div className="mt-4">
           {loading ? (
             <div className="bg-white rounded-3xl p-4 shadow text-center py-10 text-ink/50">Loading…</div>
@@ -241,14 +247,12 @@ export default function GuardSchedule() {
                   <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
                 </div>
               )}
-
               {tab === 'DELIVERY' && (
                 <div className="bg-white rounded-3xl p-4 shadow">
-                  {deliveries.length === 0 ? <EmptyState /> : deliveries.map((e, i) => <DeliveryRow key={i} e={e} />)}
+                  {deliveries.length === 0 ? <EmptyState /> : deliveries.map((e, i) => <SingleRow key={i} e={e} />)}
                   <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
                 </div>
               )}
-
               {tab === 'BATCH' && (
                 <div className="bg-white rounded-3xl p-4 shadow">
                   {batches.length === 0 ? <EmptyState /> : batches.map((g) => (
@@ -257,7 +261,6 @@ export default function GuardSchedule() {
                   <p className="text-center text-ink/50 text-sm py-2">--- Nothing Follows ---</p>
                 </div>
               )}
-
               {tab === 'LINKED' && (
                 <div className="bg-white rounded-3xl p-4 shadow">
                   {linked.length === 0 ? <EmptyState /> : linked.map((g) => (
@@ -289,29 +292,7 @@ function SingleRow({ e }) {
         <div>
           <p className="font-bold text-ink text-sm">{e.name}</p>
           <p className="text-xs text-ink/60">{e.resident} | {e.address}</p>
-          <p className="text-xs text-ink/60">Purpose: {e.purpose}</p>
-        </div>
-        <span className="text-[9px] font-bold px-3 py-1 rounded-full whitespace-nowrap" style={badgeBg[e.status]}>
-          {e.status}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function DeliveryRow({ e }) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      <div className="text-xs font-bold text-ink text-center w-16 shrink-0 leading-tight">
-        {e.start}
-        {e.end && <><br />to<br />{e.end}</>}
-      </div>
-      <div className="flex-1 border border-gray-200 rounded-2xl p-3 shadow-sm flex items-center justify-between gap-2">
-        <div>
-          <p className="font-bold text-ink text-sm">{e.passNumber || 'Delivery'}</p>
-          <p className="text-xs text-ink/60">Rider Name: {e.name}</p>
-          <p className="text-xs text-ink/60">Resident Name: {e.resident}</p>
-          <p className="text-xs text-ink/60">Address: {e.address}</p>
+          {e.purpose && <p className="text-xs text-ink/60">Purpose: {e.purpose}</p>}
         </div>
         <span className="text-[9px] font-bold px-3 py-1 rounded-full whitespace-nowrap" style={badgeBg[e.status]}>
           {e.status}
@@ -361,12 +342,25 @@ function MiniBadge({ n, label, color }) {
 
 function DetailModal({ group, onClose }) {
   const isLinked = group.kind === 'linked';
+
+  // Grupuhin ang ACTIVE ayon sa arrival_id → ARRIVAL sections
+  const activeVisitors = group.visitors.filter((v) => v.status === 'ACTIVE');
+  const arrMap = {};
+  activeVisitors.forEach((v) => {
+    const key = v.arrivalId || ('solo-' + v.name);
+    (arrMap[key] = arrMap[key] || { arrivalId: v.arrivalId, timeIn: v.timeIn, visitors: [] }).visitors.push(v);
+  });
+  const arrivals = Object.values(arrMap);
+  const expectedMembers = group.visitors.filter((v) => v.status === 'EXPECTED');
+  const departedMembers = group.visitors.filter((v) => v.status === 'DEPARTED');
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-5" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-sm max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-extrabold text-ink text-center mb-3">{group.id}</h2>
         <hr className="border-gray-200 mb-4" />
 
+        {/* Summary */}
         <div className="flex items-center gap-3 mb-4">
           <div className="flex flex-col items-center shrink-0">
             <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center text-lg">👥</div>
@@ -381,41 +375,58 @@ function DetailModal({ group, onClose }) {
           </div>
         </div>
 
-        <hr className="border-gray-200 mb-3" />
-        <h3 className="text-center text-base font-extrabold text-ink mb-3">
-          {isLinked ? 'LINKED VISITORS' : 'BATCH VISITORS'}
-        </h3>
-
-        <div className="max-h-[38vh] overflow-y-auto">
-          {group.visitors.map((v, i) => (
-            isLinked ? (
-              <div key={i} className="flex items-center gap-3 mb-3">
-                <div className="text-xs font-bold text-ink text-center w-14 shrink-0 leading-tight">
-                  {v.start}<br />to<br />{v.end || '-----'}
-                </div>
-                <div className="flex-1 border border-gray-200 rounded-xl p-3">
-                  <p className="font-bold text-ink text-sm">{v.name}</p>
-                  <p className="text-xs text-ink/60">{v.type || 'Visitor'}</p>
-                  <p className="text-xs text-ink/60">Purpose: {v.purpose || 'N/A'}</p>
-                </div>
+        {/* ARRIVAL sections (mga nakapasok na) */}
+        {arrivals.map((a, idx) => (
+          <div key={a.arrivalId || idx} className="mb-4">
+            <div className="bg-ink text-white rounded-xl px-3 py-2 flex items-center justify-between mb-2">
+              <span className="text-xs font-bold">ARRIVAL {idx + 1}</span>
+              <span className="text-[10px] opacity-80">Time in: {fmtTime(a.timeIn)}</span>
+            </div>
+            <p className="text-[10px] font-bold text-ink/50 mb-1">VISITORS</p>
+            {a.visitors.map((v, i) => (
+              <div key={v.name} className="flex items-center justify-between border border-gray-200 rounded-xl px-3 py-2 mb-2">
+                <span className="text-sm text-ink">{i + 1}. {v.name}</span>
+                <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={badgeBg.ACTIVE}>ACTIVE</span>
               </div>
-            ) : (
-              <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-100">
-                <span className="text-xs font-bold text-ink w-14 shrink-0 text-center">{v.start || '-----'}</span>
-                <div className="flex-1 border border-gray-200 rounded-xl px-3 py-2 flex items-center justify-between">
-                  <span className="text-sm text-ink">{v.name}</span>
-                  <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={badgeBg.ACTIVE}>ACTIVE</span>
-                </div>
-              </div>
-            )
-          ))}
-        </div>
+            ))}
+          </div>
+        ))}
 
-        <div className="flex gap-3 mt-5">
+        {/* EXPECTED VISITORS (natitira) */}
+        {expectedMembers.length > 0 && (
+          <>
+            <h3 className="text-center text-base font-extrabold text-ink mb-3">EXPECTED VISITORS</h3>
+            <div className="mb-3">
+              {expectedMembers.map((v) => (
+                <div key={v.name} className="flex items-center gap-3 py-2 border-b border-gray-100">
+                  <span className="text-xs font-bold text-ink w-14 shrink-0 text-center">-----</span>
+                  <div className="flex-1 border border-gray-200 rounded-xl px-3 py-2">
+                    <span className="text-sm text-ink">{v.name}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* DEPARTED (kung meron) */}
+        {departedMembers.length > 0 && (
+          <>
+            <h3 className="text-center text-sm font-extrabold text-ink/60 mb-2">DEPARTED</h3>
+            <div className="mb-3">
+              {departedMembers.map((v) => (
+                <div key={v.name} className="flex items-center justify-between border border-gray-100 rounded-xl px-3 py-2 mb-2">
+                  <span className="text-sm text-ink/60">{v.name}</span>
+                  <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={badgeBg.DEPARTED}>DEPARTED</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-3 mt-2">
           <button onClick={onClose}
-                  className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">
-            CLOSE
-          </button>
+                  className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">CLOSE</button>
         </div>
       </div>
     </div>
@@ -427,7 +438,7 @@ function EmptyState() {
     <div className="text-center py-8">
       <p className="text-4xl mb-2">📭</p>
       <p className="text-ink/60 font-semibold">No entries here</p>
-      <p className="text-ink/40 text-sm mt-1">Approved entries will appear here.</p>
+      <p className="text-ink/40 text-sm mt-1">Registrations will appear here.</p>
     </div>
   );
 }
