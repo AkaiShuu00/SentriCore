@@ -230,6 +230,67 @@ async function getCompanions(req, res) {
   }
 }
 
+// GET /api/entry/schedule  (Guard) - today's registrations w/ per-visitor status
+//   Bawat registration (Expected o Active) + status ng bawat miyembro
+//   (EXPECTED = hindi pa pumapasok, ACTIVE = nasa loob, DEPARTED = nakaalis)
+async function getSchedule(req, res) {
+  try {
+    const [regs] = await pool.query(
+      `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose,
+              r.expected_date, r.status,
+              res.resident_id, res.full_name AS resident_name, res.unit_address
+       FROM VisitorRegistrations r
+       JOIN Residents res ON res.resident_id = r.resident_id
+       WHERE r.status IN ('Expected','Active')
+       ORDER BY r.registration_id DESC`
+    );
+
+    const result = [];
+    for (const r of regs) {
+      const [details] = await pool.query(
+        `SELECT visitor_name FROM VisitorRegistrationDetails WHERE registration_id = ?`,
+        [r.registration_id]
+      );
+      const [txs] = await pool.query(
+        `SELECT visitor_name, status, entry_time, exit_time, arrival_id, transaction_id, plate_number
+         FROM VisitorTransactions WHERE registration_id = ?`,
+        [r.registration_id]
+      );
+      const txByName = {};
+      for (const t of txs) txByName[(t.visitor_name || '').toUpperCase()] = t;
+
+      const visitors = details.map((d) => {
+        const t = txByName[(d.visitor_name || '').toUpperCase()];
+        let status = 'EXPECTED', timeIn = null, timeOut = null, arrivalId = null, transactionId = null;
+        if (t) {
+          transactionId = t.transaction_id;
+          arrivalId = t.arrival_id;
+          timeIn = t.entry_time;
+          timeOut = t.exit_time;
+          if (t.status === 'Active') status = 'ACTIVE';
+          else if (t.status === 'Completed') status = 'DEPARTED';
+        }
+        return { name: d.visitor_name, status, timeIn, timeOut, arrivalId, transactionId };
+      });
+
+      result.push({
+        registrationId: r.registration_id,
+        registrationType: r.registration_type,
+        batchName: r.batch_name,
+        purpose: r.purpose,
+        expectedDate: r.expected_date,
+        resident: r.resident_name,
+        address: r.unit_address,
+        residentId: r.resident_id,
+        visitors,
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching schedule.', error: err.message });
+  }
+}
+
 // POST /api/entry/:id/exit  (Guard) - record a visitor's exit
 async function recordExit(req, res) {
   try {
@@ -280,4 +341,4 @@ async function recordExit(req, res) {
   }
 }
 
-module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, getHistory, recordExit, getResidentsForGuard, getCompanions };
+module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, getHistory, recordExit, getResidentsForGuard, getCompanions, getSchedule };

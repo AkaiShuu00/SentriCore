@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
-import { getActiveVisitors, getAnnouncements } from '../../api';
+import { getActiveVisitors, getAnnouncements, getSchedule } from '../../api';
 
 export default function GuardHome() {
   const navigate = useNavigate();
@@ -20,13 +20,14 @@ export default function GuardHome() {
 
   // ── Active entries sa community (galing DB) ──
   const [activeDB, setActiveDB] = useState([]);
+  const [scheduleDB, setScheduleDB] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getActiveVisitors()
-      .then((res) => setActiveDB(res.data || []))
-      .catch(() => setActiveDB([]))
-      .finally(() => setLoading(false));
+    Promise.all([
+      getActiveVisitors().then((res) => setActiveDB(res.data || [])).catch(() => setActiveDB([])),
+      getSchedule().then((res) => setScheduleDB(res.data || [])).catch(() => setScheduleDB([])),
+    ]).finally(() => setLoading(false));
   }, []);
 
   const entries = activeDB.map((t) => ({
@@ -39,10 +40,11 @@ export default function GuardHome() {
     purpose: t.purpose || 'N/A',
   }));
 
-  // ── Stat counts ──
-  const activeCount = entries.length;   // active entries (mula DB)
-  const totalCount = entries.length;    // total (active) — expand kapag may history endpoint na
-  const expectedCount = 0;              // TODO: kailangan ng community-expected-today endpoint
+  // ── Stat counts (mula DB schedule) ──
+  const allVisitors = scheduleDB.flatMap((r) => r.visitors || []);
+  const activeCount = allVisitors.filter((v) => v.status === 'ACTIVE').length;
+  const expectedCount = allVisitors.filter((v) => v.status === 'EXPECTED').length;
+  const totalCount = allVisitors.length;
 
   // Day strip
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];

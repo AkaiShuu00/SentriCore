@@ -322,6 +322,52 @@ export default function GuardVerify() {
     return 'matched';
   };
 
+  // I-match ulit gamit ang na-edit na scanned name (entry visitor lang)
+  const reRunMatch = async () => {
+    const name = (scannedName || '').trim();
+    if (!name) { setOcrError('Please type the name first.'); return; }
+    setOcrError('');
+    try {
+      if (isExit) {
+        const list = await loadActive();
+        const found = list.find((t) => nameMatches(name, t.name));
+        if (found) {
+          setMatchData({
+            transactionId: found.transactionId, arrivalId: found.arrivalId, registrationId: found.registrationId,
+            passId: found.passNumber || ('VST ' + found.transactionId),
+            category: (found.regType || 'Single').toUpperCase(), regType: found.regType || 'Single',
+            resident: found.resident || '', address: found.address || '',
+            visitor: found.name, purpose: found.purpose || 'N/A', expectedDate: '', residentId: found.residentId,
+          });
+          setScannedName(found.name);
+        } else {
+          setMatchData({});
+          setOcrError('Not active inside. Check the name or use manual search.');
+        }
+      } else {
+        const matchRes = await fetch(`${API}/entry/match?name=${encodeURIComponent(name)}`,
+          { headers: { Authorization: `Bearer ${token()}` } });
+        const matchJson = await matchRes.json();
+        if (matchJson.matched && matchJson.candidates.length > 0) {
+          const c = matchJson.candidates[0];
+          const dateStr = c.expectedDate ? new Date(c.expectedDate).toLocaleDateString('en-US') : '';
+          setMatchData({
+            registrationId: c.registrationId, passId: 'VST ' + String(c.registrationId).padStart(6, '0'),
+            category: (c.registrationType || 'Single').toUpperCase(), regType: c.registrationType || 'Single',
+            resident: c.residentName || '', address: c.residentAddress || '',
+            visitor: c.registeredName || name, purpose: c.purpose || 'N/A', expectedDate: dateStr, residentId: c.residentId,
+          });
+          setScannedName(c.registeredName || name);
+        } else {
+          setMatchData({});
+          setOcrError('No matching registration. Check the name or use manual search.');
+        }
+      }
+    } catch {
+      setOcrError('Match failed. Please try again.');
+    }
+  };
+
   useEffect(() => {
     if (step === 'reading' && !photoFile) {
       const t = setTimeout(() => setStep(afterReading()), 1200);
@@ -621,6 +667,23 @@ export default function GuardVerify() {
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">
                 {isExit ? 'ACTIVE VISITOR' : 'VISITOR MATCHED'}
               </h2>
+
+              {/* Editable scanned name — kung mali/kulang ang OCR */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-3">
+                <label className="block text-[10px] font-bold text-ink/60 mb-1">SCANNED NAME (editable)</label>
+                <div className="flex gap-2">
+                  <input value={scannedName} onChange={(e) => setScannedName(e.target.value)}
+                         placeholder="Type the full name"
+                         className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600" />
+                  {!isExit && (
+                    <button onClick={reRunMatch}
+                            className="px-3 py-2 rounded-xl text-xs font-bold text-white shrink-0" style={{ backgroundColor: '#0F6E6E' }}>
+                      RE-MATCH
+                    </button>
+                  )}
+                </div>
+                {ocrError && <p className="text-[11px] text-red-600 mt-1">{ocrError}</p>}
+              </div>
 
               {matchData.visitor ? (
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
