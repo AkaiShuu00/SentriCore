@@ -38,8 +38,11 @@ const nameMatches = (scanned, dbName) => {
   const a = nameTokens(scanned);
   const b = nameTokens(dbName);
   if (a.length === 0 || b.length === 0) return false;
-  const hits = b.filter((w) => a.includes(w)).length;
-  return hits >= Math.min(2, b.length);
+  // Mahigpit: kung buong pangalan ang scanned (2+ tokens), LAHAT ng db-name tokens dapat tumugma
+  // (para di matugma ang ibang "Dela Cruz")
+  if (a.length >= 2) return b.every((w) => a.includes(w)) && a.every((w) => b.includes(w));
+  // Surname lang — partial fallback
+  return b.some((w) => a.includes(w));
 };
 
 export default function GuardVerify() {
@@ -72,6 +75,8 @@ export default function GuardVerify() {
   const [ocrError, setOcrError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [matchData, setMatchData] = useState({});
+  const [candidates, setCandidates] = useState([]);   // lahat ng tumugmang candidate (disambiguation)
+  const multiRef = useRef(false);                      // may 2+ candidate ba?
 
   // ── Real data mula DB ──
   const [residentsDB, setResidentsDB] = useState([]);
@@ -224,9 +229,35 @@ export default function GuardVerify() {
     );
   };
 
+  // Buuin ang matchData mula sa isang candidate
+  const candidateToMatch = (c, fallbackName) => {
+    const dateStr = c.expectedDate ? new Date(c.expectedDate).toLocaleDateString('en-US') : '';
+    return {
+      registrationId: c.registrationId,
+      passId: 'VST ' + String(c.registrationId).padStart(6, '0'),
+      category: (c.registrationType || 'Single').toUpperCase(),
+      regType: c.registrationType || 'Single',
+      resident: c.residentName || '',
+      address: c.residentAddress || '',
+      visitor: c.registeredName || fallbackName,
+      purpose: c.purpose || 'N/A',
+      expectedDate: dateStr,
+      residentId: c.residentId,
+    };
+  };
+
+  // Piliin ang isang candidate mula sa SELECT VISITOR list
+  const pickCandidate = (c) => {
+    setMatchData(candidateToMatch(c, scannedName));
+    setScannedName(c.registeredName || scannedName);
+    multiRef.current = false;
+    setStep('matched');
+  };
+
   const handlePhoto = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    multiRef.current = false;
     setPhotoFile(file);
     setPhoto(URL.createObjectURL(file));
     setOcrError('');
@@ -285,22 +316,19 @@ export default function GuardVerify() {
             );
             const matchJson = await matchRes.json();
             console.log('🟣 match result:', matchJson);
-            if (matchJson.matched && matchJson.candidates.length > 0) {
+            if (matchJson.matched && matchJson.candidates.length === 1) {
+              // Isa lang → auto-select
               const c = matchJson.candidates[0];
-              const dateStr = c.expectedDate ? new Date(c.expectedDate).toLocaleDateString('en-US') : '';
-              setMatchData({
-                registrationId: c.registrationId,
-                passId: 'VST ' + String(c.registrationId).padStart(6, '0'),
-                category: (c.registrationType || 'Single').toUpperCase(),
-                regType: c.registrationType || 'Single',
-                resident: c.residentName || '',
-                address: c.residentAddress || '',
-                visitor: c.registeredName || scanned,
-                purpose: c.purpose || 'N/A',
-                expectedDate: dateStr,
-                residentId: c.residentId,
-              });
+              setMatchData(candidateToMatch(c, scanned));
+              setScannedName(c.registeredName || scanned);
+              multiRef.current = false;
+            } else if (matchJson.matched && matchJson.candidates.length > 1) {
+              // Marami → SELECT VISITOR (piliin ng guard)
+              setCandidates(matchJson.candidates);
+              multiRef.current = true;
             } else {
+              setMatchData({});
+              multiRef.current = false;
               setOcrError('No matching registration found. Please use manual search or contact the resident.');
             }
           } catch (mErr) {
@@ -319,6 +347,7 @@ export default function GuardVerify() {
 
   const afterReading = () => {
     if (isPickup && pickupTarget === 'RESIDENT') return 'pickupResidents';
+    if (multiRef.current) return 'selectVisitor';
     return 'matched';
   };
 
@@ -348,16 +377,14 @@ export default function GuardVerify() {
         const matchRes = await fetch(`${API}/entry/match?name=${encodeURIComponent(name)}`,
           { headers: { Authorization: `Bearer ${token()}` } });
         const matchJson = await matchRes.json();
-        if (matchJson.matched && matchJson.candidates.length > 0) {
+        if (matchJson.matched && matchJson.candidates.length === 1) {
           const c = matchJson.candidates[0];
-          const dateStr = c.expectedDate ? new Date(c.expectedDate).toLocaleDateString('en-US') : '';
-          setMatchData({
-            registrationId: c.registrationId, passId: 'VST ' + String(c.registrationId).padStart(6, '0'),
-            category: (c.registrationType || 'Single').toUpperCase(), regType: c.registrationType || 'Single',
-            resident: c.residentName || '', address: c.residentAddress || '',
-            visitor: c.registeredName || name, purpose: c.purpose || 'N/A', expectedDate: dateStr, residentId: c.residentId,
-          });
+          setMatchData(candidateToMatch(c, name));
           setScannedName(c.registeredName || name);
+        } else if (matchJson.matched && matchJson.candidates.length > 1) {
+          setCandidates(matchJson.candidates);
+          multiRef.current = true;
+          setStep('selectVisitor');
         } else {
           setMatchData({});
           setOcrError('No matching registration. Check the name or use manual search.');
@@ -587,6 +614,47 @@ export default function GuardVerify() {
                     className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
               CONTINUE
             </button>
+          </div>
+        )}
+
+        {/* SELECT VISITOR — kapag maraming tumugmang pangalan (magkaibang resident) */}
+        {step === 'selectVisitor' && (
+          <div>
+            <div className="bg-white rounded-2xl p-3 shadow mb-4">
+              <IDCardPlaceholder name={scannedName} />
+            </div>
+            <h2 className="text-xl font-extrabold text-ink text-center mb-1">SELECT VISITOR</h2>
+            <p className="text-center text-xs text-ink/60 mb-4">
+              Multiple visitors match this name. Ask which resident they're visiting, then select.
+            </p>
+
+            <div className="bg-white rounded-3xl p-4 shadow mb-4">
+              <div className="max-h-[50vh] overflow-y-auto space-y-2">
+                {candidates.map((c, i) => (
+                  <button key={i} onClick={() => pickCandidate(c)}
+                          className="w-full text-left rounded-2xl p-3 border border-gray-200 shadow-sm active:scale-[0.99] transition hover:border-teal-500">
+                    <p className="font-bold text-ink text-sm">{c.registeredName}</p>
+                    <p className="text-xs text-ink/70 mt-1"><span className="font-bold">Resident:</span> {c.residentName}</p>
+                    <p className="text-xs text-ink/60"><span className="font-bold">Address:</span> {c.residentAddress}</p>
+                    <div className="flex gap-2 mt-1">
+                      <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-teal-100 text-teal-800">{c.registrationType || 'Single'}</span>
+                      {c.purpose && <span className="text-[9px] text-ink/50 py-1">Purpose: {c.purpose}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <button onClick={() => setStep('residentList')}
+                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                NONE OF THESE — CONTACT RESIDENT
+              </button>
+              <button onClick={() => setStep('scan')}
+                      className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                RETRY SCAN
+              </button>
+            </div>
           </div>
         )}
 

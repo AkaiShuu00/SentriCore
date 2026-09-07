@@ -36,16 +36,18 @@ export default function Home() {
   const month = today.getMonth();
   const isoToday = today.toISOString().slice(0, 10);
 
-  // I-flatten ang registrations → isang row bawat visitor
+  // I-flatten ang registrations → isang row bawat visitor (per-visitor status)
   const allRows = registrations.flatMap((r) => {
     const isDelivery = r.registration_type === 'Delivery';
     const expDate = (r.expected_date || '').slice(0, 10);
-    const names = r.visitors && r.visitors.length ? r.visitors : [isDelivery ? 'Delivery Rider' : '—'];
-    return names.map((name) => ({
-      name,
+    const vlist = r.visitors && r.visitors.length
+      ? r.visitors
+      : [{ name: isDelivery ? 'Delivery Rider' : '—', status: r.status || 'Expected' }];
+    return vlist.map((v) => ({
+      name: typeof v === 'string' ? v : v.name,
       type: isDelivery ? 'Delivery' : 'Visitor',
       purpose: r.purpose || (isDelivery ? 'Delivery' : 'N/A'),
-      status: (r.status || 'Expected').toUpperCase(),
+      status: (typeof v === 'string' ? (r.status || 'Expected') : v.status).toUpperCase(),
       expectedDate: expDate,
     }));
   });

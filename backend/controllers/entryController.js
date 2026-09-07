@@ -30,9 +30,24 @@ async function matchVisitor(req, res) {
     const candidates = [];
     for (const reg of regs) {
       const regTokens = tokenize(reg.visitor_name);
-      const score = regTokens.filter(t => searchTokens.includes(t)).length;
-      const required = regTokens.length >= 2 ? 2 : 1;
-      if (score >= required) {
+      if (regTokens.length === 0) continue;
+
+      const overlap = regTokens.filter((t) => searchTokens.includes(t)).length;
+
+      // Mas mahigpit na matching:
+      //  - Kung ang scanned ay may 2+ tokens (buong pangalan, hal. "MARIA DELA CRUZ"),
+      //    dapat MATCH ANG LAHAT ng registered tokens (para di matugma ang ibang "Dela Cruz")
+      //  - Kung 1 token lang ang scanned (surname lang), pwede ang partial (fallback)
+      let isMatch = false;
+      if (searchTokens.length >= 2) {
+        // Lahat ng token ng registered name ay nasa scanned name (buong pangalan match)
+        isMatch = regTokens.every((t) => searchTokens.includes(t));
+      } else {
+        // Surname lang — partial (fallback, para may lumabas pa rin)
+        isMatch = overlap >= 1;
+      }
+
+      if (isMatch) {
         candidates.push({
           registrationId: reg.registration_id,
           registeredName: reg.visitor_name,
@@ -43,7 +58,7 @@ async function matchVisitor(req, res) {
           batchName: reg.batch_name,
           purpose: reg.purpose,
           expectedDate: reg.expected_date,
-          score
+          score: overlap,
         });
       }
     }
@@ -94,10 +109,15 @@ async function createGroupEntry(req, res) {
     }
 
     for (const regId of touchedRegs) {
-      await conn.query(
-        `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
-        [regId]
-      );
+      try {
+        await conn.query(
+          `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
+          [regId]
+        );
+      } catch (regErr) {
+        // Huwag sirain ang entry kung hindi tanggap ng registrations enum ang 'Active'
+        console.warn('Registration status update skipped:', regErr.message);
+      }
     }
 
     await conn.commit();
@@ -315,17 +335,48 @@ async function recordExit(req, res) {
       [exitGuardId, id]
     );
 
-    // 2) OPTIONAL: registration → Departed (hindi sisira ang exit kung pumalya ang enum)
+    // 2) Registration status update — mag-ingat sa batch (huwag i-Departed
+    //    kung may miyembro pang hindi nakakapasok)
     if (regId) {
       try {
+        // Ilan ang REGISTERED na miyembro?
+        const [members] = await pool.query(
+          `SELECT COUNT(*) AS n FROM VisitorRegistrationDetails WHERE registration_id = ?`,
+          [regId]
+        );
+        const totalMembers = members[0].n;
+
+        // Ilan ang may transaction (nakapasok na — Active o Completed)?
+        const [entered] = await pool.query(
+          `SELECT COUNT(DISTINCT visitor_name) AS n FROM VisitorTransactions
+           WHERE registration_id = ?`,
+          [regId]
+        );
+        const enteredCount = entered[0].n;
+
+        // May active pa ba?
         const [stillActive] = await pool.query(
           `SELECT transaction_id FROM VisitorTransactions
            WHERE registration_id = ? AND status = 'Active' LIMIT 1`,
           [regId]
         );
-        if (stillActive.length === 0) {
+
+        if (stillActive.length > 0) {
+          // May nasa loob pa → Active pa rin ang registration
+          await pool.query(
+            `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
+            [regId]
+          );
+        } else if (enteredCount >= totalMembers) {
+          // LAHAT ng miyembro ay nakapasok na AT wala nang active → Departed na
           await pool.query(
             `UPDATE VisitorRegistrations SET status = 'Departed' WHERE registration_id = ?`,
+            [regId]
+          );
+        } else {
+          // May hindi pa nakakapasok (hal. si Juana) → Expected pa rin ang registration
+          await pool.query(
+            `UPDATE VisitorRegistrations SET status = 'Expected' WHERE registration_id = ?`,
             [regId]
           );
         }
