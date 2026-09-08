@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 
-// POST /api/registrations  (Resident) - create single/batch/delivery
+// POST /api/registrations  (Resident) - create a pre-registration
 async function createRegistration(req, res) {
   const conn = await pool.getConnection();
   try {
@@ -10,33 +10,42 @@ async function createRegistration(req, res) {
     if (!registrationType || !expectedDate) {
       return res.status(400).json({ message: 'Registration type and expected date are required.' });
     }
-
-    let names = Array.isArray(visitorNames) ? visitorNames.filter(n => n && n.trim()) : [];
-
-    if (registrationType === 'Delivery') {
-      if (!orderId) return res.status(400).json({ message: 'Order ID is required for a delivery.' });
-      if (names.length === 0) names = ['Delivery Driver'];
-    } else if (names.length === 0) {
-      return res.status(400).json({ message: 'Please provide at least one visitor name.' });
+    if (!Array.isArray(visitorNames) || visitorNames.length === 0) {
+      return res.status(400).json({ message: 'At least one visitor name is required.' });
     }
 
     await conn.beginTransaction();
 
     const [reg] = await conn.query(
-      `INSERT INTO VisitorRegistrations (resident_id, registration_type, batch_name, order_id, purpose, expected_date)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [residentId, registrationType, batchName || null, orderId || null, purpose || null, expectedDate]
+      `INSERT INTO VisitorRegistrations
+        (resident_id, registration_type, batch_name, order_id, purpose, expected_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'Expected')`,
+      [
+        residentId,
+        registrationType,
+        batchName || null,
+        orderId || null,
+        purpose || null,
+        expectedDate,
+      ]
     );
+    const registrationId = reg.insertId;
 
-    for (const name of names) {
-      await conn.query(
-        `INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`,
-        [reg.insertId, name.trim()]
-      );
+    for (const name of visitorNames) {
+      if (name && name.trim()) {
+        await conn.query(
+          `INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`,
+          [registrationId, name.trim()]
+        );
+      }
     }
 
     await conn.commit();
-    res.status(201).json({ message: 'Registration created.', registrationId: reg.insertId, visitorCount: names.length });
+    res.status(201).json({
+      message: 'Registration created.',
+      registrationId,
+      visitorCount: visitorNames.filter((n) => n && n.trim()).length,
+    });
   } catch (err) {
     await conn.rollback();
     res.status(500).json({ message: 'Error creating registration.', error: err.message });
@@ -45,73 +54,102 @@ async function createRegistration(req, res) {
   }
 }
 
-// GET /api/registrations  (Resident) - own registrations
+// GET /api/registrations  (Resident) - list my registrations w/ PER-VISITOR status
 async function getMyRegistrations(req, res) {
   try {
     const residentId = req.user.residentId;
-    const [rows] = await pool.query(
-      `SELECT r.registration_id, r.registration_type, r.batch_name, r.order_id,
-              r.purpose, r.expected_date, r.status, r.created_at
-       FROM VisitorRegistrations r
-       WHERE r.resident_id = ?
-       ORDER BY r.registration_id DESC`,
+
+    const [regs] = await pool.query(
+      `SELECT registration_id, registration_type, batch_name, order_id,
+              purpose, DATE_FORMAT(expected_date, '%Y-%m-%d') AS expected_date,
+              status, created_at
+       FROM VisitorRegistrations
+       WHERE resident_id = ?
+       ORDER BY registration_id DESC`,
       [residentId]
     );
 
-    for (const reg of rows) {
+    const result = [];
+    for (const r of regs) {
+      // Lahat ng miyembro
       const [details] = await pool.query(
         `SELECT visitor_name FROM VisitorRegistrationDetails WHERE registration_id = ?`,
-        [reg.registration_id]
+        [r.registration_id]
       );
-      reg.visitors = details.map(d => d.visitor_name);
+      // Transactions ng registration na ito (para sa PER-VISITOR status)
+      const [txs] = await pool.query(
+        `SELECT visitor_name, status, entry_time, exit_time
+         FROM VisitorTransactions WHERE registration_id = ?`,
+        [r.registration_id]
+      );
+      const txByName = {};
+      for (const t of txs) txByName[(t.visitor_name || '').toUpperCase()] = t;
+
+      // Bawat visitor may sariling status base sa transaction
+      const visitors = details.map((d) => {
+        const t = txByName[(d.visitor_name || '').toUpperCase()];
+        let status = 'Expected', timeIn = null, timeOut = null;
+        if (t) {
+          timeIn = t.entry_time;
+          timeOut = t.exit_time;
+          if (t.status === 'Active') status = 'Active';
+          else if (t.status === 'Completed') status = 'Departed';
+        }
+        return { name: d.visitor_name, status, timeIn, timeOut };
+      });
+
+      result.push({
+        registration_id: r.registration_id,
+        registration_type: r.registration_type,
+        batch_name: r.batch_name,
+        order_id: r.order_id,
+        purpose: r.purpose,
+        expected_date: r.expected_date,
+        status: r.status,          // registration-level (para sa summary/filter)
+        created_at: r.created_at,
+        visitors,                  // ← per-visitor na may sariling status
+      });
     }
 
-    res.json(rows);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching registrations.', error: err.message });
   }
 }
 
-// PUT /api/registrations/:id  (Resident) - edit, only while Expected (no gate activity)
+// PUT /api/registrations/:id  (Resident) - update a registration
 async function updateRegistration(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { id } = req.params;
     const residentId = req.user.residentId;
-    const { purpose, expectedDate, batchName, orderId, visitorNames } = req.body;
+    const { id } = req.params;
+    const { purpose, expectedDate, visitorNames } = req.body;
 
-    const [reg] = await conn.query(
-      `SELECT registration_type FROM VisitorRegistrations WHERE registration_id = ? AND resident_id = ?`,
+    const [own] = await conn.query(
+      `SELECT registration_id FROM VisitorRegistrations WHERE registration_id = ? AND resident_id = ?`,
       [id, residentId]
     );
-    if (reg.length === 0) return res.status(404).json({ message: 'Registration not found.' });
-
-    const [used] = await conn.query(
-      `SELECT transaction_id FROM VisitorTransactions WHERE registration_id = ? LIMIT 1`,
-      [id]
-    );
-    if (used.length > 0) {
-      return res.status(400).json({ message: 'This registration already has gate activity and can no longer be edited.' });
+    if (own.length === 0) {
+      return res.status(404).json({ message: 'Registration not found.' });
     }
-
-    let names = Array.isArray(visitorNames) ? visitorNames.filter(n => n && n.trim()) : [];
-    if (reg[0].registration_type === 'Delivery' && names.length === 0) names = ['Delivery Driver'];
-    if (names.length === 0) return res.status(400).json({ message: 'Please provide at least one visitor name.' });
 
     await conn.beginTransaction();
 
     await conn.query(
-      `UPDATE VisitorRegistrations SET purpose = ?, expected_date = ?, batch_name = ?, order_id = ?
-       WHERE registration_id = ?`,
-      [purpose || null, expectedDate, batchName || null, orderId || null, id]
+      `UPDATE VisitorRegistrations SET purpose = ?, expected_date = ? WHERE registration_id = ?`,
+      [purpose || null, expectedDate || null, id]
     );
 
-    await conn.query(`DELETE FROM VisitorRegistrationDetails WHERE registration_id = ?`, [id]);
-    for (const name of names) {
-      await conn.query(
-        `INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`,
-        [id, name.trim()]
-      );
+    if (Array.isArray(visitorNames)) {
+      await conn.query(`DELETE FROM VisitorRegistrationDetails WHERE registration_id = ?`, [id]);
+      for (const name of visitorNames) {
+        if (name && name.trim()) {
+          await conn.query(
+            `INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`,
+            [id, name.trim()]
+          );
+        }
+      }
     }
 
     await conn.commit();
@@ -124,38 +162,24 @@ async function updateRegistration(req, res) {
   }
 }
 
-// DELETE /api/registrations/:id  (Resident) - delete, only while Expected
+// DELETE /api/registrations/:id  (Resident) - delete a registration
 async function deleteRegistration(req, res) {
-  const conn = await pool.getConnection();
   try {
-    const { id } = req.params;
     const residentId = req.user.residentId;
+    const { id } = req.params;
 
-    const [reg] = await conn.query(
+    const [own] = await pool.query(
       `SELECT registration_id FROM VisitorRegistrations WHERE registration_id = ? AND resident_id = ?`,
       [id, residentId]
     );
-    if (reg.length === 0) return res.status(404).json({ message: 'Registration not found.' });
-
-    const [used] = await conn.query(
-      `SELECT transaction_id FROM VisitorTransactions WHERE registration_id = ? LIMIT 1`,
-      [id]
-    );
-    if (used.length > 0) {
-      return res.status(400).json({ message: 'This registration already has gate activity and can no longer be deleted.' });
+    if (own.length === 0) {
+      return res.status(404).json({ message: 'Registration not found.' });
     }
 
-    await conn.beginTransaction();
-    await conn.query(`DELETE FROM VisitorRegistrationDetails WHERE registration_id = ?`, [id]);
-    await conn.query(`DELETE FROM VisitorRegistrations WHERE registration_id = ?`, [id]);
-    await conn.commit();
-
+    await pool.query(`DELETE FROM VisitorRegistrations WHERE registration_id = ?`, [id]);
     res.json({ message: 'Registration deleted.' });
   } catch (err) {
-    await conn.rollback();
     res.status(500).json({ message: 'Error deleting registration.', error: err.message });
-  } finally {
-    conn.release();
   }
 }
 

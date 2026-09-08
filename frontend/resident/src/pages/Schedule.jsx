@@ -72,7 +72,7 @@ export default function Schedule() {
   };
 
   // Napiling petsa (YYYY-MM-DD) base sa day strip
-  const selectedISO = new Date(year, month, selectedDay).toISOString().slice(0, 10);
+  const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
 
   const filtered = allRows
     .filter((s) => s.expectedDate === selectedISO)              // filter by selected day

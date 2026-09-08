@@ -34,7 +34,8 @@ export default function Home() {
 
   const year = today.getFullYear();
   const month = today.getMonth();
-  const isoToday = today.toISOString().slice(0, 10);
+  // Local "today" (YYYY-MM-DD) — para tumugma sa DATE_FORMAT ng backend
+  const isoToday = `${year}-${String(month + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   // I-flatten ang registrations → isang row bawat visitor (per-visitor status)
   const allRows = registrations.flatMap((r) => {
@@ -80,7 +81,7 @@ export default function Home() {
   };
 
   // Listahan = base sa piniling araw (default: today)
-  const selectedISO = new Date(year, month, selectedDay).toISOString().slice(0, 10);
+  const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
   const daySchedule = allRows.filter((s) => s.expectedDate === selectedISO);
   const filteredSchedule = daySchedule.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
