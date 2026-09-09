@@ -22,12 +22,17 @@ import ContactGuard from './pages/ContactGuard';
 import Complaints from './pages/Complaints';
 import PreRegister from './pages/PreRegister';
 
-// ── Guard pages (gagawin natin — palitan/idagdag habang binubuo) ──
+// ── Guard pages 
 import GuardHome from './pages/guard/GuardHome';
 import GuardSchedule from './pages/guard/GuardSchedule';
 import GuardProfile from './pages/guard/GuardProfile';
 import GuardLogs from './pages/guard/GuardLogs';
 import GuardVerify from './pages/guard/GuardVerify';
+
+// ── Admin pages
+import AdminSignIn from './pages/admin/AdminSignIn';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminVisitorLogs from './pages/admin/AdminVisitorLogs';
 
 function App() {
   return (
@@ -61,6 +66,11 @@ function App() {
         <Route path="/guard-profile" element={<GuardProfile />} />
         <Route path="/guard-logs" element={<GuardLogs />} />
         <Route path="/guard-verify" element={<GuardVerify />} />
+
+        {/* Admin */}
+        <Route path="/admin-signin" element={<AdminSignIn />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/admin-visitor-logs" element={<AdminVisitorLogs />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
