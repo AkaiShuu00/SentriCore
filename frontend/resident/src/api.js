@@ -35,6 +35,8 @@ export const getMyProfile = () => api.get('/residents/me');
 
 // ── Announcements (all logged-in) ──
 export const getAnnouncements = () => api.get('/announcements');
+export const createAnnouncement = (data) => api.post('/announcements', data);
+export const deleteAnnouncement = (id) => api.delete(`/announcements/${id}`);
 
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
