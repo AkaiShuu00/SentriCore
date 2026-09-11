@@ -33,6 +33,9 @@ import GuardVerify from './pages/guard/GuardVerify';
 import AdminSignIn from './pages/admin/AdminSignIn';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminVisitorLogs from './pages/admin/AdminVisitorLogs';
+import AdminAnnouncements from './pages/admin/AdminAnnouncements';
+import AdminGuards from './pages/admin/AdminGuards';
+import AdminResidents from './pages/admin/AdminResidents';
 
 function App() {
   return (
@@ -71,6 +74,9 @@ function App() {
         <Route path="/admin-signin" element={<AdminSignIn />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/admin-visitor-logs" element={<AdminVisitorLogs />} />
+        <Route path="/admin-announcements" element={<AdminAnnouncements />} />
+        <Route path="/admin-guards" element={<AdminGuards />} />
+        <Route path="/admin-residents" element={<AdminResidents />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
