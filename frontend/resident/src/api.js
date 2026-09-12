@@ -38,6 +38,10 @@ export const getAnnouncements = () => api.get('/announcements');
 export const createAnnouncement = (data) => api.post('/announcements', data);
 export const deleteAnnouncement = (id) => api.delete(`/announcements/${id}`);
 
+// ── Admin ──
+export const getAllVisitorLogs = () => api.get('/entry/all-logs');
+export const getAdminSummary = () => api.get('/entry/admin-summary');
+
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');

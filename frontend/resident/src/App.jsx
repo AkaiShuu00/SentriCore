@@ -36,6 +36,7 @@ import AdminVisitorLogs from './pages/admin/AdminVisitorLogs';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements';
 import AdminGuards from './pages/admin/AdminGuards';
 import AdminResidents from './pages/admin/AdminResidents';
+import AdminReports from './pages/admin/AdminReports';
 
 function App() {
   return (
@@ -77,6 +78,8 @@ function App() {
         <Route path="/admin-announcements" element={<AdminAnnouncements />} />
         <Route path="/admin-guards" element={<AdminGuards />} />
         <Route path="/admin-residents" element={<AdminResidents />} />
+        <Route path="/admin-reports" element={<AdminReports />} />
+
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />

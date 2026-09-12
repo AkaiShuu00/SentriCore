@@ -1,21 +1,15 @@
 const pool = require('../config/db');
 
-// Helper: split a name into uppercase word tokens
 function tokenize(s) {
-  return (s || '')
-    .toUpperCase()
-    .split(/[\s,.\-]+/)
-    .filter(t => t.length >= 2);
+  return (s || '').toUpperCase().split(/[\s,.\-]+/).filter(t => t.length >= 2);
 }
 
-// GET /api/entry/match?name=  (Guard) - match OCR name to an expected registration
+// GET /api/entry/match?name=  (Guard)
 async function matchVisitor(req, res) {
   try {
     const name = req.query.name || '';
     const searchTokens = tokenize(name);
-    if (searchTokens.length === 0) {
-      return res.json({ matched: false, candidates: [] });
-    }
+    if (searchTokens.length === 0) return res.json({ matched: false, candidates: [] });
 
     const [regs] = await pool.query(
       `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose,
@@ -31,38 +25,17 @@ async function matchVisitor(req, res) {
     for (const reg of regs) {
       const regTokens = tokenize(reg.visitor_name);
       if (regTokens.length === 0) continue;
-
       const overlap = regTokens.filter((t) => searchTokens.includes(t)).length;
-
-      // Mas mahigpit na matching:
-      //  - Kung ang scanned ay may 2+ tokens (buong pangalan, hal. "MARIA DELA CRUZ"),
-      //    dapat MATCH ANG LAHAT ng registered tokens (para di matugma ang ibang "Dela Cruz")
-      //  - Kung 1 token lang ang scanned (surname lang), pwede ang partial (fallback)
-      let isMatch = false;
-      if (searchTokens.length >= 2) {
-        // Lahat ng token ng registered name ay nasa scanned name (buong pangalan match)
-        isMatch = regTokens.every((t) => searchTokens.includes(t));
-      } else {
-        // Surname lang — partial (fallback, para may lumabas pa rin)
-        isMatch = overlap >= 1;
-      }
-
+      let isMatch = searchTokens.length >= 2 ? regTokens.every((t) => searchTokens.includes(t)) : overlap >= 1;
       if (isMatch) {
         candidates.push({
-          registrationId: reg.registration_id,
-          registeredName: reg.visitor_name,
-          residentId: reg.resident_id,
-          residentName: reg.resident_name,
-          residentAddress: reg.unit_address,
-          registrationType: reg.registration_type,
-          batchName: reg.batch_name,
-          purpose: reg.purpose,
-          expectedDate: reg.expected_date,
-          score: overlap,
+          registrationId: reg.registration_id, registeredName: reg.visitor_name,
+          residentId: reg.resident_id, residentName: reg.resident_name, residentAddress: reg.unit_address,
+          registrationType: reg.registration_type, batchName: reg.batch_name,
+          purpose: reg.purpose, expectedDate: reg.expected_date, score: overlap,
         });
       }
     }
-
     candidates.sort((a, b) => b.score - a.score);
     res.json({ matched: candidates.length > 0, candidates });
   } catch (err) {
@@ -70,20 +43,18 @@ async function matchVisitor(req, res) {
   }
 }
 
-// POST /api/entry/group  (Guard) - record entry for one or more visitors
+// POST /api/entry/group  (Guard)
 async function createGroupEntry(req, res) {
   const conn = await pool.getConnection();
   try {
     const guardId = req.user.guardId;
     const gateId = req.user.gateId;
     const { visitors } = req.body;
-
     if (!Array.isArray(visitors) || visitors.length === 0) {
       return res.status(400).json({ message: 'No visitors to log.' });
     }
 
     await conn.beginTransaction();
-
     let arrivalId = null;
     if (visitors.length >= 2) {
       const [arr] = await conn.query(`INSERT INTO Arrivals () VALUES ()`);
@@ -98,11 +69,9 @@ async function createGroupEntry(req, res) {
           (resident_id, guard_id, gate_id, registration_id, arrival_id, visitor_name,
            visitor_type, purpose, plate_number, pass_number, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          v.residentId, guardId, gateId, v.registrationId || null, arrivalId,
-          v.visitorName, v.visitorType || 'Visitor', v.purpose || null,
-          v.plateNumber || null, v.passNumber || null, v.status || 'Active'
-        ]
+        [v.residentId, guardId, gateId, v.registrationId || null, arrivalId,
+         v.visitorName, v.visitorType || 'Visitor', v.purpose || null,
+         v.plateNumber || null, v.passNumber || null, v.status || 'Active']
       );
       created.push(tx.insertId);
       if (v.registrationId) touchedRegs.add(v.registrationId);
@@ -110,14 +79,8 @@ async function createGroupEntry(req, res) {
 
     for (const regId of touchedRegs) {
       try {
-        await conn.query(
-          `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
-          [regId]
-        );
-      } catch (regErr) {
-        // Huwag sirain ang entry kung hindi tanggap ng registrations enum ang 'Active'
-        console.warn('Registration status update skipped:', regErr.message);
-      }
+        await conn.query(`UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`, [regId]);
+      } catch (regErr) { console.warn('Reg status skipped:', regErr.message); }
     }
 
     await conn.commit();
@@ -130,13 +93,12 @@ async function createGroupEntry(req, res) {
   }
 }
 
-// GET /api/entry/active  (Guard) - all visitors currently inside
+// GET /api/entry/active  (Guard)
 async function getActiveVisitors(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
-              t.plate_number, t.pass_number, t.entry_time, t.arrival_id,
-              t.registration_id,
+              t.plate_number, t.pass_number, t.entry_time, t.arrival_id, t.registration_id,
               res.resident_id, res.full_name AS resident_name, res.unit_address,
               vr.registration_type, vr.batch_name
        FROM VisitorTransactions t
@@ -151,15 +113,13 @@ async function getActiveVisitors(req, res) {
   }
 }
 
-// GET /api/entry/history  (Guard) - completed/departed transactions
+// GET /api/entry/history  (Guard)
 async function getHistory(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
-              t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status,
-              t.registration_id,
-              res.full_name AS resident_name, res.unit_address,
-              vr.registration_type
+              t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
+              res.full_name AS resident_name, res.unit_address, vr.registration_type
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
        LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
@@ -172,13 +132,83 @@ async function getHistory(req, res) {
   }
 }
 
-// GET /api/entry/residents  (Guard) - residents directory
+// GET /api/entry/all-logs  (Admin/Guard) - LAHAT ng transactions
+async function getAllLogs(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
+              t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
+              res.full_name AS resident_name, res.unit_address,
+              vr.registration_type, g.full_name AS guard_name
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
+       LEFT JOIN Guards g ON g.guard_id = t.guard_id
+       ORDER BY t.transaction_id DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching logs.', error: err.message });
+  }
+}
+
+// GET /api/entry/admin-summary  (Admin) - dashboard stats + recent activity
+async function getAdminSummary(req, res) {
+  try {
+    const [[active]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions WHERE status = 'Active'`);
+    const [[todayEntries]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions WHERE DATE(entry_time) = CURDATE()`);
+    const [[expected]] = await pool.query(
+      `SELECT COUNT(*) AS n
+       FROM VisitorRegistrationDetails d
+       JOIN VisitorRegistrations r ON r.registration_id = d.registration_id
+       WHERE r.status = 'Expected' AND DATE(r.expected_date) = CURDATE()`
+    );
+    let activeGates = 0;
+    try {
+      const [[g]] = await pool.query(`SELECT COUNT(DISTINCT gate_id) AS n FROM Guards WHERE status = 'Active'`);
+      activeGates = g.n;
+    } catch (e) { activeGates = 0; }
+    const [[total]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions`);
+
+    const [recent] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.status, t.entry_time, t.exit_time,
+              res.full_name AS resident_name, res.unit_address, g.full_name AS guard_name
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       LEFT JOIN Guards g ON g.guard_id = t.guard_id
+       ORDER BY t.transaction_id DESC LIMIT 8`
+    );
+
+    const [inside] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.entry_time,
+              res.full_name AS resident_name, res.unit_address
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       WHERE t.status = 'Active'
+       ORDER BY t.transaction_id DESC LIMIT 8`
+    );
+
+    res.json({
+      stats: { activeVisitors: active.n, todayEntries: todayEntries.n, expectedToday: expected.n, activeGates, total: total.n },
+      recent: recent.map((r) => ({
+        id: r.transaction_id, name: r.visitor_name, resident: r.resident_name, unit: r.unit_address,
+        guard: r.guard_name || '—', status: r.status, entry: r.entry_time, exit: r.exit_time,
+      })),
+      inside: inside.map((r) => ({
+        id: r.transaction_id, name: r.visitor_name, resident: r.resident_name, unit: r.unit_address, entry: r.entry_time,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching admin summary.', error: err.message });
+  }
+}
+
+// GET /api/entry/residents  (Guard)
 async function getResidentsForGuard(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT resident_id, full_name, unit_address, phone_number AS contact_number, email
-       FROM Residents
-       ORDER BY full_name ASC`
+       FROM Residents ORDER BY full_name ASC`
     );
     res.json(rows);
   } catch (err) {
@@ -187,13 +217,10 @@ async function getResidentsForGuard(req, res) {
 }
 
 // GET /api/entry/companions  (Guard)
-//   ?registrationId=X  → BATCH: ibang miyembro ng same batch na HINDI PA pumapasok
-//   ?single=1          → SINGLE: expected single visitors (hindi pa pumapasok)
 async function getCompanions(req, res) {
   try {
     const { registrationId, single } = req.query;
 
-    // ── BATCH ──
     if (registrationId) {
       const [members] = await pool.query(
         `SELECT d.visitor_name, r.registration_id, r.purpose,
@@ -201,29 +228,18 @@ async function getCompanions(req, res) {
          FROM VisitorRegistrationDetails d
          JOIN VisitorRegistrations r ON r.registration_id = d.registration_id
          JOIN Residents res ON res.resident_id = r.resident_id
-         WHERE d.registration_id = ?`,
-        [registrationId]
+         WHERE d.registration_id = ?`, [registrationId]
       );
       const [active] = await pool.query(
-        `SELECT visitor_name FROM VisitorTransactions
-         WHERE registration_id = ? AND status = 'Active'`,
-        [registrationId]
+        `SELECT visitor_name FROM VisitorTransactions WHERE registration_id = ? AND status = 'Active'`, [registrationId]
       );
       const activeNames = new Set(active.map((a) => (a.visitor_name || '').toUpperCase()));
-      const result = members
+      return res.json(members
         .filter((m) => !activeNames.has((m.visitor_name || '').toUpperCase()))
-        .map((m) => ({
-          name: m.visitor_name,
-          registrationId: m.registration_id,
-          residentId: m.resident_id,
-          resident: m.resident_name,
-          address: m.unit_address,
-          purpose: m.purpose,
-        }));
-      return res.json(result);
+        .map((m) => ({ name: m.visitor_name, registrationId: m.registration_id, residentId: m.resident_id,
+                       resident: m.resident_name, address: m.unit_address, purpose: m.purpose })));
     }
 
-    // ── SINGLE ──
     if (single) {
       const [rows] = await pool.query(
         `SELECT d.visitor_name, r.registration_id, r.purpose,
@@ -233,31 +249,20 @@ async function getCompanions(req, res) {
          JOIN Residents res ON res.resident_id = r.resident_id
          WHERE r.registration_type = 'Single' AND r.status = 'Expected'`
       );
-      const result = rows.map((m) => ({
-        name: m.visitor_name,
-        registrationId: m.registration_id,
-        residentId: m.resident_id,
-        resident: m.resident_name,
-        address: m.unit_address,
-        purpose: m.purpose,
-      }));
-      return res.json(result);
+      return res.json(rows.map((m) => ({ name: m.visitor_name, registrationId: m.registration_id, residentId: m.resident_id,
+                                         resident: m.resident_name, address: m.unit_address, purpose: m.purpose })));
     }
-
     res.json([]);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching companions.', error: err.message });
   }
 }
 
-// GET /api/entry/schedule  (Guard) - today's registrations w/ per-visitor status
-//   Bawat registration (Expected o Active) + status ng bawat miyembro
-//   (EXPECTED = hindi pa pumapasok, ACTIVE = nasa loob, DEPARTED = nakaalis)
+// GET /api/entry/schedule  (Guard)
 async function getSchedule(req, res) {
   try {
     const [regs] = await pool.query(
-      `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose,
-              r.expected_date, r.status,
+      `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose, r.expected_date, r.status,
               res.resident_id, res.full_name AS resident_name, res.unit_address
        FROM VisitorRegistrations r
        JOIN Residents res ON res.resident_id = r.resident_id
@@ -267,14 +272,10 @@ async function getSchedule(req, res) {
 
     const result = [];
     for (const r of regs) {
-      const [details] = await pool.query(
-        `SELECT visitor_name FROM VisitorRegistrationDetails WHERE registration_id = ?`,
-        [r.registration_id]
-      );
+      const [details] = await pool.query(`SELECT visitor_name FROM VisitorRegistrationDetails WHERE registration_id = ?`, [r.registration_id]);
       const [txs] = await pool.query(
-        `SELECT visitor_name, status, entry_time, exit_time, arrival_id, transaction_id, plate_number
-         FROM VisitorTransactions WHERE registration_id = ?`,
-        [r.registration_id]
+        `SELECT visitor_name, status, entry_time, exit_time, arrival_id, transaction_id
+         FROM VisitorTransactions WHERE registration_id = ?`, [r.registration_id]
       );
       const txByName = {};
       for (const t of txs) txByName[(t.visitor_name || '').toUpperCase()] = t;
@@ -283,10 +284,7 @@ async function getSchedule(req, res) {
         const t = txByName[(d.visitor_name || '').toUpperCase()];
         let status = 'EXPECTED', timeIn = null, timeOut = null, arrivalId = null, transactionId = null;
         if (t) {
-          transactionId = t.transaction_id;
-          arrivalId = t.arrival_id;
-          timeIn = t.entry_time;
-          timeOut = t.exit_time;
+          transactionId = t.transaction_id; arrivalId = t.arrival_id; timeIn = t.entry_time; timeOut = t.exit_time;
           if (t.status === 'Active') status = 'ACTIVE';
           else if (t.status === 'Completed') status = 'DEPARTED';
         }
@@ -294,15 +292,9 @@ async function getSchedule(req, res) {
       });
 
       result.push({
-        registrationId: r.registration_id,
-        registrationType: r.registration_type,
-        batchName: r.batch_name,
-        purpose: r.purpose,
-        expectedDate: r.expected_date,
-        resident: r.resident_name,
-        address: r.unit_address,
-        residentId: r.resident_id,
-        visitors,
+        registrationId: r.registration_id, registrationType: r.registration_type, batchName: r.batch_name,
+        purpose: r.purpose, expectedDate: r.expected_date, resident: r.resident_name, address: r.unit_address,
+        residentId: r.resident_id, visitors,
       });
     }
     res.json(result);
@@ -311,78 +303,39 @@ async function getSchedule(req, res) {
   }
 }
 
-// POST /api/entry/:id/exit  (Guard) - record a visitor's exit
+// POST /api/entry/:id/exit  (Guard)
 async function recordExit(req, res) {
   try {
     const { id } = req.params;
     const exitGuardId = req.user.guardId;
 
     const [rows] = await pool.query(
-      `SELECT transaction_id, registration_id FROM VisitorTransactions
-       WHERE transaction_id = ? AND status = 'Active'`,
-      [id]
+      `SELECT transaction_id, registration_id FROM VisitorTransactions WHERE transaction_id = ? AND status = 'Active'`, [id]
     );
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Active visitor not found.' });
-    }
+    if (rows.length === 0) return res.status(404).json({ message: 'Active visitor not found.' });
     const regId = rows[0].registration_id;
 
-    // 1) ESSENTIAL: markahan ang transaction bilang Completed
     await pool.query(
-      `UPDATE VisitorTransactions
-       SET status = 'Completed', exit_time = NOW(), exit_guard_id = ?
-       WHERE transaction_id = ?`,
+      `UPDATE VisitorTransactions SET status = 'Completed', exit_time = NOW(), exit_guard_id = ? WHERE transaction_id = ?`,
       [exitGuardId, id]
     );
 
-    // 2) Registration status update — mag-ingat sa batch (huwag i-Departed
-    //    kung may miyembro pang hindi nakakapasok)
     if (regId) {
       try {
-        // Ilan ang REGISTERED na miyembro?
-        const [members] = await pool.query(
-          `SELECT COUNT(*) AS n FROM VisitorRegistrationDetails WHERE registration_id = ?`,
-          [regId]
-        );
+        const [members] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorRegistrationDetails WHERE registration_id = ?`, [regId]);
         const totalMembers = members[0].n;
-
-        // Ilan ang may transaction (nakapasok na — Active o Completed)?
-        const [entered] = await pool.query(
-          `SELECT COUNT(DISTINCT visitor_name) AS n FROM VisitorTransactions
-           WHERE registration_id = ?`,
-          [regId]
-        );
+        const [entered] = await pool.query(`SELECT COUNT(DISTINCT visitor_name) AS n FROM VisitorTransactions WHERE registration_id = ?`, [regId]);
         const enteredCount = entered[0].n;
-
-        // May active pa ba?
-        const [stillActive] = await pool.query(
-          `SELECT transaction_id FROM VisitorTransactions
-           WHERE registration_id = ? AND status = 'Active' LIMIT 1`,
-          [regId]
-        );
+        const [stillActive] = await pool.query(`SELECT transaction_id FROM VisitorTransactions WHERE registration_id = ? AND status = 'Active' LIMIT 1`, [regId]);
 
         if (stillActive.length > 0) {
-          // May nasa loob pa → Active pa rin ang registration
-          await pool.query(
-            `UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`,
-            [regId]
-          );
+          await pool.query(`UPDATE VisitorRegistrations SET status = 'Active' WHERE registration_id = ?`, [regId]);
         } else if (enteredCount >= totalMembers) {
-          // LAHAT ng miyembro ay nakapasok na AT wala nang active → Departed na
-          await pool.query(
-            `UPDATE VisitorRegistrations SET status = 'Departed' WHERE registration_id = ?`,
-            [regId]
-          );
+          await pool.query(`UPDATE VisitorRegistrations SET status = 'Departed' WHERE registration_id = ?`, [regId]);
         } else {
-          // May hindi pa nakakapasok (hal. si Juana) → Expected pa rin ang registration
-          await pool.query(
-            `UPDATE VisitorRegistrations SET status = 'Expected' WHERE registration_id = ?`,
-            [regId]
-          );
+          await pool.query(`UPDATE VisitorRegistrations SET status = 'Expected' WHERE registration_id = ?`, [regId]);
         }
-      } catch (regErr) {
-        console.warn('Registration status update skipped:', regErr.message);
-      }
+      } catch (regErr) { console.warn('Reg status skipped:', regErr.message); }
     }
 
     res.json({ message: 'Exit recorded.' });
@@ -392,4 +345,7 @@ async function recordExit(req, res) {
   }
 }
 
-module.exports = { matchVisitor, createGroupEntry, getActiveVisitors, getHistory, recordExit, getResidentsForGuard, getCompanions, getSchedule };
+module.exports = {
+  matchVisitor, createGroupEntry, getActiveVisitors, getHistory, getAllLogs, getAdminSummary,
+  getResidentsForGuard, getCompanions, getSchedule, recordExit,
+};

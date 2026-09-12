@@ -1,38 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
+import { getAdminSummary, getAnnouncements } from '../../api';
 
 // ── Sample data (iko-connect sa DB after) ──
-const STATS = [
-  {
-    label: 'Active Visitors', value: 24, sub: 'Inside Subdivision', icon: '📍',
-    gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false,
-  },
-  {
-    label: "Today's Entries", value: 132, sub: '↗ +18% vs yesterday', icon: '⤵',
-    gradient: 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)', dark: true,
-  },
-  {
-    label: 'Expected Today', value: 59, sub: 'Registered Visitors', icon: '📅',
-    gradient: 'linear-gradient(135deg,#3FA89A 0%,#2E8C7E 100%)', dark: true,
-  },
-  {
-    label: 'Active Gates', value: 2, sub: 'Gates Currently Monitoring', icon: '🛡️',
-    gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false,
-  },
+// Stat card styling (value + sub galing DB)
+const STAT_META = [
+  { key: 'activeVisitors', label: 'Active Visitors', sub: 'Inside Subdivision', icon: '📍',
+    gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
+  { key: 'todayEntries', label: "Today's Entries", sub: 'Entries logged today', icon: '⤵',
+    gradient: 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)', dark: true },
+  { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', icon: '📅',
+    gradient: 'linear-gradient(135deg,#3FA89A 0%,#2E8C7E 100%)', dark: true },
+  { key: 'activeGates', label: 'Active Gates', sub: 'Gates Currently Monitoring', icon: '🛡️',
+    gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
 ];
 
-const RECENT = [
-  { text: 'Visitor approved by resident (UNIT B-12)', sub: 'Guard: Miguel R.', time: '10:12 AM' },
-  { text: 'Lalamove Rider exited the subdivision', sub: 'Guard: Miguel R.', time: '9:08 AM' },
-  { text: 'New visitor entry detected', sub: 'Guard: Carla A.', time: '9:00 AM' },
-];
-
-const ANNOUNCEMENTS = [
-  { icon: '🔥', bg: '#F6E7C9', text: 'Fire incident happening at Gemini Street' },
-  { icon: '💧', bg: '#CDEBE3', text: 'Water interruption at 11:00 PM today, June 2, 2026' },
-  { icon: '🧑', bg: '#F3D9D9', text: 'Homeowners meeting today at clubhouse, 10:30 AM' },
-];
+const annIcon = (text) => {
+  const t = (text || '').toLowerCase();
+  if (t.includes('fire')) return { icon: '🔥', bg: '#F6E7C9' };
+  if (t.includes('water')) return { icon: '💧', bg: '#CDEBE3' };
+  if (t.includes('power')) return { icon: '⚡', bg: '#F6E7C9' };
+  if (t.includes('gate') || t.includes('maintenance')) return { icon: '🛠️', bg: '#CDEBE3' };
+  if (t.includes('meeting') || t.includes('homeowner')) return { icon: '🧑', bg: '#F3D9D9' };
+  return { icon: '📢', bg: '#E8F1EE' };
+};
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -42,9 +34,22 @@ export default function AdminDashboard() {
   const today = new Date();
   const [selected, setSelected] = useState(new Date(today));
   const [showFullCal, setShowFullCal] = useState(false);
-  // Ang buwan/taon na tinitignan sa full calendar
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewYear, setViewYear] = useState(today.getFullYear());
+
+  // ── DB data ──
+  const [stats, setStats] = useState({ activeVisitors: 0, todayEntries: 0, expectedToday: 0, activeGates: 0, total: 0 });
+  const [recent, setRecent] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+
+  useEffect(() => {
+    getAdminSummary()
+      .then((res) => { setStats(res.data.stats || {}); setRecent(res.data.recent || []); })
+      .catch(() => {});
+    getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => {});
+  }, []);
+
+  const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
 
   // ── WEEK STRIP: ang linggo kung nasaan ang `selected` ──
   const weekStart = new Date(selected);
@@ -88,10 +93,9 @@ export default function AdminDashboard() {
         <div className="flex-1 min-w-0">
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-5">
-            {STATS.map((s) => (
-              <div key={s.label} className="rounded-3xl p-5 shadow-md relative overflow-hidden"
+            {STAT_META.map((s) => (
+              <div key={s.key} className="rounded-3xl p-5 shadow-md relative overflow-hidden"
                    style={{ background: s.gradient, minHeight: 130 }}>
-                {/* Label pill */}
                 <div className="flex items-start gap-3">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0
                                   ${s.dark ? 'bg-white/20 text-white' : 'bg-white text-ink'}`}>
@@ -99,7 +103,7 @@ export default function AdminDashboard() {
                   </div>
                   <span className="ml-auto text-[11px] font-bold px-3 py-1 rounded-lg bg-ink/80 text-white">{s.label}</span>
                 </div>
-                <p className="text-5xl font-extrabold text-white mt-3 leading-none">{s.value}</p>
+                <p className="text-5xl font-extrabold text-white mt-3 leading-none">{stats[s.key] ?? 0}</p>
                 <p className="text-[11px] font-semibold text-white/80 mt-2">{s.sub}</p>
               </div>
             ))}
@@ -112,13 +116,19 @@ export default function AdminDashboard() {
               <button className="text-xs font-bold text-teal-700">View All ›</button>
             </div>
             <div className="space-y-2">
-              {RECENT.map((r, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0">
+              {recent.length === 0 ? (
+                <p className="text-center text-ink/50 py-6 text-sm">No recent activity yet.</p>
+              ) : recent.map((r) => (
+                <div key={r.id} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0">
                   <div>
-                    <p className="text-sm font-semibold text-ink">{r.text}</p>
-                    <p className="text-[11px] text-ink/50">{r.sub}</p>
+                    <p className="text-sm font-semibold text-ink">
+                      {r.name} {r.status === 'Active' ? 'entered' : 'exited'} · {r.unit || ''}
+                    </p>
+                    <p className="text-[11px] text-ink/50">Guard: {r.guard}</p>
                   </div>
-                  <span className="text-[11px] text-ink/40 shrink-0">{r.time}</span>
+                  <span className="text-[11px] text-ink/40 shrink-0">
+                    {fmtTime(r.status === 'Active' ? r.entry : (r.exit || r.entry))}
+                  </span>
                 </div>
               ))}
             </div>
@@ -170,12 +180,17 @@ export default function AdminDashboard() {
 
             {/* List */}
             <div className="space-y-3">
-              {ANNOUNCEMENTS.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl px-3 py-3 shadow-sm">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg shrink-0" style={{ backgroundColor: a.bg }}>{a.icon}</div>
-                  <p className="flex-1 text-sm text-ink/80 leading-snug">{a.text}</p>
-                </div>
-              ))}
+              {announcements.length === 0 ? (
+                <p className="text-center text-ink/50 py-4 text-sm">No announcements yet.</p>
+              ) : announcements.slice(0, 3).map((a) => {
+                const ic = annIcon(a.title + ' ' + (a.content || ''));
+                return (
+                  <div key={a.announcement_id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl px-3 py-3 shadow-sm">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg shrink-0" style={{ backgroundColor: ic.bg }}>{ic.icon}</div>
+                    <p className="flex-1 text-sm text-ink/80 leading-snug">{a.title}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
