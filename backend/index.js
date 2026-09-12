@@ -16,6 +16,8 @@ const { startCronJobs } = require('./cron');
 const reportRoutes = require('./routes/reports');
 const auditRoutes = require('./routes/audit');
 const ocrRoutes = require('./routes/ocr');
+const adminResidentRoutes = require('./routes/adminresidents');
+
 
 // Import db
 require('./config/db');
@@ -39,6 +41,7 @@ app.use('/api/gates', gateRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/ocr', ocrRoutes);
+app.use('/api/admin', adminResidentRoutes);
 
 // Health check
 app.get('/', (req, res) => {

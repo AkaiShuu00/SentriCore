@@ -42,6 +42,13 @@ export const deleteAnnouncement = (id) => api.delete(`/announcements/${id}`);
 export const getAllVisitorLogs = () => api.get('/entry/all-logs');
 export const getAdminSummary = () => api.get('/entry/admin-summary');
 
+// ── Admin: Residents ──
+export const adminListResidents = () => api.get('/admin/residents');
+export const adminResidentActive = (id) => api.get(`/admin/residents/${id}/active`);
+export const adminAddResident = (data) => api.post('/admin/residents', data);
+export const adminUpdateResident = (id, data) => api.put(`/admin/residents/${id}`, data);
+export const adminResetResidentPassword = (id) => api.post(`/admin/residents/${id}/reset-password`);
+
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');

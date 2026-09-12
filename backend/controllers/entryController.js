@@ -156,18 +156,38 @@ async function getAllLogs(req, res) {
 async function getAdminSummary(req, res) {
   try {
     const [[active]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions WHERE status = 'Active'`);
-    const [[todayEntries]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions WHERE DATE(entry_time) = CURDATE()`);
+
+    // Today's entries — gamitin ang parehong araw base sa server local date
+    const [[todayEntries]] = await pool.query(
+      `SELECT COUNT(*) AS n FROM VisitorTransactions
+       WHERE entry_time >= CURDATE() AND entry_time < CURDATE() + INTERVAL 1 DAY`
+    );
+
     const [[expected]] = await pool.query(
       `SELECT COUNT(*) AS n
        FROM VisitorRegistrationDetails d
        JOIN VisitorRegistrations r ON r.registration_id = d.registration_id
        WHERE r.status = 'Expected' AND DATE(r.expected_date) = CURDATE()`
     );
+
+    // Active gates — subukan muna ang guards na may status 'Active';
+    // kung walang status column o walang active, gamitin ang lahat ng distinct gates.
     let activeGates = 0;
     try {
-      const [[g]] = await pool.query(`SELECT COUNT(DISTINCT gate_id) AS n FROM Guards WHERE status = 'Active'`);
+      const [[g]] = await pool.query(
+        `SELECT COUNT(DISTINCT gate_id) AS n FROM Guards
+         WHERE gate_id IS NOT NULL AND (status = 'Active' OR status = 'On Duty' OR status = 'ON DUTY')`
+      );
       activeGates = g.n;
     } catch (e) { activeGates = 0; }
+    // Fallback: kung 0, bilangin lahat ng distinct gates na may naka-assign na guard
+    if (!activeGates) {
+      try {
+        const [[g2]] = await pool.query(`SELECT COUNT(DISTINCT gate_id) AS n FROM Guards WHERE gate_id IS NOT NULL`);
+        activeGates = g2.n;
+      } catch (e) { activeGates = 0; }
+    }
+
     const [[total]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions`);
 
     const [recent] = await pool.query(
