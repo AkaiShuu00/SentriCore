@@ -18,8 +18,7 @@ const auditRoutes = require('./routes/audit');
 const ocrRoutes = require('./routes/ocr');
 const adminResidentRoutes = require('./routes/adminresidents');
 const adminGuardRoutes = require('./routes/adminGuards');
-
-
+const adminReportRoutes = require('./routes/adminReports');
 
 // Import db
 require('./config/db');
@@ -45,7 +44,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/admin', adminResidentRoutes);
 app.use('/api/admin', adminGuardRoutes);
-
+app.use('/api/admin', adminReportRoutes);
 // Health check
 app.get('/', (req, res) => {
   res.json({ message: '✅ SentriCore API is running!' });

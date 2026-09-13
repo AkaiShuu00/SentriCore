@@ -58,6 +58,10 @@ export const adminAssignGate = (id, gateId) => api.post(`/admin/guards/${id}/ass
 export const adminResetGuardPassword = (id) => api.post(`/admin/guards/${id}/reset-password`);
 export const adminDeleteGuard = (id) => api.delete(`/admin/guards/${id}`);
 
+// ── Admin: Reports ──
+export const adminMonthlyReport = () => api.get('/admin/reports/monthly');
+export const adminRecurrentReport = () => api.get('/admin/reports/recurrent');
+
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');

@@ -1,91 +1,91 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-
-// ── Sample data (iko-connect sa DB after) ──
-const MONTHLY_CHART = [
-  { month: 'Jan', visitors: 1520, deliveries: 740 },
-  { month: 'Feb', visitors: 1810, deliveries: 690 },
-  { month: 'Mar', visitors: 2034, deliveries: 812 },
-  { month: 'Apr', visitors: 2287, deliveries: 909 },
-  { month: 'May', visitors: 2418, deliveries: 942 },
-];
-const MONTHLY_TABLE = [
-  { month: 'MAY 2026', visitors: 2418, deliveries: 942, total: 3360 },
-  { month: 'APRIL 2026', visitors: 2287, deliveries: 909, total: 3196 },
-  { month: 'MARCH 2026', visitors: 2034, deliveries: 812, total: 2846 },
-  { month: 'FEBRUARY 2026', visitors: 1810, deliveries: 690, total: 2500 },
-  { month: 'JANUARY 2026', visitors: 1520, deliveries: 748, total: 2268 },
-];
-
-const RECURRENT_CHART = [
-  { month: 'Jan', visits: 60 }, { month: 'Feb', visits: 95 }, { month: 'Mar', visits: 120 },
-  { month: 'Apr', visits: 130 }, { month: 'May', visits: 142 },
-];
-const RECURRENT_TABLE = [
-  { name: 'Juan Dela Cruz', type: 'Driver', unit: 'Multiple', ytd: 73, month: 6 },
-  { name: 'Andrea Pedrejas', type: 'Visitor', unit: 'Unit C-8', ytd: 68, month: 9 },
-  { name: 'Bel Magpantay', type: 'Visitor', unit: 'Unit C-13', ytd: 44, month: 3 },
-  { name: 'Mary-Del Mercado', type: 'Delivery', unit: 'Multiple', ytd: 142, month: 19 },
-  { name: 'Sona Gordo', type: 'Visitor', unit: 'Unit B-12', ytd: 21, month: 5 },
-];
-
-const INCIDENTS = Array.from({ length: 8 }).map((_, i) => ({
-  date: 'May 21, 10:17 AM',
-  type: ['Driver', 'Visitor', 'Delivery'][i % 3],
-  name: 'Juan Dela Cruz',
-  note: ['Unregistered visitor – Gate A', 'Pass P-0921 never logged out', 'Suspicious vehicle plate mismatch'][i % 3],
-}));
-
-const AUDIT = Array.from({ length: 10 }).map((_, i) => ({
-  date: 'May 21, 10:17 AM',
-  type: i % 2 === 0 ? 'Guard' : 'Resident',
-  name: 'Juan Dela Cruz',
-  note: ['Registered visitor entry P-1052', 'Registered 2 visitors', 'Logged visitor exit P-1052', 'Registered 10 visitors'][i % 4],
-}));
+import { adminMonthlyReport, adminRecurrentReport } from '../../api';
 
 const REPORT_CARDS = [
-  { key: 'monthly',   title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days', icon: '📈' },
-  { key: 'recurrent', title: 'Recurrent Visitor',   desc: 'Recurring visitors, frequently visiting people', icon: '🔁' },
-  { key: 'incident',  title: 'Incident Monitoring', desc: 'Rejected entries, unresolved exits', icon: '🛡️' },
-  { key: 'audit',     title: 'Audit Trails',        desc: 'Guard & resident action accountability', icon: '📝' },
+  { key: 'monthly',   title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days.', icon: '📈' },
+  { key: 'recurrent', title: 'Recurrent Visitor',   desc: 'Recurring riders, frequently visiting peoples.', icon: '🔁' },
+  { key: 'incident',  title: 'Incident Monitoring', desc: 'Rejected entries, unresolved exits.', icon: '🛡️' },
+  { key: 'audit',     title: 'Audit Trails',        desc: 'Track all system actions.', icon: '🕐' },
 ];
 
-export default function AdminReports() {
-  const [view, setView] = useState('overview'); // overview | monthly | recurrent | incident | audit
-  const [showGen, setShowGen] = useState(false);
-  const [auditTab, setAuditTab] = useState('All');
+const fmtDay = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '—';
 
-  const genContent = {
-    monthly: { title: 'Generate — Monthly Report', sub: 'Generated for May 2026. Includes month-over-month trend, total entries, and peak visitation days.',
-      items: ['2,418 total visitors (+5.7% vs Apr)', '942 deliveries logged', 'Peak day: May 18 (148 entries)', 'Avg. daily visitors: 78'] },
-    recurrent: { title: 'Generate — Recurrent Visitor', sub: 'Generated for May 2026. Year-to-date frequent visitors with current-month highlight.',
-      items: ['Top repeat: Mary-Del Mercado (142 visits YTD)', '19 visits this month from top repeat', "7 individuals classified as 'frequent'", 'Visitors dominate top 3'] },
-    incident: { title: 'Generate — Incident Monitoring', sub: 'Generated for May 2026. Includes rejections, incident reports, and unresolved exit pending review.',
-      items: ['6 incidents this month', '2 rejected entries', '1 unresolved exit pending review'] },
-    audit: { title: 'Generate — Audit Trails', sub: 'Generated for May 2026. Guard & resident actions for accountability.',
-      items: ['312 total actions logged', '198 guard actions', '114 resident actions'] },
+export default function AdminReports() {
+  const [view, setView] = useState('overview');
+  const [showGen, setShowGen] = useState(false);
+
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [recurrent, setRecurrent] = useState(null);
+
+  useEffect(() => {
+    adminMonthlyReport()
+      .then((res) => setReport(res.data))
+      .catch(() => setReport(null))
+      .finally(() => setLoading(false));
+    adminRecurrentReport()
+      .then((res) => setRecurrent(res.data))
+      .catch(() => setRecurrent(null));
+  }, []);
+
+  // ── Export helpers (CSV + print PDF) ──
+  const exportCSV = (filename, header, rows) => {
+    if (!rows.length) { alert('No data to export.'); return; }
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportPDF = (title, header, rows) => {
+    if (!rows.length) { alert('No data to export.'); return; }
+    const rowsHtml = rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('');
+    const html = `<html><head><title>${title}</title>
+      <style>body{font-family:Arial;padding:24px;color:#123}h1{color:#0F6E6E}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+      th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#0E2A2E;color:#fff}</style>
+      </head><body><h1>SentriCore — ${title}</h1><p>${new Date().toLocaleString()}</p>
+      <table><thead><tr>${header.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rowsHtml}</tbody></table>
+      </body></html>`;
+    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.focus();
+    setTimeout(() => w.print(), 400);
   };
 
-  const Header = ({ title }) => (
+  const doExport = (type) => {
+    if (view === 'monthly') {
+      const header = ['Month', 'Visitors', 'Deliveries', 'Total'];
+      const rows = (report?.table || []).map((m) => [m.fullLabel, m.visitors, m.deliveries, m.total]);
+      type === 'pdf' ? exportPDF('Monthly Report', header, rows) : exportCSV('monthly-report.csv', header, rows);
+    } else if (view === 'recurrent') {
+      const header = ['Name', 'Resident', 'Type', 'Unit', 'YTD Visits', 'This Month'];
+      const rows = (recurrent?.list || []).map((r) => [r.name, r.resident, r.type, r.unit, r.ytd, r.thisMonth]);
+      type === 'pdf' ? exportPDF('Recurrent Visitor', header, rows) : exportCSV('recurrent-visitor.csv', header, rows);
+    } else {
+      alert('Nothing to export on this view yet.');
+    }
+  };
+
+  const overview = report?.overview || { totalVisitors: 0, totalDeliveries: 0, peakDay: null, monthLabel: '' };
+  const chart = report?.chart || [];
+  const table = report?.table || [];
+  const summary = report?.summary || {};
+
+  const Header = () => (
     <div className="flex items-end justify-between mb-5">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink">Reports</h1>
-        <p className="text-sm text-ink/60">Generated space and long-term analytics</p>
+        <h1 className="text-3xl font-extrabold text-teal-800">Reports</h1>
+        <p className="text-sm text-ink/60">Generated reports and long-term analytics.</p>
       </div>
       <div className="flex gap-2">
-        {view !== 'overview' && (
-          <button onClick={() => setShowGen(true)} className="text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
-        )}
-        <button className="bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink">Export PDF</button>
-        <button className="text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>Export Excel</button>
+        <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink">📄 Export PDF</button>
+        <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>📊 Export Excel</button>
       </div>
     </div>
   );
-
-  const Th = ({ children, center }) => <span className={`text-[11px] font-bold text-white ${center ? 'text-center' : ''}`}>{children}</span>;
 
   return (
     <AdminLayout>
@@ -93,173 +93,212 @@ export default function AdminReports() {
 
       {/* OVERVIEW */}
       {view === 'overview' && (
-        <>
-          <div className="rounded-2xl p-6 shadow-sm text-white flex items-center justify-between mb-6"
-               style={{ background: 'linear-gradient(135deg,#0F5E5E,#7FB0AE)' }}>
-            <div>
-              <p className="text-3xl font-extrabold">May 2026</p>
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-5 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
+            <span className="text-ink/40">🔍</span>
+            <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
+          </div>
+
+          {/* Month overview banner */}
+          <div className="rounded-2xl p-6 flex items-center justify-between mb-6"
+               style={{ background: 'linear-gradient(135deg,#0E2A2E 0%,#2E8C7E 100%)' }}>
+            <div className="text-white">
+              <p className="text-3xl font-extrabold">{overview.monthLabel || '—'}</p>
               <p className="text-sm text-white/70">Monthly Overview</p>
+              <p className="text-[11px] text-white/50 italic mt-2">Snapshot of the current month at a glance.</p>
             </div>
             <div className="flex gap-3">
-              <div className="bg-white rounded-2xl px-6 py-3 text-center">
-                <p className="text-2xl font-extrabold text-ink">1234</p><p className="text-[10px] font-bold text-ink/50">Total Visitors</p>
+              <div className="bg-white/95 rounded-2xl px-6 py-3 text-center min-w-[110px]">
+                <p className="text-[10px] font-bold text-ink/50">Total Visitors</p>
+                <p className="text-3xl font-extrabold text-ink">{overview.totalVisitors}</p>
               </div>
-              <div className="bg-white rounded-2xl px-6 py-3 text-center">
-                <p className="text-2xl font-extrabold text-ink">676</p><p className="text-[10px] font-bold text-ink/50">Total Deliveries</p>
+              <div className="bg-white/95 rounded-2xl px-6 py-3 text-center min-w-[110px]">
+                <p className="text-[10px] font-bold text-ink/50">Total Deliveries</p>
+                <p className="text-3xl font-extrabold text-ink">{overview.totalDeliveries}</p>
               </div>
-              <div className="rounded-2xl px-6 py-3 text-center text-white" style={{ backgroundColor: '#0E2A2E' }}>
-                <p className="text-2xl font-extrabold">May 20</p><p className="text-[10px] font-bold text-white/60">Peak Day</p>
+              <div className="rounded-2xl px-6 py-3 text-center min-w-[110px] text-white" style={{ backgroundColor: '#1E7E7E' }}>
+                <p className="text-[10px] font-bold text-white/70">Peak Day</p>
+                <p className="text-2xl font-extrabold">{fmtDay(overview.peakDay)}</p>
               </div>
             </div>
           </div>
 
+          {/* Report cards */}
           <div className="grid grid-cols-2 gap-4">
             {REPORT_CARDS.map((c) => (
-              <div key={c.key} className="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-teal-100 flex items-center justify-center text-2xl">{c.icon}</div>
+              <div key={c.key} className="rounded-2xl p-5 shadow-sm flex items-center gap-4" style={{ backgroundColor: '#F5F2E9' }}>
                 <div className="flex-1">
                   <p className="font-extrabold text-ink">{c.title}</p>
-                  <p className="text-xs text-ink/60">{c.desc}</p>
+                  <p className="text-xs text-ink/60 mb-3">{c.desc}</p>
+                  <button onClick={() => setView(c.key)}
+                          className="text-ink text-sm font-bold px-8 py-2 rounded-full bg-white border border-gray-200 shadow-sm">View</button>
                 </div>
-                <button onClick={() => setView(c.key)} className="text-white text-sm font-bold px-5 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>View</button>
+                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center text-2xl shadow-sm">{c.icon}</div>
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {/* MONTHLY */}
       {view === 'monthly' && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-extrabold text-ink">January to May Report</h3>
-            <button onClick={() => setView('overview')} className="text-xs font-bold text-teal-700">← Back</button>
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
+            <span className="text-ink/40">🔍</span>
+            <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
           </div>
-          <div style={{ width: '100%', height: 260 }}>
-            <ResponsiveContainer>
-              <BarChart data={MONTHLY_CHART}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="visitors" fill="#0F6E6E" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="deliveries" fill="#7FB0AE" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="font-extrabold text-ink">Monthly Report</h3>
+              <p className="text-xs text-ink/60">Total visitors, trends, peak visitation days.</p>
+            </div>
+            <button onClick={() => setShowGen(true)} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
           </div>
-          <div className="grid grid-cols-4 gap-2 px-4 py-3 bg-ink text-white text-[11px] font-bold rounded-xl mt-4">
-            <span>MONTH</span><span className="text-center">VISITORS</span><span className="text-center">DELIVERIES</span><span className="text-center">TOTAL</span>
+
+          {/* Chart */}
+          <div className="border border-gray-100 rounded-2xl p-4 mt-3">
+            <p className="text-center font-extrabold text-teal-800 mb-3">
+              {chart.length ? `${chart[0].label} to ${chart[chart.length - 1].label} Report` : 'Report'}
+            </p>
+            <div style={{ width: '100%', height: 260 }}>
+              <ResponsiveContainer>
+                <BarChart data={chart} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="visitors" name="visitors" fill="#1E7E7E" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="deliveries" name="deliveries" fill="#E0A83E" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          {MONTHLY_TABLE.map((m, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-gray-100 text-sm text-ink">
-              <span className="font-semibold">{m.month}</span>
-              <span className="text-center text-ink/70">{m.visitors}</span>
-              <span className="text-center text-ink/70">{m.deliveries}</span>
-              <span className="text-center font-bold">{m.total}</span>
+
+          {/* Table */}
+          <div className="grid grid-cols-4 gap-2 mt-5 mb-2">
+            {['MONTH', 'VISITORS', 'DELIVERIES', 'TOTAL'].map((h, i) => (
+              <span key={h} className={`text-[11px] font-bold text-white px-4 py-2 rounded-lg ${i > 0 ? 'text-center' : ''}`} style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
+            ))}
+          </div>
+          {table.map((m, i) => (
+            <div key={i} className={`grid grid-cols-4 gap-2 px-4 py-3 border-b border-gray-100 text-sm ${i === 0 ? 'rounded-xl' : ''}`}
+                 style={i === 0 ? { backgroundColor: '#CFEDE4' } : {}}>
+              <span className="font-bold text-ink">{m.fullLabel}</span>
+              <span className="text-center text-ink/80">{m.visitors}</span>
+              <span className="text-center text-ink/80">{m.deliveries}</span>
+              <span className="text-center font-bold text-ink">{m.total}</span>
             </div>
           ))}
+
+          <div className="flex justify-end mt-5">
+            <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full flex items-center gap-1" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+          </div>
         </div>
       )}
 
-      {/* RECURRENT */}
+      {/* RECURRENT VISITOR */}
       {view === 'recurrent' && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
+            <span className="text-ink/40">🔍</span>
+            <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
+          </div>
+
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-extrabold text-ink">January to May Report</h3>
-            <button onClick={() => setView('overview')} className="text-xs font-bold text-teal-700">← Back</button>
+            <div>
+              <h3 className="font-extrabold text-ink">Recurrent Visitor</h3>
+              <p className="text-xs text-ink/60">Recurring riders, frequently visiting individuals.</p>
+            </div>
+            <button onClick={() => setShowGen(true)} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
           </div>
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer>
-              <LineChart data={RECURRENT_CHART}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="visits" stroke="#0F6E6E" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
+
+          {/* Table (walang graph) */}
+          <div className="grid grid-cols-6 gap-2 mb-2">
+            {['NAME', 'RESIDENT', 'TYPE', 'UNIT', 'YTD VISITS', 'THIS MONTH'].map((h, i) => (
+              <span key={h} className={`text-[11px] font-bold text-white px-4 py-2 rounded-lg ${i >= 4 ? 'text-center' : ''}`} style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
+            ))}
           </div>
-          <div className="grid grid-cols-5 gap-2 px-4 py-3 bg-ink text-white text-[11px] font-bold rounded-xl mt-4">
-            <span>NAME</span><span>TYPE</span><span>UNIT</span><span className="text-center">YTD VISITS</span><span className="text-center">THIS MONTH</span>
-          </div>
-          {RECURRENT_TABLE.map((r, i) => (
-            <div key={i} className="grid grid-cols-5 gap-2 px-4 py-3 border-b border-gray-100 text-sm text-ink">
-              <span className="font-semibold">{r.name}</span>
+          {(recurrent?.list || []).length === 0 ? (
+            <p className="text-center text-ink/50 py-10 text-sm">No recurrent visitors yet.</p>
+          ) : recurrent.list.map((r, i) => (
+            <div key={i} className="grid grid-cols-6 gap-2 px-4 py-3 border-b border-gray-100 text-sm text-ink items-center">
+              <span className="font-bold text-ink">{r.name}</span>
+              <span className="text-ink/70">{r.resident}</span>
               <span className="text-ink/70">{r.type}</span>
               <span className="text-ink/70">{r.unit}</span>
-              <span className="text-center text-ink/70">{r.ytd}</span>
-              <span className="text-center font-bold">{r.month}</span>
+              <span className="text-center text-ink/80">{r.ytd}</span>
+              <span className="text-center font-bold">{r.thisMonth}</span>
             </div>
           ))}
+
+          <div className="flex justify-end mt-5">
+            <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+          </div>
         </div>
       )}
 
-      {/* INCIDENT */}
-      {view === 'incident' && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
+      {/* Other views — placeholder (susunod na i-connect) */}
+      {['incident', 'audit'].includes(view) && (
+        <div className="bg-white rounded-2xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-extrabold text-ink">Incident Monitoring</h3>
-            <button onClick={() => setView('overview')} className="text-xs font-bold text-teal-700">← Back</button>
+            <h3 className="font-extrabold text-ink capitalize">{view} Report</h3>
+            <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
           </div>
-          <div className="grid grid-cols-4 gap-2 px-4 py-3 bg-ink text-white text-[11px] font-bold rounded-xl">
-            <span>DATE</span><span>TYPE</span><span>NAME</span><span>NOTE</span>
-          </div>
-          {INCIDENTS.map((r, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-gray-100 text-sm text-ink">
-              <span className="text-ink/70">{r.date}</span>
-              <span className="text-ink/70">{r.type}</span>
-              <span className="font-semibold">{r.name}</span>
-              <span className="text-ink/70">{r.note}</span>
-            </div>
-          ))}
+          <p className="text-center text-ink/50 py-16 text-sm">This report will be connected next.</p>
         </div>
       )}
 
-      {/* AUDIT */}
-      {view === 'audit' && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-extrabold text-ink">Audit Trails Reports</h3>
-            <div className="flex gap-2">
-              {['All', 'Guard', 'Resident'].map((t) => (
-                <button key={t} onClick={() => setAuditTab(t)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold ${auditTab === t ? 'text-white' : 'bg-gray-100 text-ink'}`}
-                        style={auditTab === t ? { backgroundColor: '#0F6E6E' } : {}}>{t}</button>
-              ))}
-              <button onClick={() => setView('overview')} className="text-xs font-bold text-teal-700 ml-2">← Back</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-2 px-4 py-3 bg-ink text-white text-[11px] font-bold rounded-xl">
-            <span>DATE</span><span>TYPE</span><span>NAME</span><span>NOTE</span>
-          </div>
-          {AUDIT.filter((a) => auditTab === 'All' || a.type === auditTab).map((r, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-gray-100 text-sm text-ink">
-              <span className="text-ink/70">{r.date}</span>
-              <span className="text-ink/70">{r.type}</span>
-              <span className="font-semibold">{r.name}</span>
-              <span className="text-ink/70">{r.note}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Generate summary modal */}
-      {showGen && view !== 'overview' && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setShowGen(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setShowGen(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink">✕</button>
-            <h2 className="text-lg font-extrabold text-ink mb-1">📄 {genContent[view].title}</h2>
-            <p className="text-xs text-ink/60 mb-4">{genContent[view].sub}</p>
-            <div className="rounded-xl p-4" style={{ backgroundColor: '#DCF3E4' }}>
-              <p className="text-xs font-bold text-teal-800 mb-2">Highlights</p>
-              <ul className="space-y-1">
-                {genContent[view].items.map((it, i) => (
-                  <li key={i} className="text-sm text-ink flex gap-2"><span>•</span>{it}</li>
-                ))}
+      {/* Generate summary modal (Monthly) */}
+      {showGen && view === 'monthly' && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setShowGen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowGen(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center">✕</button>
+            <h2 className="text-lg font-extrabold text-ink mb-1">📄 Generate — Monthly Report</h2>
+            <p className="text-xs text-ink/60 mb-4">
+              Generated for {overview.monthLabel}. Includes month-over-month trend, total entries, and peak visitation days.
+            </p>
+            <div className="rounded-xl px-5 py-4" style={{ backgroundColor: '#F5F2E9' }}>
+              <span className="text-xs font-bold text-white px-4 py-1.5 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>Highlights</span>
+              <ul className="space-y-2 mt-3">
+                <li className="text-sm text-ink flex gap-2">
+                  <span>•</span>{summary.totalVisitors ?? 0} total visitors
+                  {summary.pctVsPrev != null && ` (${summary.pctVsPrev >= 0 ? '+' : ''}${summary.pctVsPrev}% vs prev month)`}
+                </li>
+                <li className="text-sm text-ink flex gap-2"><span>•</span>{summary.totalDeliveries ?? 0} deliveries logged</li>
+                <li className="text-sm text-ink flex gap-2"><span>•</span>Peak day: {fmtDay(summary.peakDay)} ({summary.peakCount ?? 0} entries)</li>
+                <li className="text-sm text-ink flex gap-2"><span>•</span>Avg. daily visitors: {summary.avgDaily ?? 0}</li>
               </ul>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Generate summary modal (Recurrent) */}
+      {showGen && view === 'recurrent' && recurrent && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setShowGen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowGen(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center">✕</button>
+            <h2 className="text-lg font-extrabold text-ink mb-1">📄 Generate — Recurrent Visitor</h2>
+            <p className="text-xs text-ink/60 mb-4">
+              Generated for {recurrent.summary.monthLabel}. Year-to-date frequent visitors with current-month highlight.
+            </p>
+            <div className="rounded-xl px-5 py-4" style={{ backgroundColor: '#F5F2E9' }}>
+              <span className="text-xs font-bold text-white px-4 py-1.5 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>Highlights</span>
+              <ul className="space-y-2 mt-3">
+                <li className="text-sm text-ink flex gap-2"><span>•</span>Top repeat: {recurrent.summary.topName} ({recurrent.summary.topYtd} visits YTD)</li>
+                <li className="text-sm text-ink flex gap-2"><span>•</span>{recurrent.summary.topThisMonth} visits this month from top repeat</li>
+                <li className="text-sm text-ink flex gap-2"><span>•</span>{recurrent.summary.frequentCount} individuals classified as 'frequent'</li>
+                <li className="text-sm text-ink flex gap-2"><span>•</span>{recurrent.summary.dominantType}s dominate top 3</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && view === 'overview' && (
+        <p className="text-center text-ink/40 text-sm mt-4">Loading report data…</p>
       )}
     </AdminLayout>
   );
