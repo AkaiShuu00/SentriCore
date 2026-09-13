@@ -49,6 +49,15 @@ export const adminAddResident = (data) => api.post('/admin/residents', data);
 export const adminUpdateResident = (id, data) => api.put(`/admin/residents/${id}`, data);
 export const adminResetResidentPassword = (id) => api.post(`/admin/residents/${id}/reset-password`);
 
+// ── Admin: Guards ──
+export const adminListGuards = () => api.get('/admin/guards');
+export const adminGuardActivity = () => api.get('/admin/guards/activity');
+export const adminAddGuard = (data) => api.post('/admin/guards', data);
+export const adminUpdateGuard = (id, data) => api.put(`/admin/guards/${id}`, data);
+export const adminAssignGate = (id, gateId) => api.post(`/admin/guards/${id}/assign`, { gateId });
+export const adminResetGuardPassword = (id) => api.post(`/admin/guards/${id}/reset-password`);
+export const adminDeleteGuard = (id) => api.delete(`/admin/guards/${id}`);
+
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');

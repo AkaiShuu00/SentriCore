@@ -17,6 +17,8 @@ const reportRoutes = require('./routes/reports');
 const auditRoutes = require('./routes/audit');
 const ocrRoutes = require('./routes/ocr');
 const adminResidentRoutes = require('./routes/adminresidents');
+const adminGuardRoutes = require('./routes/adminGuards');
+
 
 
 // Import db
@@ -42,6 +44,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/admin', adminResidentRoutes);
+app.use('/api/admin', adminGuardRoutes);
 
 // Health check
 app.get('/', (req, res) => {
