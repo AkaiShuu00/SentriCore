@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
 
 const teal = '#0F6E6E';
-const API = 'http://192.168.100.9:3000/api';  
+const API = 'http://localhost:3000/api';
 
 const DEFAULT_SCANNED_NAME = '';
 const DEFAULT_DRIVER_NAME = '';
@@ -70,6 +70,10 @@ export default function GuardVerify() {
   const [activeSearch, setActiveSearch] = useState('');
   const [deliveryResident, setDeliveryResident] = useState(null);
   const fileRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraError, setCameraError] = useState('');
   const [scannedName, setScannedName] = useState(DEFAULT_SCANNED_NAME);
   const [driverName, setDriverName] = useState(DEFAULT_DRIVER_NAME);
   const [ocrError, setOcrError] = useState('');
@@ -254,6 +258,83 @@ export default function GuardVerify() {
     setStep('matched');
   };
 
+  // ── LIVE CAMERA (getUserMedia) ──
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraOn(false);
+  };
+
+  const startCamera = async () => {
+    setCameraError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera not supported on this device/browser.');
+      return;
+    }
+    try {
+      // Rear/environment camera kapag available
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setCameraOn(true);
+    } catch (err) {
+      // Fallback: subukan ang kahit anong camera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setCameraOn(true);
+      } catch (err2) {
+        setCameraError('Cannot access camera. Use "Take Photo" or type the name manually.');
+        setCameraOn(false);
+      }
+    }
+  };
+
+  // Kunin ang frame mula video → File → gamitin sa existing OCR (handlePhoto)
+  const captureFromCamera = async () => {
+    const video = videoRef.current;
+    if (!video || !streamRef.current) return;
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, w, h);
+    stopCamera();
+    canvas.toBlob((blob) => {
+      if (!blob) { setCameraError('Capture failed. Please try again.'); return; }
+      const file = new File([blob], 'id-capture.jpg', { type: 'image/jpeg' });
+      // Gamitin ang existing OCR flow (walang binabago sa matching)
+      handlePhoto({ target: { files: [file] } });
+    }, 'image/jpeg', 0.9);
+  };
+
+  // Buksan ang camera kapag nasa SCAN step; isara kapag umalis / unmount
+  useEffect(() => {
+    if (step === 'scan') {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Siguradong isara ang camera kapag na-unmount ang page
+  useEffect(() => () => stopCamera(), []);
+
   const handlePhoto = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -402,7 +483,7 @@ export default function GuardVerify() {
     }
   }, [step, photoFile]);
 
-  const close = () => navigate('/guard-home');
+  const close = () => { stopCamera(); navigate('/guard-home'); };
 
   const handleApprove = async () => {
     if (submitting) return;
@@ -568,29 +649,74 @@ export default function GuardVerify() {
       </header>
 
       <div className="px-6 py-8">
-        {/* SCAN ID */}
+        {/* SCAN ID — LIVE CAMERA */}
         {step === 'scan' && (
           <div className="bg-white rounded-3xl p-6 shadow">
             <h2 className="text-xl font-extrabold text-ink text-center mb-4">SCAN ID</h2>
-            <div className="border-2 border-dashed border-gray-300 rounded-2xl p-3 mb-4">
-              <IDCardPlaceholder />
+
+            {/* Live camera preview + ID guide box overlay */}
+            <div className="relative rounded-2xl overflow-hidden mb-4 bg-black" style={{ aspectRatio: '4 / 3' }}>
+              <video ref={videoRef} playsInline muted
+                     className="w-full h-full object-cover"
+                     style={{ display: cameraOn ? 'block' : 'none' }} />
+
+              {/* Placeholder kapag walang camera */}
+              {!cameraOn && (
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <IDCardPlaceholder />
+                </div>
+              )}
+
+              {/* ID guide box overlay */}
+              {cameraOn && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="border-2 border-white/90 rounded-xl"
+                       style={{ width: '82%', height: '62%', boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }}>
+                    <div className="absolute -top-6 left-0 right-0 text-center">
+                      <span className="text-[11px] font-bold text-white bg-black/50 px-3 py-1 rounded-full">
+                        Align the ID inside the box
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
             <p className="text-center text-xs text-ink mb-1">
               PLACE <span className="font-bold">{isDriverFlow ? "DRIVER'S" : "VISITOR'S"} IDENTIFICATION CARD</span> INSIDE THE BOX
             </p>
-            <p className="text-center text-xs text-ink/50 mb-5">Ensure the ID is clear and readable</p>
+            <p className="text-center text-xs text-ink/50 mb-4">Ensure the ID is clear and readable</p>
+
+            {cameraError && (
+              <p className="text-xs text-center text-red-700 bg-red-100 rounded-xl px-4 py-2 mb-3">{cameraError}</p>
+            )}
+
             <div className="flex flex-col items-center gap-2">
+              {/* CAPTURE ID — pangunahing button kapag naka-camera */}
+              {cameraOn ? (
+                <button onClick={captureFromCamera}
+                        className="px-6 py-3 rounded-full text-sm font-bold text-white w-56 shadow" style={{ backgroundColor: '#0F6E6E' }}>
+                  📸 CAPTURE ID
+                </button>
+              ) : (
+                <button onClick={startCamera}
+                        className="px-6 py-3 rounded-full text-sm font-bold text-white w-56 shadow" style={{ backgroundColor: '#0F6E6E' }}>
+                  ▶ START CAMERA
+                </button>
+              )}
+
+              {/* Fallback: file capture (bubukas ang phone camera app) */}
               <input ref={fileRef} type="file" accept="image/*" capture="environment"
                      onChange={handlePhoto} style={{ display: 'none' }} />
-              <button onClick={() => fileRef.current?.click()}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
+              <button onClick={() => { stopCamera(); fileRef.current?.click(); }}
+                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-56" style={{ backgroundColor: '#112D31' }}>
                 TAKE PHOTO OF ID
               </button>
-              <button onClick={() => setStep('reading')}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
+              <button onClick={() => { stopCamera(); setStep('reading'); }}
+                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-56" style={{ backgroundColor: '#112D31' }}>
                 TYPE INFO MANUALLY
               </button>
-              <button onClick={() => setStep(isExit ? 'reading' : 'choose')}
+              <button onClick={() => { stopCamera(); setStep(isExit ? 'reading' : 'choose'); }}
                       className="px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
                 {isExit ? 'MANUAL SEARCH' : 'BACK'}
               </button>
