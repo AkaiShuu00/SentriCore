@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
 
 const teal = '#0F6E6E';
-const API = 'http://localhost:3000/api';
+const API = '/api';
 
 const DEFAULT_SCANNED_NAME = '';
 const DEFAULT_DRIVER_NAME = '';

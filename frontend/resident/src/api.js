@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API = 'http://192.168.100.9:3000/api';  
+const API = '/api';
 
 // Axios instance na may auto-attach ng token
 const api = axios.create({ baseURL: API });
