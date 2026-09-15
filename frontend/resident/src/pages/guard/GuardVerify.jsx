@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
 
 const teal = '#0F6E6E';
-const API = '/api';
+const API = 'http://localhost:3000/api';
 
 const DEFAULT_SCANNED_NAME = '';
 const DEFAULT_DRIVER_NAME = '';
@@ -33,7 +33,7 @@ function IDCardPlaceholder({ name }) {
   );
 }
 
-const nameTokens = (s) => (s || '').toUpperCase().replace(/[.,\-]/g, ' ').split(/\s+/).filter((w) => w.length >= 2);
+const nameTokens = (s) => (s || '').toUpperCase().replace(/[.,\-]/g, ' ').trim().split(/\s+/).filter((w) => w.length >= 2);
 const nameMatches = (scanned, dbName) => {
   const a = nameTokens(scanned);
   const b = nameTokens(dbName);
@@ -250,10 +250,29 @@ export default function GuardVerify() {
     };
   };
 
-  // Piliin ang isang candidate mula sa SELECT VISITOR list
+  // Piliin ang isang candidate mula sa SELECT VISITOR list (entry O exit)
   const pickCandidate = (c) => {
-    setMatchData(candidateToMatch(c, scannedName));
-    setScannedName(c.registeredName || scannedName);
+    if (c.__exit) {
+      // Exit candidate = active visitor (may transactionId)
+      setMatchData({
+        transactionId: c.transactionId,
+        arrivalId: c.arrivalId,
+        registrationId: c.registrationId,
+        passId: c.passNumber || ('VST ' + c.transactionId),
+        category: (c.regType || 'Single').toUpperCase(),
+        regType: c.regType || 'Single',
+        resident: c.resident || '',
+        address: c.address || '',
+        visitor: c.name,
+        purpose: c.purpose || 'N/A',
+        expectedDate: '',
+        residentId: c.residentId,
+      });
+      setScannedName(c.name);
+    } else {
+      setMatchData(candidateToMatch(c, scannedName));
+      setScannedName(c.registeredName || scannedName);
+    }
     multiRef.current = false;
     setStep('matched');
   };
@@ -362,8 +381,9 @@ export default function GuardVerify() {
         if (isExit) {
           setScannedName(scanned);
           const list = await loadActive();
-          const found = list.find((t) => nameMatches(scanned, t.name));
-          if (found) {
+          const matches = list.filter((t) => nameMatches(scanned, t.name));
+          if (matches.length === 1) {
+            const found = matches[0];
             setMatchData({
               transactionId: found.transactionId,
               arrivalId: found.arrivalId,
@@ -379,7 +399,22 @@ export default function GuardVerify() {
               residentId: found.residentId,
             });
             setScannedName(found.name);
+            multiRef.current = false;
+          } else if (matches.length > 1) {
+            // 2+ active na parehong pangalan → SELECT VISITOR
+            setCandidates(matches.map((m) => ({
+              __exit: true,
+              transactionId: m.transactionId, arrivalId: m.arrivalId, registrationId: m.registrationId,
+              passNumber: m.passNumber, regType: m.regType,
+              name: m.name, registeredName: m.name,
+              resident: m.resident, residentName: m.resident,
+              address: m.address, residentAddress: m.address,
+              residentId: m.residentId, purpose: m.purpose,
+            })));
+            multiRef.current = true;
           } else {
+            setMatchData({});
+            multiRef.current = false;
             setOcrError('This visitor is not currently active inside. Please verify or use manual search.');
           }
         }
@@ -440,8 +475,9 @@ export default function GuardVerify() {
     try {
       if (isExit) {
         const list = await loadActive();
-        const found = list.find((t) => nameMatches(name, t.name));
-        if (found) {
+        const matches = list.filter((t) => nameMatches(name, t.name));
+        if (matches.length === 1) {
+          const found = matches[0];
           setMatchData({
             transactionId: found.transactionId, arrivalId: found.arrivalId, registrationId: found.registrationId,
             passId: found.passNumber || ('VST ' + found.transactionId),
@@ -450,6 +486,18 @@ export default function GuardVerify() {
             visitor: found.name, purpose: found.purpose || 'N/A', expectedDate: '', residentId: found.residentId,
           });
           setScannedName(found.name);
+        } else if (matches.length > 1) {
+          setCandidates(matches.map((m) => ({
+            __exit: true,
+            transactionId: m.transactionId, arrivalId: m.arrivalId, registrationId: m.registrationId,
+            passNumber: m.passNumber, regType: m.regType,
+            name: m.name, registeredName: m.name,
+            resident: m.resident, residentName: m.resident,
+            address: m.address, residentAddress: m.address,
+            residentId: m.residentId, purpose: m.purpose,
+          })));
+          multiRef.current = true;
+          setStep('selectVisitor');
         } else {
           setMatchData({});
           setOcrError('Not active inside. Check the name or use manual search.');
