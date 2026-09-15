@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
 
 const teal = '#0F6E6E';
-const API = 'http://localhost:3000/api';
+const API = '/api';
 
 const DEFAULT_SCANNED_NAME = '';
 const DEFAULT_DRIVER_NAME = '';
@@ -90,7 +90,10 @@ export default function GuardVerify() {
   const token = () => localStorage.getItem('sentricore_token');
 
   const loadActive = () =>
-    getActiveVisitors().then((res) => {
+  getActiveVisitors()
+    .then((res) => {
+      console.log('🟢 ACTIVE VISITORS RESPONSE:', res.data);
+
       const list = (res.data || []).map((t) => ({
         transactionId: t.transaction_id,
         name: t.visitor_name,
@@ -103,10 +106,21 @@ export default function GuardVerify() {
         arrivalId: t.arrival_id,
         passNumber: t.pass_number,
       }));
+
+      console.log('🟢 ACTIVE VISITORS MAPPED:', list);
+
       setActiveDB(list);
       return list;
-    }).catch(() => { setActiveDB([]); return []; });
+    })
+    .catch((err) => {
+      console.error('🔴 GET ACTIVE VISITORS ERROR:', err);
+      console.error('🔴 STATUS:', err.response?.status);
+      console.error('🔴 DATA:', err.response?.data);
 
+      setActiveDB([]);
+      return [];
+    });
+    
   useEffect(() => {
     getResidentsForGuard()
       .then((res) => setResidentsDB((res.data || []).map((r) => ({
