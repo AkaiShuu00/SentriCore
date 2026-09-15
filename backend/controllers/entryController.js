@@ -11,6 +11,7 @@ async function matchVisitor(req, res) {
     const searchTokens = tokenize(name);
     if (searchTokens.length === 0) return res.json({ matched: false, candidates: [] });
 
+    // Expected LANG at HINDI pa lipas ang expected_date (walang expired)
     const [regs] = await pool.query(
       `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose,
               r.expected_date, res.resident_id, res.full_name AS resident_name, res.unit_address,
@@ -18,7 +19,7 @@ async function matchVisitor(req, res) {
        FROM VisitorRegistrations r
        JOIN Residents res ON res.resident_id = r.resident_id
        JOIN VisitorRegistrationDetails d ON d.registration_id = r.registration_id
-       WHERE r.status = 'Expected'`
+       WHERE r.status = 'Expected' AND DATE(r.expected_date) >= CURDATE()`
     );
 
     const candidates = [];
@@ -55,6 +56,8 @@ async function createGroupEntry(req, res) {
     }
 
     await conn.beginTransaction();
+
+    // Kapag 2+ visitors na sabay → gumawa ng Arrival (ito ang "sabay sila pumasok" = LINKED/BATCH)
     let arrivalId = null;
     if (visitors.length >= 2) {
       const [arr] = await conn.query(`INSERT INTO Arrivals () VALUES ()`);
@@ -113,10 +116,11 @@ async function getActiveVisitors(req, res) {
   }
 }
 
-// GET /api/entry/history  (Guard)
+// GET /api/entry/history  (Guard) - completed transactions + EXPIRED registrations
 async function getHistory(req, res) {
   try {
-    const [rows] = await pool.query(
+    // 1) Completed (departed) transactions
+    const [txRows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
               res.full_name AS resident_name, res.unit_address, vr.registration_type
@@ -126,7 +130,51 @@ async function getHistory(req, res) {
        WHERE t.status = 'Completed'
        ORDER BY t.exit_time DESC, t.transaction_id DESC`
     );
-    res.json(rows);
+
+    const completed = txRows.map((t) => ({
+      transaction_id: t.transaction_id,
+      visitor_name: t.visitor_name,
+      visitor_type: t.visitor_type,
+      purpose: t.purpose,
+      plate_number: t.plate_number,
+      pass_number: t.pass_number,
+      entry_time: t.entry_time,
+      exit_time: t.exit_time,
+      status: 'Departed',
+      registration_id: t.registration_id,
+      resident_name: t.resident_name,
+      unit_address: t.unit_address,
+      registration_type: t.registration_type,
+    }));
+
+    // 2) EXPIRED registrations (hindi pumasok, lumipas ang date) — isang row bawat visitor
+    const [expRows] = await pool.query(
+      `SELECT r.registration_id, r.registration_type, r.purpose, r.expected_date,
+              res.full_name AS resident_name, res.unit_address, d.visitor_name
+       FROM VisitorRegistrations r
+       JOIN Residents res ON res.resident_id = r.resident_id
+       JOIN VisitorRegistrationDetails d ON d.registration_id = r.registration_id
+       WHERE r.status = 'Expired'
+       ORDER BY r.expected_date DESC, r.registration_id DESC`
+    );
+
+    const expired = expRows.map((r) => ({
+      transaction_id: null,
+      visitor_name: r.visitor_name,
+      visitor_type: r.registration_type === 'Delivery' ? 'Delivery' : 'Visitor',
+      purpose: r.purpose,
+      plate_number: null,
+      pass_number: null,
+      entry_time: r.expected_date,   // gamitin ang expected_date para sa petsa
+      exit_time: null,
+      status: 'Expired',
+      registration_id: r.registration_id,
+      resident_name: r.resident_name,
+      unit_address: r.unit_address,
+      registration_type: r.registration_type,
+    }));
+
+    res.json([...completed, ...expired]);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching history.', error: err.message });
   }
@@ -152,26 +200,20 @@ async function getAllLogs(req, res) {
   }
 }
 
-// GET /api/entry/admin-summary  (Admin) - dashboard stats + recent activity
+// GET /api/entry/admin-summary  (Admin)
 async function getAdminSummary(req, res) {
   try {
     const [[active]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions WHERE status = 'Active'`);
-
-    // Today's entries — gamitin ang parehong araw base sa server local date
     const [[todayEntries]] = await pool.query(
       `SELECT COUNT(*) AS n FROM VisitorTransactions
        WHERE entry_time >= CURDATE() AND entry_time < CURDATE() + INTERVAL 1 DAY`
     );
-
     const [[expected]] = await pool.query(
       `SELECT COUNT(*) AS n
        FROM VisitorRegistrationDetails d
        JOIN VisitorRegistrations r ON r.registration_id = d.registration_id
        WHERE r.status = 'Expected' AND DATE(r.expected_date) = CURDATE()`
     );
-
-    // Active gates — subukan muna ang guards na may status 'Active';
-    // kung walang status column o walang active, gamitin ang lahat ng distinct gates.
     let activeGates = 0;
     try {
       const [[g]] = await pool.query(
@@ -180,14 +222,12 @@ async function getAdminSummary(req, res) {
       );
       activeGates = g.n;
     } catch (e) { activeGates = 0; }
-    // Fallback: kung 0, bilangin lahat ng distinct gates na may naka-assign na guard
     if (!activeGates) {
       try {
         const [[g2]] = await pool.query(`SELECT COUNT(DISTINCT gate_id) AS n FROM Guards WHERE gate_id IS NOT NULL`);
         activeGates = g2.n;
       } catch (e) { activeGates = 0; }
     }
-
     const [[total]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions`);
 
     const [recent] = await pool.query(
@@ -261,13 +301,15 @@ async function getCompanions(req, res) {
     }
 
     if (single) {
+      // Expected singles na HINDI pa lipas (walang expired)
       const [rows] = await pool.query(
         `SELECT d.visitor_name, r.registration_id, r.purpose,
                 res.resident_id, res.full_name AS resident_name, res.unit_address
          FROM VisitorRegistrations r
          JOIN VisitorRegistrationDetails d ON d.registration_id = r.registration_id
          JOIN Residents res ON res.resident_id = r.resident_id
-         WHERE r.registration_type = 'Single' AND r.status = 'Expected'`
+         WHERE r.registration_type = 'Single' AND r.status = 'Expected'
+           AND DATE(r.expected_date) >= CURDATE()`
       );
       return res.json(rows.map((m) => ({ name: m.visitor_name, registrationId: m.registration_id, residentId: m.resident_id,
                                          resident: m.resident_name, address: m.unit_address, purpose: m.purpose })));
@@ -279,6 +321,8 @@ async function getCompanions(req, res) {
 }
 
 // GET /api/entry/schedule  (Guard)
+// Ipinapakita: Active registrations + Expected na HINDI pa lipas (walang expired).
+// Kasama ang today's Completed para makita ang LINKED/BATCH departures.
 async function getSchedule(req, res) {
   try {
     const [regs] = await pool.query(
@@ -286,7 +330,12 @@ async function getSchedule(req, res) {
               res.resident_id, res.full_name AS resident_name, res.unit_address
        FROM VisitorRegistrations r
        JOIN Residents res ON res.resident_id = r.resident_id
-       WHERE r.status IN ('Expected','Active')
+       WHERE r.status = 'Active'
+          OR (r.status = 'Expected' AND DATE(r.expected_date) >= CURDATE())
+          OR (r.status = 'Departed' AND EXISTS (
+                SELECT 1 FROM VisitorTransactions vt
+                WHERE vt.registration_id = r.registration_id
+                  AND DATE(vt.exit_time) = CURDATE()))
        ORDER BY r.registration_id DESC`
     );
 
@@ -365,7 +414,20 @@ async function recordExit(req, res) {
   }
 }
 
+// GET /api/entry/expire-check  (Admin/Guard) - markahan bilang Expired ang lumipas
+async function expireOld(req, res) {
+  try {
+    const [result] = await pool.query(
+      `UPDATE VisitorRegistrations SET status = 'Expired'
+       WHERE status = 'Expected' AND DATE(expected_date) < CURDATE()`
+    );
+    res.json({ message: 'Expired registrations updated.', count: result.affectedRows });
+  } catch (err) {
+    res.status(500).json({ message: 'Error expiring registrations.', error: err.message });
+  }
+}
+
 module.exports = {
   matchVisitor, createGroupEntry, getActiveVisitors, getHistory, getAllLogs, getAdminSummary,
-  getResidentsForGuard, getCompanions, getSchedule, recordExit,
+  getResidentsForGuard, getCompanions, getSchedule, recordExit, expireOld,
 };

@@ -40,8 +40,8 @@ export default function GuardHome() {
     purpose: t.purpose || 'N/A',
   }));
 
-  // ── Stat counts (mula DB schedule) ──
-  const allVisitors = scheduleDB.flatMap((r) => r.visitors || []);
+  // ── Stat counts (mula DB schedule; active + expected lang, walang departed) ──
+  const allVisitors = scheduleDB.flatMap((r) => r.visitors || []).filter((v) => v.status !== 'DEPARTED');
   const activeCount = allVisitors.filter((v) => v.status === 'ACTIVE').length;
   const expectedCount = allVisitors.filter((v) => v.status === 'EXPECTED').length;
   const totalCount = allVisitors.length;

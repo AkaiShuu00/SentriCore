@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import { getMyRegistrations } from '../api';
 
-const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED', 'DEPARTED'];
+const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED'];
 
 export default function Schedule() {
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
@@ -27,6 +27,7 @@ export default function Schedule() {
   const month = today.getMonth();
 
   // I-flatten ang registrations → isang row bawat visitor (per-visitor status)
+  // Walang DEPARTED — active + expected lang sa Today's Schedule
   const allRows = registrations.flatMap((r) => {
     const isDelivery = r.registration_type === 'Delivery';
     const expDate = (r.expected_date || '').slice(0, 10);
@@ -40,14 +41,13 @@ export default function Schedule() {
       status: (typeof v === 'string' ? (r.status || 'Expected') : v.status).toUpperCase(),
       expectedDate: expDate,
     }));
-  });
+  }).filter((s) => s.status !== 'DEPARTED');
 
-  // ── Counts para sa summary (buong listahan) ──
+  // ── Counts para sa summary (active + expected lang) ──
   const counts = {
     ALL: allRows.length,
     ACTIVE: allRows.filter((s) => s.status === 'ACTIVE').length,
     EXPECTED: allRows.filter((s) => s.status === 'EXPECTED').length,
-    DEPARTED: allRows.filter((s) => s.status === 'DEPARTED').length,
   };
 
   const statusStyle = {
@@ -104,7 +104,6 @@ export default function Schedule() {
               { label: 'ALL', val: counts.ALL },
               { label: 'ACTIVE', val: counts.ACTIVE },
               { label: 'EXPECTED', val: counts.EXPECTED },
-              { label: 'DEPARTED', val: counts.DEPARTED },
             ].map((s) => (
               <div key={s.label} className="flex-1 bg-black/15 rounded-2xl py-3 text-center">
                 <p className="text-2xl font-extrabold">{s.val}</p>

@@ -11,7 +11,8 @@ const {
   recordExit,
   getResidentsForGuard,
   getCompanions,
-  getSchedule
+  getSchedule,
+  expireOld
 } = require('../controllers/entryController');
 
 // ── Guard routes ──
@@ -26,6 +27,7 @@ router.post('/group', verifyToken, requireRole('Guard'), createGroupEntry);
 // ── Admin routes ──
 router.get('/all-logs', verifyToken, requireRole('Admin', 'Guard'), getAllLogs);
 router.get('/admin-summary', verifyToken, requireRole('Admin'), getAdminSummary);
+router.post('/expire-check', verifyToken, requireRole('Admin', 'Guard'), expireOld);
 
 // ── Dynamic (dapat HULI para di ma-confuse ang specific routes bilang :id) ──
 router.post('/:id/exit', verifyToken, requireRole('Guard'), recordExit);

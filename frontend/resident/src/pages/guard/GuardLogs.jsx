@@ -32,17 +32,18 @@ export default function GuardLogs() {
         const mapped = (res.data || []).map((t) => {
           const type = (t.registration_type || 'Single').toUpperCase(); // SINGLE/BATCH/DELIVERY
           const prefix = type === 'DELIVERY' ? 'DLV' : type === 'BATCH' ? 'BTC' : 'VST';
+          const st = (t.status || 'Departed').toUpperCase(); // DEPARTED o EXPIRED
           return {
             dateISO: (t.entry_time || t.exit_time || '').slice(0, 10),
             date: t.entry_time ? new Date(t.entry_time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '-----',
-            time: `${fmtTime(t.entry_time)} to ${fmtTime(t.exit_time)}`,
+            time: st === 'EXPIRED' ? 'Did not arrive' : `${fmtTime(t.entry_time)} to ${fmtTime(t.exit_time)}`,
             name: t.visitor_name,
             kind: t.visitor_type || 'Visitor',
             plate: t.plate_number || '',
             resident: t.resident_name || '',
             address: t.unit_address || '',
-            status: 'DEPARTED',
-            entryId: t.pass_number || `${prefix} ${t.transaction_id}`,
+            status: st,
+            entryId: t.pass_number || `${prefix} ${t.transaction_id || '—'}`,
             type,
           };
         });

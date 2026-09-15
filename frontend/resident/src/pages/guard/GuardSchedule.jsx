@@ -37,10 +37,10 @@ export default function GuardSchedule() {
 
   const countByStatus = (visitors, s) => visitors.filter((v) => v.status === s).length;
 
-  // ── SINGLE: type Single → isang row bawat visitor ──
+  // ── SINGLE: type Single → isang row bawat visitor (walang DEPARTED) ──
   const singleRows = [];
   schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
-    r.visitors.forEach((v) => {
+    r.visitors.filter((v) => v.status !== 'DEPARTED').forEach((v) => {
       singleRows.push({
         name: v.name,
         resident: r.resident,
@@ -54,43 +54,51 @@ export default function GuardSchedule() {
     });
   });
 
-  // ── BATCH: type Batch → group card + arrival modal ──
-  const batchGroups = schedule.filter((r) => r.registrationType === 'Batch').map((r) => ({
-    kind: 'batch',
-    id: r.batchName ? `BTC ${r.batchName}` : `BTC ${r.registrationId}`,
-    resident: r.resident,
-    address: r.address,
-    purpose: r.purpose,
-    active: countByStatus(r.visitors, 'ACTIVE'),
-    expected: countByStatus(r.visitors, 'EXPECTED'),
-    departed: countByStatus(r.visitors, 'DEPARTED'),
-    visitors: r.visitors,
-  }));
+  // ── BATCH: type Batch → group card + arrival modal (walang DEPARTED, active+expected lang) ──
+  const batchGroups = schedule.filter((r) => r.registrationType === 'Batch')
+    .map((r) => {
+      const vis = r.visitors.filter((v) => v.status !== 'DEPARTED');
+      return {
+        kind: 'batch',
+        id: r.batchName ? `BTC ${r.batchName}` : `BTC ${r.registrationId}`,
+        resident: r.resident,
+        address: r.address,
+        purpose: r.purpose,
+        active: countByStatus(vis, 'ACTIVE'),
+        expected: countByStatus(vis, 'EXPECTED'),
+        departed: 0,
+        visitors: vis,
+      };
+    })
+    .filter((g) => g.visitors.length > 0);   // itago ang batch na lahat departed na
 
-  // ── LINKED: single visitors na naka-ACTIVE at sabay dumating (same arrival_id, 2+) ──
-  const activeSingles = [];
+  // ── LINKED: single visitors na sabay dumating (same arrival_id, 2+), ACTIVE lang ──
+  // (Walang DEPARTED sa Today's Schedule — active + expected view lang ito)
+  const linkableSingles = [];
   schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
-    r.visitors.filter((v) => v.status === 'ACTIVE' && v.arrivalId).forEach((v) => {
-      activeSingles.push({ ...v, resident: r.resident, address: r.address, purpose: r.purpose });
+    r.visitors.filter((v) => v.arrivalId && v.status === 'ACTIVE').forEach((v) => {
+      linkableSingles.push({ ...v, resident: r.resident, address: r.address, purpose: r.purpose });
     });
   });
   const linkedMap = {};
-  activeSingles.forEach((v) => { (linkedMap[v.arrivalId] = linkedMap[v.arrivalId] || []).push(v); });
+  linkableSingles.forEach((v) => { (linkedMap[v.arrivalId] = linkedMap[v.arrivalId] || []).push(v); });
   const linkedGroups = Object.entries(linkedMap)
     .filter(([, vis]) => vis.length >= 2)
     .map(([key, vis]) => ({
       kind: 'linked',
-      id: `LNK ${key}`,
-      resident: vis[0].resident,
-      address: vis[0].address,
-      active: vis.length, expected: 0, departed: 0,
-      visitors: vis.map((v) => ({ name: v.name, status: 'ACTIVE', timeIn: v.timeIn, timeOut: v.timeOut, purpose: v.purpose })),
+      id: `LNK-${String(key).padStart(5, '0')}`,
+      resident: vis.length ? vis[0].resident : '',
+      address: vis.length ? vis[0].address : '',
+      active: vis.length,
+      expected: 0,
+      departed: 0,
+      visitors: vis.map((v) => ({ name: v.name, status: v.status, timeIn: v.timeIn, timeOut: v.timeOut, purpose: v.purpose, arrivalId: v.arrivalId })),
     }));
 
-  // ── DELIVERY: type Delivery ──
+  // ── DELIVERY: type Delivery (walang DEPARTED) ──
   const deliveryRows = [];
   schedule.filter((r) => r.registrationType === 'Delivery').forEach((r) => {
-    r.visitors.forEach((v) => {
+    r.visitors.filter((v) => v.status !== 'DEPARTED').forEach((v) => {
       deliveryRows.push({
         name: v.name, resident: r.resident, address: r.address,
         status: v.status, start: v.timeIn ? fmtTime(v.timeIn) : '-----',
@@ -99,13 +107,13 @@ export default function GuardSchedule() {
     });
   });
 
-  // ── Summary counts (buong schedule) ──
-  const allVisitors = schedule.flatMap((r) => r.visitors);
+  // ── Summary counts (active + expected lang; walang departed sa Today's Schedule) ──
+  const allVisitors = schedule.flatMap((r) => r.visitors).filter((v) => v.status !== 'DEPARTED');
   const SUMMARY = {
     TOTAL: allVisitors.length,
     ACTIVE: countByStatus(allVisitors, 'ACTIVE'),
     EXPECTED: countByStatus(allVisitors, 'EXPECTED'),
-    DEPARTED: countByStatus(allVisitors, 'DEPARTED'),
+    DEPARTED: 0,
   };
 
   // Day strip
