@@ -25,8 +25,8 @@ export default function SignIn() {
       const res = await axios.post(`${API}/auth/login`, { username, password });
 
       const user = res.data.user;
-      localStorage.setItem('sentricore_token', res.data.token);
-      localStorage.setItem('sentricore_user', JSON.stringify(user));
+      sessionStorage.setItem('sentricore_token', res.data.token);
+      sessionStorage.setItem('sentricore_user', JSON.stringify(user));
 
       // Role-based redirect
       const role = (user.role || '').toLowerCase();

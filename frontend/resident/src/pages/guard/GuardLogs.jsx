@@ -13,7 +13,7 @@ const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
 
 export default function GuardLogs() {
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [showCal, setShowCal] = useState(false);

@@ -6,7 +6,7 @@ import { getActiveVisitors, getAnnouncements, getSchedule } from '../../api';
 
 export default function GuardHome() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
@@ -66,8 +66,8 @@ export default function GuardHome() {
 
   const endShift = () => {
     if (!window.confirm('End your shift and log out?')) return;
-    localStorage.removeItem('sentricore_token');
-    localStorage.removeItem('sentricore_user');
+    sessionStorage.removeItem('sentricore_token');
+    sessionStorage.removeItem('sentricore_user');
     navigate('/signin');
   };
 

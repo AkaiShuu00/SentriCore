@@ -6,7 +6,7 @@ const API = '/api';
 const api = axios.create({ baseURL: API });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('sentricore_token');
+  const token = sessionStorage.getItem('sentricore_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });

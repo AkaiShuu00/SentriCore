@@ -87,13 +87,10 @@ export default function GuardVerify() {
   const [activeDB, setActiveDB] = useState([]);
   const [entryCompanions, setEntryCompanions] = useState([]);   // para sa ENTRY accompanying
 
-  const token = () => localStorage.getItem('sentricore_token');
+  const token = () => sessionStorage.getItem('sentricore_token');
 
   const loadActive = () =>
-  getActiveVisitors()
-    .then((res) => {
-      console.log('🟢 ACTIVE VISITORS RESPONSE:', res.data);
-
+    getActiveVisitors().then((res) => {
       const list = (res.data || []).map((t) => ({
         transactionId: t.transaction_id,
         name: t.visitor_name,
@@ -106,21 +103,10 @@ export default function GuardVerify() {
         arrivalId: t.arrival_id,
         passNumber: t.pass_number,
       }));
-
-      console.log('🟢 ACTIVE VISITORS MAPPED:', list);
-
       setActiveDB(list);
       return list;
-    })
-    .catch((err) => {
-      console.error('🔴 GET ACTIVE VISITORS ERROR:', err);
-      console.error('🔴 STATUS:', err.response?.status);
-      console.error('🔴 DATA:', err.response?.data);
+    }).catch(() => { setActiveDB([]); return []; });
 
-      setActiveDB([]);
-      return [];
-    });
-    
   useEffect(() => {
     getResidentsForGuard()
       .then((res) => setResidentsDB((res.data || []).map((r) => ({
