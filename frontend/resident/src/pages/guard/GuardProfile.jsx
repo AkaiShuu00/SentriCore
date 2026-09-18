@@ -5,7 +5,7 @@ import AnnouncementsModal from '../../components/AnnouncementsModal';
 
 export default function GuardProfile() {
   const navigate = useNavigate();
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [showAnnouncements, setShowAnnouncements] = useState(false);
 
   // ── Guard details (mula sa naka-login na account / token) ──
@@ -26,8 +26,8 @@ export default function GuardProfile() {
 
   const endShift = () => {
     if (!window.confirm('End your shift and log out?')) return;
-    sessionStorage.removeItem('sentricore_token');
-    sessionStorage.removeItem('sentricore_user');
+    localStorage.removeItem('sentricore_token');
+    localStorage.removeItem('sentricore_user');
     navigate('/signin');
   };
 

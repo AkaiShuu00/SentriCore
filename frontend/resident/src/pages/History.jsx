@@ -4,7 +4,7 @@ import BottomNav from '../components/BottomNav';
 const FILTERS = ['ALL', 'VISITORS', 'DELIVERIES'];
 
 export default function History() {
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [showCalendar, setShowCalendar] = useState(false);

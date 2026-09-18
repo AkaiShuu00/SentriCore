@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
 
   const nav = [
     { key: 'dashboard', label: 'Dashboard',    icon: '🏠', to: '/admin-dashboard' },
@@ -61,8 +61,8 @@ export default function AdminLayout({ children }) {
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg text-white"
                  style={{ background: 'linear-gradient(135deg,#1E7E7E,#3FA89A)' }}>👤</div>
             <button onClick={() => {
-                      sessionStorage.removeItem('sentricore_token');
-                      sessionStorage.removeItem('sentricore_user');
+                      localStorage.removeItem('sentricore_token');
+                      localStorage.removeItem('sentricore_user');
                       navigate('/admin-signin');
                     }}
                     className="text-ink/50 text-sm ml-1" title="Log out">⌄</button>

@@ -15,7 +15,7 @@ const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
 
 export default function GuardSchedule() {
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('SINGLE');
   const [sortOpen, setSortOpen] = useState(false);

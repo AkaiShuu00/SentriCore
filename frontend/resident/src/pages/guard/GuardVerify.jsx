@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
 
 const teal = '#0F6E6E';
+// Relative na base URL — dumadaan sa ngrok/Vite proxy → backend → OCR.
+// Iwas sa mixed-content block kapag HTTPS (ngrok) ang page. Gumagana rin sa localhost.
 const API = '/api';
 
 const DEFAULT_SCANNED_NAME = '';
@@ -33,7 +35,7 @@ function IDCardPlaceholder({ name }) {
   );
 }
 
-const nameTokens = (s) => (s || '').toUpperCase().replace(/[.,\-]/g, ' ').trim().split(/\s+/).filter((w) => w.length >= 2);
+const nameTokens = (s) => (s || '').toUpperCase().replace(/[.,\-]/g, ' ').split(/\s+/).filter((w) => w.length >= 2);
 const nameMatches = (scanned, dbName) => {
   const a = nameTokens(scanned);
   const b = nameTokens(dbName);
@@ -71,23 +73,46 @@ export default function GuardVerify() {
   const [deliveryResident, setDeliveryResident] = useState(null);
   const fileRef = useRef(null);
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [scannedName, setScannedName] = useState(DEFAULT_SCANNED_NAME);
   const [driverName, setDriverName] = useState(DEFAULT_DRIVER_NAME);
   const [ocrError, setOcrError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [exitNote, setExitNote] = useState('');                 // optional exit note (1 of 4 choices)
+  const [exitAdditionalNote, setExitAdditionalNote] = useState(''); // optional free-text
   const [matchData, setMatchData] = useState({});
   const [candidates, setCandidates] = useState([]);   // lahat ng tumugmang candidate (disambiguation)
   const multiRef = useRef(false);                      // may 2+ candidate ba?
+  const exitMultiRef = useRef(false);                  // exit: kailangan bang pumili sa active list?
 
   // ── Real data mula DB ──
   const [residentsDB, setResidentsDB] = useState([]);
   const [activeDB, setActiveDB] = useState([]);
   const [entryCompanions, setEntryCompanions] = useState([]);   // para sa ENTRY accompanying
 
-  const token = () => sessionStorage.getItem('sentricore_token');
+  const token = () => localStorage.getItem('sentricore_token');
+  // Header para hindi ibalik ng ngrok-free ang HTML warning page sa mga API call.
+  const NGROK = { 'ngrok-skip-browser-warning': 'true' };
+  const authHeaders = (extra = {}) => ({ Authorization: `Bearer ${token()}`, ...NGROK, ...extra });
+
+  // EXIT matching — kapareho ng backend entry: sapat na na LAHAT ng token ng
+  // pangalan sa DB ay nasa scan (tanggap kahit may dagdag na basura ang OCR).
+  const exitMatches = (scanned, dbName) => {
+    const a = nameTokens(scanned), b = nameTokens(dbName);
+    if (a.length === 0 || b.length === 0) return false;
+    if (a.length >= 2) return b.every((w) => a.includes(w));
+    return b.some((w) => a.includes(w));
+  };
+  // Bumuo ng exit matchData mula sa isang active-visitor row
+  const fromActive = (v) => ({
+    transactionId: v.transactionId, arrivalId: v.arrivalId, registrationId: v.registrationId,
+    passId: v.passNumber || ('VST ' + v.transactionId),
+    category: (v.regType || 'Single').toUpperCase(), regType: v.regType || 'Single',
+    resident: v.resident || '', address: v.address || '',
+    visitor: v.name, purpose: v.purpose || 'N/A', expectedDate: '', residentId: v.residentId,
+  });
 
   const loadActive = () =>
     getActiveVisitors().then((res) => {
@@ -198,13 +223,15 @@ export default function GuardVerify() {
 
     const res = await fetch(`${API}/entry/group`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ visitors }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to record entry.');
     }
+    const data = await res.json().catch(() => ({}));
+    return data.passes || [];   // auto-generated passes (V-001 / D-001 ...)
   };
 
   // ── Save EXIT sa DATABASE ──
@@ -216,7 +243,11 @@ export default function GuardVerify() {
     for (const id of exitingIds) {
       const res = await fetch(`${API}/entry/${id}/exit`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token()}` },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          exitNote: exitNote || null,
+          exitAdditionalNote: exitAdditionalNote || null,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -250,113 +281,86 @@ export default function GuardVerify() {
     };
   };
 
-  // Piliin ang isang candidate mula sa SELECT VISITOR list (entry O exit)
+  // Piliin ang isang candidate mula sa SELECT VISITOR list
   const pickCandidate = (c) => {
-    if (c.__exit) {
-      // Exit candidate = active visitor (may transactionId)
-      setMatchData({
-        transactionId: c.transactionId,
-        arrivalId: c.arrivalId,
-        registrationId: c.registrationId,
-        passId: c.passNumber || ('VST ' + c.transactionId),
-        category: (c.regType || 'Single').toUpperCase(),
-        regType: c.regType || 'Single',
-        resident: c.resident || '',
-        address: c.address || '',
-        visitor: c.name,
-        purpose: c.purpose || 'N/A',
-        expectedDate: '',
-        residentId: c.residentId,
-      });
-      setScannedName(c.name);
-    } else {
-      setMatchData(candidateToMatch(c, scannedName));
-      setScannedName(c.registeredName || scannedName);
-    }
+    setMatchData(candidateToMatch(c, scannedName));
+    setScannedName(c.registeredName || scannedName);
     multiRef.current = false;
     setStep('matched');
   };
 
-  // ── LIVE CAMERA (getUserMedia) ──
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    setCameraOn(false);
-  };
+  // ── Resize image client-side (max 1000px) para bumilis ang OCR at umiwas sa timeout ──
+  const fileToResized = (file, maxDim = 1000, quality = 0.85) =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(
+          (b) => resolve(b ? new File([b], 'id.jpg', { type: 'image/jpeg' }) : file),
+          'image/jpeg', quality
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
 
+  // ── Live camera (getUserMedia) — kailangan ng HTTPS (ngrok) o localhost ──
   const startCamera = async () => {
     setCameraError('');
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Camera not supported on this device/browser.');
-      return;
-    }
     try {
-      // Rear/environment camera kapag available
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
+        video: { facingMode: { ideal: 'environment' } }, audio: false,
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => {});
       }
-      setCameraOn(true);
-    } catch (err) {
-      // Fallback: subukan ang kahit anong camera
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
-        }
-        setCameraOn(true);
-      } catch (err2) {
-        setCameraError('Cannot access camera. Use "Take Photo" or type the name manually.');
-        setCameraOn(false);
-      }
+    } catch (e) {
+      setCameraError('Hindi ma-access ang camera. Siguraduhing HTTPS (ngrok) ang URL at pinayagan ang camera. Gamitin ang "TAKE PHOTO OF ID" bilang alternatibo.');
     }
   };
 
-  // Kunin ang frame mula video → File → gamitin sa existing OCR (handlePhoto)
-  const captureFromCamera = async () => {
-    const video = videoRef.current;
-    if (!video || !streamRef.current) return;
-    const w = video.videoWidth || 1280;
-    const h = video.videoHeight || 720;
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, w, h);
-    stopCamera();
-    canvas.toBlob((blob) => {
-      if (!blob) { setCameraError('Capture failed. Please try again.'); return; }
-      const file = new File([blob], 'id-capture.jpg', { type: 'image/jpeg' });
-      // Gamitin ang existing OCR flow (walang binabago sa matching)
-      handlePhoto({ target: { files: [file] } });
-    }, 'image/jpeg', 0.9);
+  const stopCamera = () => {
+    const s = streamRef.current;
+    if (s) { s.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (videoRef.current) videoRef.current.srcObject = null;
   };
 
-  // Buksan ang camera kapag nasa SCAN step; isara kapag umalis / unmount
+  // Simulan/patayin ang camera base sa 'scan' step; patayin din pag-alis ng page
   useEffect(() => {
-    if (step === 'scan') {
-      startCamera();
-    } else {
-      stopCamera();
-    }
+    if (step === 'scan') startCamera();
+    else stopCamera();
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // Siguradong isara ang camera kapag na-unmount ang page
-  useEffect(() => () => stopCamera(), []);
+  // Kunan ng frame mula sa live video → i-process gaya ng litrato
+  const captureFromCamera = async () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) { setCameraError('Hindi pa handa ang camera, sandali lang.'); return; }
+    const maxDim = 1000;
+    const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+    const w = Math.round(video.videoWidth * scale), h = Math.round(video.videoHeight * scale);
+    const canvas = canvasRef.current || document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+    canvas.toBlob(async (blob) => {
+      if (!blob) { setCameraError('Capture failed, subukan ulit.'); return; }
+      stopCamera();
+      await processImageFile(new File([blob], 'id-capture.jpg', { type: 'image/jpeg' }), true);
+    }, 'image/jpeg', 0.85);
+  };
 
-  const handlePhoto = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // ── Core: i-scan ang image file (mula file-input O live camera) ──
+  const processImageFile = async (rawFile, alreadyResized = false) => {
+    const file = alreadyResized ? rawFile : await fileToResized(rawFile).catch(() => rawFile);
     multiRef.current = false;
     setPhotoFile(file);
     setPhoto(URL.createObjectURL(file));
@@ -368,7 +372,7 @@ export default function GuardVerify() {
       formData.append('file', file);
       const res = await fetch(`${API}/ocr/scan`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token()}` },
+        headers: authHeaders(),
         body: formData,
       });
       const data = await res.json();
@@ -377,45 +381,24 @@ export default function GuardVerify() {
       if (data.success && data.suggestedName) {
         const scanned = data.suggestedName;
 
-        // ── EXIT: match sa ACTIVE visitors ──
+        // ── EXIT: match sa ACTIVE visitors (tolerant, kapareho ng entry) ──
         if (isExit) {
           setScannedName(scanned);
           const list = await loadActive();
-          const matches = list.filter((t) => nameMatches(scanned, t.name));
+          const matches = list.filter((t) => exitMatches(scanned, t.name));
           if (matches.length === 1) {
-            const found = matches[0];
-            setMatchData({
-              transactionId: found.transactionId,
-              arrivalId: found.arrivalId,
-              registrationId: found.registrationId,
-              passId: found.passNumber || ('VST ' + found.transactionId),
-              category: (found.regType || 'Single').toUpperCase(),
-              regType: found.regType || 'Single',
-              resident: found.resident || '',
-              address: found.address || '',
-              visitor: found.name,
-              purpose: found.purpose || 'N/A',
-              expectedDate: '',
-              residentId: found.residentId,
-            });
-            setScannedName(found.name);
-            multiRef.current = false;
-          } else if (matches.length > 1) {
-            // 2+ active na parehong pangalan → SELECT VISITOR
-            setCandidates(matches.map((m) => ({
-              __exit: true,
-              transactionId: m.transactionId, arrivalId: m.arrivalId, registrationId: m.registrationId,
-              passNumber: m.passNumber, regType: m.regType,
-              name: m.name, registeredName: m.name,
-              resident: m.resident, residentName: m.resident,
-              address: m.address, residentAddress: m.address,
-              residentId: m.residentId, purpose: m.purpose,
-            })));
-            multiRef.current = true;
+            setMatchData(fromActive(matches[0]));
+            setScannedName(matches[0].name);
+            exitMultiRef.current = false;
           } else {
+            // 0 o 2+ na tugma → ipakita ang listahan ng active visitors para pumili
+            exitMultiRef.current = true;
             setMatchData({});
-            multiRef.current = false;
-            setOcrError('This visitor is not currently active inside. Please verify or use manual search.');
+            if (matches.length === 0) {
+              setOcrError('Walang eksaktong tugma sa scan. Piliin ang bisita sa listahan ng active visitors.');
+            } else {
+              setOcrError('Maraming active na tugma. Piliin ang tamang bisita sa listahan.');
+            }
           }
         }
         // ── ENTRY: driver flow ──
@@ -428,7 +411,7 @@ export default function GuardVerify() {
           try {
             const matchRes = await fetch(
               `${API}/entry/match?name=${encodeURIComponent(scanned)}`,
-              { headers: { Authorization: `Bearer ${token()}` } }
+              { headers: authHeaders() }
             );
             const matchJson = await matchRes.json();
             console.log('🟣 match result:', matchJson);
@@ -461,8 +444,16 @@ export default function GuardVerify() {
     }
   };
 
+  // File-input fallback ("TAKE PHOTO OF ID" / native camera app)
+  const handlePhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImageFile(file);
+  };
+
   const afterReading = () => {
     if (isPickup && pickupTarget === 'RESIDENT') return 'pickupResidents';
+    if (isExit && exitMultiRef.current) return 'exitSelect';
     if (multiRef.current) return 'selectVisitor';
     return 'matched';
   };
@@ -475,36 +466,20 @@ export default function GuardVerify() {
     try {
       if (isExit) {
         const list = await loadActive();
-        const matches = list.filter((t) => nameMatches(name, t.name));
+        const matches = list.filter((t) => exitMatches(name, t.name));
         if (matches.length === 1) {
-          const found = matches[0];
-          setMatchData({
-            transactionId: found.transactionId, arrivalId: found.arrivalId, registrationId: found.registrationId,
-            passId: found.passNumber || ('VST ' + found.transactionId),
-            category: (found.regType || 'Single').toUpperCase(), regType: found.regType || 'Single',
-            resident: found.resident || '', address: found.address || '',
-            visitor: found.name, purpose: found.purpose || 'N/A', expectedDate: '', residentId: found.residentId,
-          });
-          setScannedName(found.name);
-        } else if (matches.length > 1) {
-          setCandidates(matches.map((m) => ({
-            __exit: true,
-            transactionId: m.transactionId, arrivalId: m.arrivalId, registrationId: m.registrationId,
-            passNumber: m.passNumber, regType: m.regType,
-            name: m.name, registeredName: m.name,
-            resident: m.resident, residentName: m.resident,
-            address: m.address, residentAddress: m.address,
-            residentId: m.residentId, purpose: m.purpose,
-          })));
-          multiRef.current = true;
-          setStep('selectVisitor');
+          setMatchData(fromActive(matches[0]));
+          setScannedName(matches[0].name);
         } else {
           setMatchData({});
-          setOcrError('Not active inside. Check the name or use manual search.');
+          setOcrError(matches.length === 0
+            ? 'Walang tugma. Piliin sa listahan ng active visitors.'
+            : 'Maraming tugma. Piliin sa listahan ng active visitors.');
+          setStep('exitSelect');
         }
       } else {
         const matchRes = await fetch(`${API}/entry/match?name=${encodeURIComponent(name)}`,
-          { headers: { Authorization: `Bearer ${token()}` } });
+          { headers: authHeaders() });
         const matchJson = await matchRes.json();
         if (matchJson.matched && matchJson.candidates.length === 1) {
           const c = matchJson.candidates[0];
@@ -531,7 +506,7 @@ export default function GuardVerify() {
     }
   }, [step, photoFile]);
 
-  const close = () => { stopCamera(); navigate('/guard-home'); };
+  const close = () => navigate('/guard-home');
 
   const handleApprove = async () => {
     if (submitting) return;
@@ -542,8 +517,12 @@ export default function GuardVerify() {
         await saveExit();
         alert(`Exit approved for ${total} visitor${total > 1 ? 's' : ''}! Time-out logged. ✅`);
       } else {
-        await saveArrival();
-        alert(`Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅`);
+        const passes = await saveArrival();
+        const passLines = (passes || []).map((p) => `• ${p.visitorName}: ${p.passNumber}`).join('\n');
+        alert(
+          `Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅` +
+          (passLines ? `\n\nVisitor Pass:\n${passLines}` : '')
+        );
       }
       navigate('/guard-home');
     } catch (err) {
@@ -697,74 +676,50 @@ export default function GuardVerify() {
       </header>
 
       <div className="px-6 py-8">
-        {/* SCAN ID — LIVE CAMERA */}
+        {/* SCAN ID */}
         {step === 'scan' && (
           <div className="bg-white rounded-3xl p-6 shadow">
             <h2 className="text-xl font-extrabold text-ink text-center mb-4">SCAN ID</h2>
 
-            {/* Live camera preview + ID guide box overlay */}
-            <div className="relative rounded-2xl overflow-hidden mb-4 bg-black" style={{ aspectRatio: '4 / 3' }}>
-              <video ref={videoRef} playsInline muted
-                     className="w-full h-full object-cover"
-                     style={{ display: cameraOn ? 'block' : 'none' }} />
-
-              {/* Placeholder kapag walang camera */}
-              {!cameraOn && (
-                <div className="absolute inset-0 flex items-center justify-center p-4">
-                  <IDCardPlaceholder />
-                </div>
-              )}
-
-              {/* ID guide box overlay */}
-              {cameraOn && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="border-2 border-white/90 rounded-xl"
-                       style={{ width: '82%', height: '62%', boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }}>
-                    <div className="absolute -top-6 left-0 right-0 text-center">
-                      <span className="text-[11px] font-bold text-white bg-black/50 px-3 py-1 rounded-full">
-                        Align the ID inside the box
-                      </span>
-                    </div>
-                  </div>
+            {/* LIVE CAMERA preview */}
+            <div className="relative rounded-2xl overflow-hidden bg-black mb-4" style={{ aspectRatio: '4 / 3' }}>
+              <video ref={videoRef} playsInline muted autoPlay
+                     className="w-full h-full object-cover" />
+              {/* guide box overlay */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="border-2 border-white/80 rounded-xl" style={{ width: '82%', height: '62%' }} />
+              </div>
+              {cameraError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-4">
+                  <p className="text-[11px] text-center text-white">{cameraError}</p>
                 </div>
               )}
             </div>
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             <p className="text-center text-xs text-ink mb-1">
-              PLACE <span className="font-bold">{isDriverFlow ? "DRIVER'S" : "VISITOR'S"} IDENTIFICATION CARD</span> INSIDE THE BOX
+              ALIGN THE <span className="font-bold">{isDriverFlow ? "DRIVER'S" : "VISITOR'S"} ID</span> INSIDE THE BOX
             </p>
-            <p className="text-center text-xs text-ink/50 mb-4">Ensure the ID is clear and readable</p>
-
-            {cameraError && (
-              <p className="text-xs text-center text-red-700 bg-red-100 rounded-xl px-4 py-2 mb-3">{cameraError}</p>
-            )}
+            <p className="text-center text-xs text-ink/50 mb-5">Ensure the ID is clear and readable</p>
 
             <div className="flex flex-col items-center gap-2">
-              {/* CAPTURE ID — pangunahing button kapag naka-camera */}
-              {cameraOn ? (
-                <button onClick={captureFromCamera}
-                        className="px-6 py-3 rounded-full text-sm font-bold text-white w-56 shadow" style={{ backgroundColor: '#0F6E6E' }}>
-                  📸 CAPTURE ID
-                </button>
-              ) : (
-                <button onClick={startCamera}
-                        className="px-6 py-3 rounded-full text-sm font-bold text-white w-56 shadow" style={{ backgroundColor: '#0F6E6E' }}>
-                  ▶ START CAMERA
-                </button>
-              )}
+              <button onClick={captureFromCamera}
+                      className="px-6 py-3 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#0F6E6E' }}>
+                📸 CAPTURE ID
+              </button>
 
-              {/* Fallback: file capture (bubukas ang phone camera app) */}
+              {/* Fallback: native camera app / file (gumagana kahit walang camera permission) */}
               <input ref={fileRef} type="file" accept="image/*" capture="environment"
                      onChange={handlePhoto} style={{ display: 'none' }} />
-              <button onClick={() => { stopCamera(); fileRef.current?.click(); }}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-56" style={{ backgroundColor: '#112D31' }}>
+              <button onClick={() => fileRef.current?.click()}
+                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
                 TAKE PHOTO OF ID
               </button>
               <button onClick={() => { stopCamera(); setStep('reading'); }}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-56" style={{ backgroundColor: '#112D31' }}>
+                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
                 TYPE INFO MANUALLY
               </button>
-              <button onClick={() => { stopCamera(); setStep(isExit ? 'reading' : 'choose'); }}
+              <button onClick={() => { stopCamera(); setStep(isExit ? 'exitSelect' : 'choose'); }}
                       className="px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
                 {isExit ? 'MANUAL SEARCH' : 'BACK'}
               </button>
@@ -823,6 +778,61 @@ export default function GuardVerify() {
               <button onClick={() => setStep('residentList')}
                       className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
                 NONE OF THESE — CONTACT RESIDENT
+              </button>
+              <button onClick={() => setStep('scan')}
+                      className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                RETRY SCAN
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* EXIT — SELECT ACTIVE VISITOR (fallback / disambiguation) */}
+        {step === 'exitSelect' && (
+          <div>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">SELECT ACTIVE VISITOR</h2>
+            <p className="text-center text-xs text-ink/60 mb-4">
+              Piliin ang bisita na lalabas. Ito ang mga kasalukuyang ACTIVE sa loob.
+            </p>
+
+            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
+              <span className="text-ink/40">🔍</span>
+              <input value={activeSearch} onChange={(e) => setActiveSearch(e.target.value)}
+                     placeholder="Search visitor name"
+                     className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow mb-4">
+              <div className="max-h-[52vh] overflow-y-auto space-y-2">
+                {activeDB.length === 0 ? (
+                  <p className="text-center text-ink/50 py-8 text-sm">Walang active na bisita sa ngayon.</p>
+                ) : activeDB
+                    .filter((v) => v.name.toLowerCase().includes(activeSearch.toLowerCase()))
+                    .map((v) => (
+                      <button key={v.transactionId} onClick={() => {
+                                setMatchData(fromActive(v));
+                                setScannedName(v.name);
+                                setOcrError('');
+                                exitMultiRef.current = false;
+                                setStep('matched');
+                              }}
+                              className="w-full text-left rounded-2xl p-3 border border-gray-200 shadow-sm active:scale-[0.99] transition hover:border-teal-500">
+                        <p className="font-bold text-ink text-sm">{v.name}</p>
+                        <p className="text-xs text-ink/70 mt-1"><span className="font-bold">Resident:</span> {v.resident} | {v.address}</p>
+                        <div className="flex gap-2 mt-1 items-center">
+                          <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-teal-100 text-teal-800">{v.regType || 'Single'}</span>
+                          {v.passNumber && <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-gray-100 text-ink">Pass: {v.passNumber}</span>}
+                          <span className="text-[9px] text-ink/50">Purpose: {v.purpose}</span>
+                        </div>
+                      </button>
+                    ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <button onClick={() => { loadActive(); }}
+                      className="w-60 py-2 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                🔄 REFRESH LIST
               </button>
               <button onClick={() => setStep('scan')}
                       className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
@@ -953,7 +963,7 @@ export default function GuardVerify() {
 
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
-                  <button onClick={() => setStep('residentList')}
+                  <button onClick={() => setStep(isExit ? 'exitSelect' : 'residentList')}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                     MANUAL SEARCH
                   </button>
@@ -1304,7 +1314,7 @@ export default function GuardVerify() {
               {confirmedList.map((c, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
                   {[
-                    ['Pass ID', entryInfo.passId],
+                    ['Visitor Pass', isExit ? (entryInfo.passId || '—') : 'Auto-assigned on approval'],
                     ['Resident Name', c.resident],
                     ['Address', c.address],
                     ...(entryInfo.driver ? [['Driver Name', entryInfo.driver]] : []),
@@ -1318,6 +1328,41 @@ export default function GuardVerify() {
                 </div>
               ))}
             </div>
+
+            {/* OPTIONAL EXIT NOTE — only on exit, before final approval (not required) */}
+            {isExit && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-5">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-bold text-ink">Exit Note</label>
+                  <span className="text-[10px] text-ink/40 font-semibold">OPTIONAL</span>
+                </div>
+                <p className="text-[11px] text-ink/50 mb-3">Log any observation for this exit. You can leave this blank.</p>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {[
+                    ['No Problem', '#B4E4BE', '#1e6b2e'],
+                    ['Small Issue', '#F1D88A', '#8a6d12'],
+                    ['Security Concern', '#F3C9C9', '#9b2c2c'],
+                    ['Incident Happened', '#D9C2E9', '#5b2c86'],
+                  ].map(([label, bg, fg]) => {
+                    const active = exitNote === label;
+                    return (
+                      <button key={label} type="button"
+                              onClick={() => setExitNote(active ? '' : label)}
+                              className="rounded-xl px-3 py-2 text-[11px] font-bold border-2 transition"
+                              style={active
+                                ? { backgroundColor: bg, color: fg, borderColor: fg }
+                                : { backgroundColor: '#fff', color: '#112D31', borderColor: '#e5e7eb' }}>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="block text-[10px] font-bold text-ink/60 mb-1">ADDITIONAL NOTE (optional)</label>
+                <textarea value={exitAdditionalNote} onChange={(e) => setExitAdditionalNote(e.target.value)}
+                          rows={2} placeholder="Add any extra detail (optional)"
+                          className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none" />
+              </div>
+            )}
 
             <div className="rounded-xl px-4 py-3 text-center text-xs font-medium mb-5"
                  style={{ backgroundColor: '#DCF3E4', color: '#1e6b2e' }}>

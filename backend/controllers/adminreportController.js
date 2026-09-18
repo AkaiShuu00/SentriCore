@@ -53,6 +53,44 @@ async function monthlyReport(req, res) {
       });
     }
 
+    // ── Exit Note observations (current month) — counts per category from DB ──
+    const [noteRows] = await pool.query(
+      `SELECT exit_note AS note, COUNT(*) AS n
+       FROM VisitorTransactions
+       WHERE status = 'Completed' AND exit_note IS NOT NULL AND exit_note <> ''
+         AND exit_time >= DATE_FORMAT(CURDATE(),'%Y-%m-01')
+         AND exit_time <  DATE_FORMAT(CURDATE(),'%Y-%m-01') + INTERVAL 1 MONTH
+       GROUP BY exit_note`
+    );
+    const exitNoteCounts = { 'No Problem': 0, 'Small Issue': 0, 'Security Concern': 0, 'Incident Happened': 0 };
+    for (const r of noteRows) {
+      if (Object.prototype.hasOwnProperty.call(exitNoteCounts, r.note)) exitNoteCounts[r.note] = Number(r.n);
+    }
+    // Recent flagged observations (concerns/incidents) with any additional detail
+    const [flagged] = await pool.query(
+      `SELECT t.visitor_name, t.exit_note, t.exit_additional_note, t.exit_time,
+              res.full_name AS resident_name, res.unit_address
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       WHERE t.status = 'Completed'
+         AND t.exit_note IN ('Security Concern','Incident Happened')
+         AND t.exit_time >= DATE_FORMAT(CURDATE(),'%Y-%m-01')
+         AND t.exit_time <  DATE_FORMAT(CURDATE(),'%Y-%m-01') + INTERVAL 1 MONTH
+       ORDER BY t.exit_time DESC LIMIT 20`
+    );
+    const exitNotes = {
+      counts: exitNoteCounts,
+      totalLogged: Object.values(exitNoteCounts).reduce((a, b) => a + b, 0),
+      flagged: flagged.map((f) => ({
+        visitor: f.visitor_name,
+        resident: f.resident_name,
+        unit: f.unit_address,
+        note: f.exit_note,
+        detail: f.exit_additional_note || '',
+        time: f.exit_time,
+      })),
+    };
+
     // ── Summary highlights (current month) ──
     const prev = months[months.length - 2];
     const curr = months[months.length - 1];
@@ -72,6 +110,7 @@ async function monthlyReport(req, res) {
       },
       chart: months,       // last 5 months (nagmu-move)
       table: [...months].reverse(),  // pinaka-bago sa taas
+      exitNotes,           // exit-note observation counts + flagged list (current month)
       summary: {
         totalVisitors: curr.visitors,
         totalDeliveries: curr.deliveries,
@@ -144,4 +183,102 @@ async function recurrentReport(req, res) {
   }
 }
 
-module.exports = { monthlyReport, recurrentReport };
+// GET /api/admin/reports/audit  (Admin)
+// Audit trail — sino-ang-gumawa-ng-ano-at-kailan.
+// Pangunahing galaw ng GUARD (entry/exit) mula sa VisitorTransactions,
+// dagdag ang login/account events mula sa AuditLogs kung available.
+// Query: ?from=YYYY-MM-DD&to=YYYY-MM-DD (default: kasalukuyang buwan).
+async function auditReport(req, res) {
+  try {
+    // ── Date window (default: current month) ──
+    const from = req.query.from
+      ? `${req.query.from} 00:00:00`
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10) + ' 00:00:00';
+    const to = req.query.to
+      ? `${req.query.to} 23:59:59`
+      : new Date().toISOString().slice(0, 10) + ' 23:59:59';
+
+    const rows = [];
+
+    // 1) ENTRY recorded by guard
+    const [entries] = await pool.query(
+      `SELECT t.entry_time AS ts, g.full_name AS actor,
+              t.visitor_name, t.visitor_type, res.full_name AS resident_name, res.unit_address
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       LEFT JOIN Guards g ON g.guard_id = t.guard_id
+       WHERE t.entry_time BETWEEN ? AND ?`,
+      [from, to]
+    );
+    for (const e of entries) {
+      rows.push({
+        ts: e.ts,
+        actor: e.actor || 'Unknown guard',
+        role: 'Guard',
+        action: 'Recorded Entry',
+        details: `${e.visitor_type || 'Visitor'}: ${e.visitor_name} → ${e.resident_name}${e.unit_address ? ` (${e.unit_address})` : ''}`,
+      });
+    }
+
+    // 2) EXIT recorded by guard
+    const [exits] = await pool.query(
+      `SELECT t.exit_time AS ts, g.full_name AS actor,
+              t.visitor_name, t.exit_note
+       FROM VisitorTransactions t
+       LEFT JOIN Guards g ON g.guard_id = t.exit_guard_id
+       WHERE t.status = 'Completed' AND t.exit_time BETWEEN ? AND ?`,
+      [from, to]
+    );
+    for (const x of exits) {
+      rows.push({
+        ts: x.ts,
+        actor: x.actor || 'Unknown guard',
+        role: 'Guard',
+        action: 'Recorded Exit',
+        details: `Visitor: ${x.visitor_name}${x.exit_note ? ` — Note: ${x.exit_note}` : ''}`,
+      });
+    }
+
+    // 3) Login / account events mula sa AuditLogs (optional — hindi lahat ng DB ay pareho)
+    try {
+      const [logs] = await pool.query(
+        `SELECT a.created_at AS ts, COALESCE(u.username, 'System') AS actor,
+                COALESCE(r.role_name, '—') AS role, a.action AS action, a.description AS details
+         FROM AuditLogs a
+         LEFT JOIN Users u ON u.user_id = a.user_id
+         LEFT JOIN Roles r ON r.role_id = u.role_id
+         WHERE a.created_at BETWEEN ? AND ?`,
+        [from, to]
+      );
+      for (const l of logs) {
+        rows.push({ ts: l.ts, actor: l.actor, role: l.role, action: l.action, details: l.details || '' });
+      }
+    } catch (e) {
+      console.warn('AuditLogs skipped (table/columns not found):', e.message);
+    }
+
+    // Sort newest-first, cap para hindi bumigat
+    rows.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    const list = rows.slice(0, 300);
+
+    // Summary
+    const summary = {
+      total: rows.length,
+      entries: entries.length,
+      exits: exits.length,
+      logins: rows.filter((r) => (r.action || '').toLowerCase().includes('login')).length,
+      activeGuards: new Set(
+        rows.filter((r) => r.role === 'Guard' && r.actor).map((r) => r.actor)
+      ).size,
+      monthLabel: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      from: from.slice(0, 10),
+      to: to.slice(0, 10),
+    };
+
+    res.json({ list, summary });
+  } catch (err) {
+    res.status(500).json({ message: 'Error generating audit report.', error: err.message });
+  }
+}
+
+module.exports = { monthlyReport, recurrentReport, auditReport };

@@ -3,7 +3,7 @@ import AdminLayout from './components/AdminLayout';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-import { adminMonthlyReport, adminRecurrentReport } from '../../api';
+import { adminMonthlyReport, adminRecurrentReport, adminAuditReport } from '../../api';
 
 const REPORT_CARDS = [
   { key: 'monthly',   title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days.', icon: '📈' },
@@ -21,6 +21,8 @@ export default function AdminReports() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recurrent, setRecurrent] = useState(null);
+  const [audit, setAudit] = useState(null);
+  const [auditSearch, setAuditSearch] = useState('');
 
   useEffect(() => {
     adminMonthlyReport()
@@ -30,6 +32,9 @@ export default function AdminReports() {
     adminRecurrentReport()
       .then((res) => setRecurrent(res.data))
       .catch(() => setRecurrent(null));
+    adminAuditReport()
+      .then((res) => setAudit(res.data))
+      .catch(() => setAudit(null));
   }, []);
 
   // ── Export helpers (CSV + print PDF) ──
@@ -64,6 +69,14 @@ export default function AdminReports() {
       const header = ['Name', 'Resident', 'Type', 'Unit', 'YTD Visits', 'This Month'];
       const rows = (recurrent?.list || []).map((r) => [r.name, r.resident, r.type, r.unit, r.ytd, r.thisMonth]);
       type === 'pdf' ? exportPDF('Recurrent Visitor', header, rows) : exportCSV('recurrent-visitor.csv', header, rows);
+    } else if (view === 'incident') {
+      const header = ['Visitor', 'Resident', 'Unit', 'Observation', 'Detail', 'Time'];
+      const rows = (report?.exitNotes?.flagged || []).map((f) => [f.visitor, f.resident, f.unit, f.note, f.detail || '', f.time ? new Date(f.time).toLocaleString('en-US') : '']);
+      type === 'pdf' ? exportPDF('Incident Monitoring', header, rows) : exportCSV('incident-monitoring.csv', header, rows);
+    } else if (view === 'audit') {
+      const header = ['Date & Time', 'Actor', 'Role', 'Action', 'Details'];
+      const rows = (audit?.list || []).map((a) => [a.ts ? new Date(a.ts).toLocaleString('en-US') : '', a.actor, a.role, a.action, a.details]);
+      type === 'pdf' ? exportPDF('Audit Trails', header, rows) : exportCSV('audit-trails.csv', header, rows);
     } else {
       alert('Nothing to export on this view yet.');
     }
@@ -239,16 +252,140 @@ export default function AdminReports() {
         </div>
       )}
 
-      {/* Other views — placeholder (susunod na i-connect) */}
-      {['incident', 'audit'].includes(view) && (
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-extrabold text-ink capitalize">{view} Report</h3>
-            <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+      {/* INCIDENT MONITORING — driven by Exit Notes logged by guards */}
+      {view === 'incident' && (() => {
+        const en = report?.exitNotes || { counts: {}, totalLogged: 0, flagged: [] };
+        const counts = en.counts || {};
+        const cards = [
+          ['No Problem', counts['No Problem'] || 0, '#B4E4BE', '#1e6b2e'],
+          ['Small Issue', counts['Small Issue'] || 0, '#F1D88A', '#8a6d12'],
+          ['Security Concern', counts['Security Concern'] || 0, '#F3C9C9', '#9b2c2c'],
+          ['Incident Happened', counts['Incident Happened'] || 0, '#D9C2E9', '#5b2c86'],
+        ];
+        return (
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-extrabold text-ink">Incident Monitoring</h3>
+                <p className="text-xs text-ink/60">Exit-note observations logged by guards — {overview.monthLabel || 'this month'}.</p>
+              </div>
+              <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+            </div>
+
+            {/* Count cards */}
+            <div className="grid grid-cols-4 gap-3 mt-4 mb-6">
+              {cards.map(([label, n, bg, fg]) => (
+                <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
+                  <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
+                  <p className="text-[11px] font-bold mt-1" style={{ color: fg }}>{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Flagged observations (Security Concern / Incident Happened) */}
+            <p className="text-sm font-bold text-ink mb-2">Flagged Observations</p>
+            <div className="grid grid-cols-5 gap-2 mb-2">
+              {['VISITOR', 'RESIDENT', 'UNIT', 'OBSERVATION', 'DETAIL / TIME'].map((h) => (
+                <span key={h} className="text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
+              ))}
+            </div>
+            {(en.flagged || []).length === 0 ? (
+              <p className="text-center text-ink/50 py-10 text-sm">No flagged exit observations this month.</p>
+            ) : en.flagged.map((f, i) => (
+              <div key={i} className="grid grid-cols-5 gap-2 px-4 py-3 border-b border-gray-100 text-sm items-center">
+                <span className="font-bold text-ink">{f.visitor}</span>
+                <span className="text-ink/70">{f.resident}</span>
+                <span className="text-ink/70">{f.unit}</span>
+                <span className="font-semibold" style={{ color: f.note === 'Incident Happened' ? '#5b2c86' : '#9b2c2c' }}>{f.note}</span>
+                <span className="text-ink/70 text-xs">
+                  {f.detail || '—'}
+                  <span className="block text-ink/40">{f.time ? new Date(f.time).toLocaleString('en-US') : ''}</span>
+                </span>
+              </div>
+            ))}
           </div>
-          <p className="text-center text-ink/50 py-16 text-sm">This report will be connected next.</p>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* AUDIT TRAILS — sino-ang-gumawa-ng-ano-at-kailan (guard movements + logins) */}
+      {view === 'audit' && (() => {
+        const a = audit || { list: [], summary: {} };
+        const s = a.summary || {};
+        const q = auditSearch.toLowerCase();
+        const list = (a.list || []).filter((row) =>
+          !q ||
+          (row.actor || '').toLowerCase().includes(q) ||
+          (row.action || '').toLowerCase().includes(q) ||
+          (row.details || '').toLowerCase().includes(q) ||
+          (row.role || '').toLowerCase().includes(q)
+        );
+        const roleColor = (r) => r === 'Guard' ? { bg: '#CFEDE4', fg: '#0F6E6E' }
+          : r === 'Admin' ? { bg: '#F1D88A', fg: '#8a6d12' }
+          : r === 'Resident' ? { bg: '#D9C2E9', fg: '#5b2c86' }
+          : { bg: '#eee', fg: '#555' };
+        return (
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-extrabold text-ink">Audit Trails</h3>
+                <p className="text-xs text-ink/60">All recorded movements and system actions — {s.monthLabel || 'this month'}.</p>
+              </div>
+              <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-4 gap-3 mt-4 mb-5">
+              {[
+                ['Total Actions', s.total ?? 0, '#CFEDE4', '#0F6E6E'],
+                ['Entries Logged', s.entries ?? 0, '#DCF3E4', '#1e6b2e'],
+                ['Exits Logged', s.exits ?? 0, '#F3C9C9', '#9b2c2c'],
+                ['Active Guards', s.activeGuards ?? 0, '#F1D88A', '#8a6d12'],
+              ].map(([label, n, bg, fg]) => (
+                <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
+                  <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
+                  <p className="text-[11px] font-bold mt-1" style={{ color: fg }}>{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
+              <span className="text-ink/40">🔍</span>
+              <input value={auditSearch} onChange={(e) => setAuditSearch(e.target.value)}
+                     placeholder="Search actor, action, details..."
+                     className="flex-1 outline-none text-sm bg-transparent" />
+            </div>
+
+            {/* Table */}
+            <div className="grid grid-cols-12 gap-2 mb-2">
+              <span className="col-span-3 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE &amp; TIME</span>
+              <span className="col-span-3 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTOR</span>
+              <span className="col-span-2 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTION</span>
+              <span className="col-span-4 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DETAILS</span>
+            </div>
+            {list.length === 0 ? (
+              <p className="text-center text-ink/50 py-10 text-sm">No audit records for this period.</p>
+            ) : (
+              <div className="max-h-[52vh] overflow-y-auto">
+                {list.map((row, i) => {
+                  const rc = roleColor(row.role);
+                  return (
+                    <div key={i} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 text-sm items-center">
+                      <span className="col-span-3 text-ink/70 text-xs">{row.ts ? new Date(row.ts).toLocaleString('en-US') : '—'}</span>
+                      <span className="col-span-3 flex items-center gap-2">
+                        <span className="font-bold text-ink">{row.actor}</span>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: rc.bg, color: rc.fg }}>{row.role}</span>
+                      </span>
+                      <span className="col-span-2 font-semibold text-ink/80 text-xs">{row.action}</span>
+                      <span className="col-span-4 text-ink/70 text-xs">{row.details}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Generate summary modal (Monthly) */}
       {showGen && view === 'monthly' && (

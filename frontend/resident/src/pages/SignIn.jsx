@@ -25,8 +25,10 @@ export default function SignIn() {
       const res = await axios.post(`${API}/auth/login`, { username, password });
 
       const user = res.data.user;
-      sessionStorage.setItem('sentricore_token', res.data.token);
-      sessionStorage.setItem('sentricore_user', JSON.stringify(user));
+      // IMPORTANTE: localStorage (hindi localStorage) para pare-pareho sa PreRegister/GuardVerify
+      // at para hindi mawala ang session kapag nag-refresh o nagbukas ng bagong tab.
+      localStorage.setItem('sentricore_token', res.data.token);
+      localStorage.setItem('sentricore_user', JSON.stringify(user));
 
       // Role-based redirect
       const role = (user.role || '').toLowerCase();

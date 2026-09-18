@@ -1,12 +1,22 @@
 import axios from 'axios';
 
+// Relative na base URL — tumutugma sa SignIn.jsx/PreRegister.jsx ('/api').
+// Gumagana ito sa laptop AT sa phone dahil dumadaan sa Vite proxy patungo sa backend.
+// (Kung wala kang Vite proxy, palitan ito ng iyong laptop IP, hal:
+//   const API = 'http://192.168.100.9:3000/api';  )
 const API = '/api';
 
-// Axios instance na may auto-attach ng token
-const api = axios.create({ baseURL: API });
+// Axios instance na may auto-attach ng token.
+// Ang 'ngrok-skip-browser-warning' ay para hindi ibalik ng ngrok-free ang HTML
+// warning page sa mga API call (na siyang dahilan ng "service unavailable" sa phone).
+const api = axios.create({
+  baseURL: API,
+  headers: { 'ngrok-skip-browser-warning': 'true' },
+});
 
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('sentricore_token');
+  // localStorage (hindi sessionStorage) — pare-pareho sa buong app
+  const token = localStorage.getItem('sentricore_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -61,6 +71,7 @@ export const adminDeleteGuard = (id) => api.delete(`/admin/guards/${id}`);
 // ── Admin: Reports ──
 export const adminMonthlyReport = () => api.get('/admin/reports/monthly');
 export const adminRecurrentReport = () => api.get('/admin/reports/recurrent');
+export const adminAuditReport = (params) => api.get('/admin/reports/audit', { params });
 
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });

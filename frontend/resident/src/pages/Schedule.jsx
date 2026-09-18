@@ -5,7 +5,7 @@ import { getMyRegistrations } from '../api';
 const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED'];
 
 export default function Schedule() {
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const today = new Date();

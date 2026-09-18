@@ -51,7 +51,9 @@ async function login(req, res) {
       profile.name = user.username;
     }
 
-    const token = jwt.sign(profile, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+    // ✅ WALANG expiry — hindi na mag-eexpire ang token (ligtas para sa live demo/defense).
+    // Kung gusto mo balikan ang expiry balang-araw, gamitin: { expiresIn: process.env.JWT_EXPIRES_IN }
+    const token = jwt.sign(profile, process.env.JWT_SECRET);
 
     await logAction(user.user_id, 'Login', `${user.role_name} "${user.username}" logged in.`);
 

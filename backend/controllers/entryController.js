@@ -4,6 +4,45 @@ function tokenize(s) {
   return (s || '').toUpperCase().split(/[\s,.\-]+/).filter(t => t.length >= 2);
 }
 
+/* =========================================================
+   AUTO VISITOR PASS
+   - Max 100 passes per pool
+   - Separate pools: Visitor (V-001..V-100) and Delivery (D-001..D-100)
+   - Assign LOWEST available number, gap-fill first
+   - Numbers are reused based on ACTIVE status (NOT a daily reset),
+     so an overnight visitor keeps their pass until they depart.
+   ========================================================= */
+const MAX_PASS = 100;
+
+function passPrefix(kind) {
+  return (kind === 'Delivery') ? 'D-' : 'V-';
+}
+
+function formatPass(kind, num) {
+  return `${passPrefix(kind)}${String(num).padStart(3, '0')}`;
+}
+
+// Return `count` lowest-available pass numbers (integers) for a pool.
+// Uses the connection inside the open transaction so concurrent entries stay consistent.
+async function getFreePasses(conn, kind, count) {
+  const prefix = passPrefix(kind);
+  const [rows] = await conn.query(
+    `SELECT pass_number FROM VisitorTransactions
+     WHERE status = 'Active' AND pass_number LIKE ?`,
+    [`${prefix}%`]
+  );
+  const used = new Set();
+  for (const r of rows) {
+    const n = parseInt(String(r.pass_number).replace(prefix, ''), 10);
+    if (!isNaN(n)) used.add(n);
+  }
+  const free = [];
+  for (let n = 1; n <= MAX_PASS && free.length < count; n++) {
+    if (!used.has(n)) free.push(n);
+  }
+  return free;
+}
+
 // GET /api/entry/match?name=  (Guard)
 async function matchVisitor(req, res) {
   try {
@@ -64,9 +103,34 @@ async function createGroupEntry(req, res) {
       arrivalId = arr.insertId;
     }
 
+    // ---- AUTO-ASSIGN passes per pool (Visitor / Delivery), gap-fill, cap 100 ----
+    const kindOf = (v) => (v.visitorType === 'Delivery' ? 'Delivery' : 'Visitor');
+    const needV = visitors.filter((v) => kindOf(v) === 'Visitor').length;
+    const needD = visitors.filter((v) => kindOf(v) === 'Delivery').length;
+
+    const freeV = needV ? await getFreePasses(conn, 'Visitor', needV) : [];
+    const freeD = needD ? await getFreePasses(conn, 'Delivery', needD) : [];
+
+    if (freeV.length < needV || freeD.length < needD) {
+      await conn.rollback();
+      const which = freeV.length < needV ? 'Visitor' : 'Delivery';
+      return res.status(409).json({
+        message: `No visitor passes available. All ${MAX_PASS} ${which} passes are currently in use.`,
+      });
+    }
+
+    let vi = 0, di = 0;
+    const assign = (v) => {
+      const kind = kindOf(v);
+      const num = kind === 'Delivery' ? freeD[di++] : freeV[vi++];
+      return formatPass(kind, num);
+    };
+
     const created = [];
+    const assignedPasses = [];
     const touchedRegs = new Set();
     for (const v of visitors) {
+      const passNumber = assign(v); // AUTO-generated, ignore any guard-typed value
       const [tx] = await conn.query(
         `INSERT INTO VisitorTransactions
           (resident_id, guard_id, gate_id, registration_id, arrival_id, visitor_name,
@@ -74,9 +138,10 @@ async function createGroupEntry(req, res) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [v.residentId, guardId, gateId, v.registrationId || null, arrivalId,
          v.visitorName, v.visitorType || 'Visitor', v.purpose || null,
-         v.plateNumber || null, v.passNumber || null, v.status || 'Active']
+         v.plateNumber || null, passNumber, v.status || 'Active']
       );
       created.push(tx.insertId);
+      assignedPasses.push({ transactionId: tx.insertId, visitorName: v.visitorName, passNumber });
       if (v.registrationId) touchedRegs.add(v.registrationId);
     }
 
@@ -87,7 +152,7 @@ async function createGroupEntry(req, res) {
     }
 
     await conn.commit();
-    res.status(201).json({ message: 'Entry recorded.', arrivalId, count: created.length });
+    res.status(201).json({ message: 'Entry recorded.', arrivalId, count: created.length, passes: assignedPasses });
   } catch (err) {
     await conn.rollback();
     res.status(500).json({ message: 'Error recording entry.', error: err.message });
@@ -123,6 +188,7 @@ async function getHistory(req, res) {
     const [txRows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
+              t.exit_note, t.exit_additional_note,
               res.full_name AS resident_name, res.unit_address, vr.registration_type
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
@@ -142,6 +208,8 @@ async function getHistory(req, res) {
       exit_time: t.exit_time,
       status: 'Departed',
       registration_id: t.registration_id,
+      exit_note: t.exit_note,
+      exit_additional_note: t.exit_additional_note,
       resident_name: t.resident_name,
       unit_address: t.unit_address,
       registration_type: t.registration_type,
@@ -169,6 +237,8 @@ async function getHistory(req, res) {
       exit_time: null,
       status: 'Expired',
       registration_id: r.registration_id,
+      exit_note: null,
+      exit_additional_note: null,
       resident_name: r.resident_name,
       unit_address: r.unit_address,
       registration_type: r.registration_type,
@@ -186,6 +256,7 @@ async function getAllLogs(req, res) {
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
+              t.exit_note, t.exit_additional_note,
               res.full_name AS resident_name, res.unit_address,
               vr.registration_type, g.full_name AS guard_name
        FROM VisitorTransactions t
@@ -321,8 +392,6 @@ async function getCompanions(req, res) {
 }
 
 // GET /api/entry/schedule  (Guard)
-// Ipinapakita: Active registrations + Expected na HINDI pa lipas (walang expired).
-// Kasama ang today's Completed para makita ang LINKED/BATCH departures.
 async function getSchedule(req, res) {
   try {
     const [regs] = await pool.query(
@@ -343,7 +412,7 @@ async function getSchedule(req, res) {
     for (const r of regs) {
       const [details] = await pool.query(`SELECT visitor_name FROM VisitorRegistrationDetails WHERE registration_id = ?`, [r.registration_id]);
       const [txs] = await pool.query(
-        `SELECT visitor_name, status, entry_time, exit_time, arrival_id, transaction_id
+        `SELECT visitor_name, status, entry_time, exit_time, arrival_id, transaction_id, pass_number
          FROM VisitorTransactions WHERE registration_id = ?`, [r.registration_id]
       );
       const txByName = {};
@@ -351,13 +420,14 @@ async function getSchedule(req, res) {
 
       const visitors = details.map((d) => {
         const t = txByName[(d.visitor_name || '').toUpperCase()];
-        let status = 'EXPECTED', timeIn = null, timeOut = null, arrivalId = null, transactionId = null;
+        let status = 'EXPECTED', timeIn = null, timeOut = null, arrivalId = null, transactionId = null, passNumber = null;
         if (t) {
           transactionId = t.transaction_id; arrivalId = t.arrival_id; timeIn = t.entry_time; timeOut = t.exit_time;
+          passNumber = t.pass_number;
           if (t.status === 'Active') status = 'ACTIVE';
           else if (t.status === 'Completed') status = 'DEPARTED';
         }
-        return { name: d.visitor_name, status, timeIn, timeOut, arrivalId, transactionId };
+        return { name: d.visitor_name, status, timeIn, timeOut, arrivalId, transactionId, passNumber };
       });
 
       result.push({
@@ -373,10 +443,12 @@ async function getSchedule(req, res) {
 }
 
 // POST /api/entry/:id/exit  (Guard)
+// Optional exit note: exitNote (one of the 4 choices) + exitAdditionalNote (free text). Both optional.
 async function recordExit(req, res) {
   try {
     const { id } = req.params;
     const exitGuardId = req.user.guardId;
+    const { exitNote, exitAdditionalNote } = req.body || {};
 
     const [rows] = await pool.query(
       `SELECT transaction_id, registration_id FROM VisitorTransactions WHERE transaction_id = ? AND status = 'Active'`, [id]
@@ -385,8 +457,11 @@ async function recordExit(req, res) {
     const regId = rows[0].registration_id;
 
     await pool.query(
-      `UPDATE VisitorTransactions SET status = 'Completed', exit_time = NOW(), exit_guard_id = ? WHERE transaction_id = ?`,
-      [exitGuardId, id]
+      `UPDATE VisitorTransactions
+       SET status = 'Completed', exit_time = NOW(), exit_guard_id = ?,
+           exit_note = ?, exit_additional_note = ?
+       WHERE transaction_id = ?`,
+      [exitGuardId, exitNote || null, exitAdditionalNote || null, id]
     );
 
     if (regId) {
