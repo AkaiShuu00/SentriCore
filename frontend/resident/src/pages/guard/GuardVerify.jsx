@@ -203,22 +203,38 @@ export default function GuardVerify() {
 
   // ── Save ENTRY sa DATABASE (bawat companion may sariling resident/registration) ──
   const saveArrival = async () => {
-    const mk = (name, resId, regId) => ({
+    // typeOverride: per-row visitor type (Visitor / Driver / Delivery)
+    const mk = (name, resId, regId, typeOverride) => ({
       residentId: resId || null,
       registrationId: regId || null,
       visitorName: name,
-      visitorType: entryInfo.driver ? 'Driver' : (entryInfo.category === 'DELIVERY' ? 'Delivery' : 'Visitor'),
+      visitorType: typeOverride || 'Visitor',
       purpose: entryInfo.purpose || null,
       plateNumber: plate || null,
       passNumber: entryInfo.passId || null,
       status: 'Active',
     });
 
+    // Type ng driver: Delivery kung delivery flow; Driver kung pickup/drop-off;
+    // Visitor kung personal visit (ang bisita mismo ang nag-drive).
+    const driverType = entryInfo.visitorType || (entryInfo.category === 'DELIVERY' ? 'Delivery' : 'Driver');
+
     const visitors = [];
-    if (entryInfo.visitor) visitors.push(mk(entryInfo.visitor, entryInfo.residentId, entryInfo.registrationId));
-    else if (entryInfo.driver) visitors.push(mk(entryInfo.driver, entryInfo.residentId, entryInfo.registrationId));
+    // 1) DRIVER (kung may sasakyan) — laging itala kung sino ang driver
+    if (entryInfo.driver) {
+      visitors.push(mk(entryInfo.driver, entryInfo.residentId, entryInfo.registrationId, driverType));
+    }
+    // 2) PANGUNAHING BISITA (walk-in, o ang sinundo/ihahatid) — Visitor
+    if (entryInfo.visitor && entryInfo.visitor !== entryInfo.driver) {
+      visitors.push(mk(entryInfo.visitor, entryInfo.residentId, entryInfo.registrationId, 'Visitor'));
+    }
+    // 3) ANGKAS / companions — Visitor
     for (const c of selectedCompanions) {
-      visitors.push(mk(c.name, c.residentId || entryInfo.residentId, c.registrationId || entryInfo.registrationId));
+      visitors.push(mk(c.name, c.residentId || entryInfo.residentId, c.registrationId || entryInfo.registrationId, 'Visitor'));
+    }
+    // Fallback: walang driver at walang visitor pero may scanned name
+    if (visitors.length === 0 && entryInfo.visitor) {
+      visitors.push(mk(entryInfo.visitor, entryInfo.residentId, entryInfo.registrationId, 'Visitor'));
     }
 
     const res = await fetch(`${API}/entry/group`, {
@@ -886,16 +902,21 @@ export default function GuardVerify() {
                                   passId: 'DRV-1001', category: 'DELIVERY', regType: 'Single',
                                   resident: deliveryResident?.name || '', address: deliveryResident?.address || '',
                                   residentId: deliveryResident?.residentId || null, driver: driverName,
-                                  visitor: '', purpose: 'Delivery', expectedDate: '', title: 'DRIVER ENTRY CONFIRMED',
+                                  visitor: '', purpose: 'Delivery', visitorType: 'Delivery',
+                                  expectedDate: '', title: 'DRIVER ENTRY CONFIRMED',
                                 }
                               : {
-                                  passId: 'DRV-1001', category: 'DELIVERY', regType: 'Single',
+                                  passId: 'DRV-1001', category: 'VISITOR', regType: 'Single',
                                   resident: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.resident || '') : (pickupResident?.name || ''),
                                   address: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.address || '') : (pickupResident?.address || ''),
                                   residentId: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.residentId || null) : (pickupResident?.residentId || null),
                                   driver: driverName,
                                   visitor: pickupTarget === 'VISITOR' ? (pickedUpVisitor?.name || scannedName) : '',
-                                  purpose: pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor',
+                                  purpose: drivePurpose === 'PICKUP'
+                                    ? (pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor')
+                                    : (drivePurpose === 'DROP-OFF' ? 'Drop-off' : 'Personal visit'),
+                                  // Personal visit = ang bisita mismo (Visitor); pickup/drop-off = Driver
+                                  visitorType: drivePurpose === 'PERSONAL VISIT' ? 'Visitor' : 'Driver',
                                   expectedDate: '', title: 'DRIVER ENTRY CONFIRMED',
                                 });
                             setSelectedCompanions([]);

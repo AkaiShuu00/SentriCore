@@ -19,6 +19,7 @@ const ocrRoutes = require('./routes/ocr');
 const adminResidentRoutes = require('./routes/adminresidents');
 const adminGuardRoutes = require('./routes/adminguards');
 const adminReportRoutes = require('./routes/adminreport');
+const complaintRoutes = require('./routes/complaints');
 
 // Import db
 require('./config/db');
@@ -45,6 +46,7 @@ app.use('/api/ocr', ocrRoutes);
 app.use('/api/admin', adminResidentRoutes);
 app.use('/api/admin', adminGuardRoutes);
 app.use('/api/admin', adminReportRoutes);
+app.use('/api', complaintRoutes);
 
 // Health check
 app.get('/', (req, res) => {

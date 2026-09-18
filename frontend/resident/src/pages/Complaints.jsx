@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createComplaint } from '../api';
 
 const CATEGORIES = [
   { key: 'visitor', icon: '🧑‍⚠️', label: 'VISITOR COMPLAINT' },
@@ -15,6 +16,9 @@ const TYPES_BY_CATEGORY = {
   hoa: ['Noise complaint', 'Maintenance issue', 'Parking violation', 'Policy concern', 'Others'],
 };
 
+// UI key → DB category (tugma sa admin filter: Visitor/Guard/Security/HOA)
+const CAT_MAP = { visitor: 'Visitor', guard: 'Guard', security: 'Security', hoa: 'HOA' };
+
 export default function Complaints() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(null);
@@ -23,6 +27,7 @@ export default function Complaints() {
   const [types, setTypes] = useState([]);
   const [description, setDescription] = useState('');
   const [blocklist, setBlocklist] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const toggleType = (t) => setTypes(types.includes(t) ? types.filter(x => x !== t) : [...types, t]);
 
@@ -32,9 +37,27 @@ export default function Complaints() {
     setTypes([]);
   };
 
-  function handleConfirm() {
-    alert('Complaint submitted!' + (blocklist ? ' Visitor flagged for admin review.' : ''));
-    navigate('/home');
+  async function handleConfirm() {
+    if (submitting) return;
+    if (!name.trim()) { alert('Please enter the ' + nameLabel.toLowerCase() + '.'); return; }
+    if (types.length === 0) { alert('Please select at least one type of complaint.'); return; }
+    setSubmitting(true);
+    try {
+      await createComplaint({
+        category: CAT_MAP[selected],
+        subject: name.trim(),
+        incidentDate: dateIncident || null,
+        complaintType: types.join(', '),   // pwedeng higit sa isa
+        description: description || null,
+        blocklist: selected === 'visitor' ? blocklist : false,
+      });
+      alert('Complaint submitted!' + (blocklist && selected === 'visitor' ? ' Visitor flagged for admin review.' : ''));
+      navigate('/home');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit complaint. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const categoryTitle = CATEGORIES.find(c => c.key === selected)?.label || '';
@@ -120,9 +143,9 @@ export default function Complaints() {
               </div>
             )}
 
-            <button onClick={handleConfirm}
-                    className="w-full bg-ink text-white font-extrabold text-xl py-4 rounded-full tracking-wide active:scale-95 transition">
-              CONFIRM
+            <button onClick={handleConfirm} disabled={submitting}
+                    className="w-full bg-ink text-white font-extrabold text-xl py-4 rounded-full tracking-wide active:scale-95 transition disabled:opacity-60">
+              {submitting ? 'SUBMITTING…' : 'CONFIRM'}
             </button>
           </div>
         )}

@@ -73,6 +73,12 @@ export const adminMonthlyReport = () => api.get('/admin/reports/monthly');
 export const adminRecurrentReport = () => api.get('/admin/reports/recurrent');
 export const adminAuditReport = (params) => api.get('/admin/reports/audit', { params });
 
+// ── Complaints ──
+export const createComplaint = (data) => api.post('/complaints', data);
+export const getMyComplaints = () => api.get('/complaints/mine');
+export const adminListComplaints = (params) => api.get('/admin/complaints', { params });
+export const adminResolveComplaint = (id, data) => api.put(`/admin/complaints/${id}`, data);
+
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');
