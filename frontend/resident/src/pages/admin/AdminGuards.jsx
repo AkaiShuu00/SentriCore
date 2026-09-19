@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
+import { Search, Settings, X, KeyRound, Trash2 } from 'lucide-react';
 import {
   adminListGuards, adminGuardActivity, adminAddGuard, adminUpdateGuard,
   adminAssignGate, adminResetGuardPassword, adminDeleteGuard,
@@ -61,7 +62,7 @@ export default function AdminGuards() {
         {/* Search + tabs */}
         <div className="flex items-center gap-2 mb-4">
           <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
                    className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
           </div>
@@ -98,7 +99,7 @@ export default function AdminGuards() {
                       <span className="text-[10px] font-bold px-4 py-1.5 rounded-full" style={statusBg[g.status] || statusBg['Off Duty']}>{g.status}</span>
                     </span>
                     <span className="text-center">
-                      <button onClick={() => setEditModal({ ...g })} className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink" title="Edit">⚙️</button>
+                      <button onClick={() => setEditModal({ ...g })} className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink" title="Edit"><Settings size={16} /></button>
                     </span>
                   </div>
                 ))}
@@ -199,7 +200,7 @@ export default function AdminGuards() {
       {assignModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setAssignModal(null)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setAssignModal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink">✕</button>
+            <button onClick={() => setAssignModal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
             <h2 className="text-xl font-extrabold text-ink mb-1">Assign Guard to {assignModal.gate}</h2>
             <p className="text-xs text-ink/60 mb-4">Ang guard ay malilipat sa gate na ito.</p>
             <div className="max-h-64 overflow-y-auto space-y-2">
@@ -224,7 +225,7 @@ export default function AdminGuards() {
       {credModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setCredModal(null)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center text-3xl mx-auto mb-4">🔑</div>
+            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4"><KeyRound size={30} className="text-teal-700" /></div>
             <h2 className="text-lg font-extrabold text-ink mb-1">Guard Login Credentials</h2>
             <p className="text-sm text-ink/60 mb-4">Ibigay ito sa guard. Ipakita lang isang beses.</p>
             <div className="bg-cream rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
@@ -258,7 +259,7 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink">✕</button>
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
         <h2 className="text-xl font-extrabold text-ink mb-1">{title}</h2>
         {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
         {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-bold">{initial.username}</span></p>}
@@ -288,8 +289,8 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
 
         {showManage && (
           <div className="flex gap-2 mt-4">
-            <button onClick={onReset} className="flex-1 py-2.5 rounded-full border border-amber-400 text-amber-700 font-bold text-xs bg-amber-50">🔑 Reset Password</button>
-            <button onClick={onDelete} className="flex-1 py-2.5 rounded-full border border-red-300 text-red-700 font-bold text-xs bg-red-50">🗑 Delete Guard</button>
+            <button onClick={onReset} className="flex-1 py-2.5 rounded-full border border-amber-400 text-amber-700 font-bold text-xs bg-amber-50 flex items-center justify-center gap-1"><KeyRound size={14} /> Reset Password</button>
+            <button onClick={onDelete} className="flex-1 py-2.5 rounded-full border border-red-300 text-red-700 font-bold text-xs bg-red-50 flex items-center justify-center gap-1"><Trash2 size={14} /> Delete Guard</button>
           </div>
         )}
 

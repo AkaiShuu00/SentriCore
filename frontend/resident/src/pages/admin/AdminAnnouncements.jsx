@@ -1,20 +1,21 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import { getAnnouncements, createAnnouncement, deleteAnnouncement } from '../../api';
+import { Flame, Droplet, Zap, Wrench, Users, Megaphone, Search, X } from 'lucide-react';
 
 const statusBg = {
   Active:  { backgroundColor: '#F1D88A', color: '#8a6d12' },
   Expired: { backgroundColor: '#D9D9D9', color: '#555' },
 };
 
-const iconFor = (text) => {
+const IconFor = ({ text, ...p }) => {
   const t = (text || '').toLowerCase();
-  if (t.includes('fire')) return '🔥';
-  if (t.includes('water')) return '💧';
-  if (t.includes('power') || t.includes('electric')) return '⚡';
-  if (t.includes('gate') || t.includes('cctv') || t.includes('maintenance')) return '🛠️';
-  if (t.includes('meeting') || t.includes('homeowner')) return '🧑';
-  return '📢';
+  if (t.includes('fire')) return <Flame {...p} />;
+  if (t.includes('water')) return <Droplet {...p} />;
+  if (t.includes('power') || t.includes('electric')) return <Zap {...p} />;
+  if (t.includes('gate') || t.includes('cctv') || t.includes('maintenance')) return <Wrench {...p} />;
+  if (t.includes('meeting') || t.includes('homeowner')) return <Users {...p} />;
+  return <Megaphone {...p} />;
 };
 
 export default function AdminAnnouncements() {
@@ -101,7 +102,7 @@ export default function AdminAnnouncements() {
       </div>
 
       <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm mb-4 max-w-md">
-        <span className="text-ink/40">🔍</span>
+        <Search size={18} className="text-ink/40" />
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search announcement"
                className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
       </div>
@@ -133,7 +134,7 @@ export default function AdminAnnouncements() {
       {detail && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setDetail(null)}>
           <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setDetail(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink">✕</button>
+            <button onClick={() => setDetail(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
             <h2 className="text-xl font-extrabold text-ink mb-4">Details</h2>
             <div className="flex items-center gap-3 mb-3">
               <span className="text-white text-sm font-bold px-4 py-1.5 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>{detail.category || 'General'}</span>
@@ -167,7 +168,7 @@ export default function AdminAnnouncements() {
           <div className="w-full max-w-2xl rounded-3xl overflow-hidden relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Dark header */}
             <div className="px-8 py-6 text-white relative" style={{ backgroundColor: '#0E2A2E' }}>
-              <button onClick={() => setShowCompose(false)} className="absolute top-5 right-6 w-8 h-8 rounded-full border-2 border-white/60 flex items-center justify-center">✕</button>
+              <button onClick={() => setShowCompose(false)} className="absolute top-5 right-6 w-8 h-8 rounded-full border-2 border-white/60 flex items-center justify-center"><X size={16} /></button>
               <h2 className="text-2xl font-extrabold">What would you like to communicate today?</h2>
               <p className="text-white/60 text-sm mt-1">Fill out the information below to get started.</p>
             </div>
@@ -254,7 +255,7 @@ export default function AdminAnnouncements() {
       {showSuccess && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setShowSuccess(false)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center text-3xl mx-auto mb-4">📣</div>
+            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4"><Megaphone size={30} className="text-teal-700" /></div>
             <h2 className="text-lg font-extrabold text-ink mb-1">Announcement Posted Successfully!</h2>
             <p className="text-sm text-ink/60 mb-6">Your announcement has been published.</p>
             <div className="flex gap-3">

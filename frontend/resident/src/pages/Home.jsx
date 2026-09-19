@@ -2,11 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import AnnouncementsModal from '../components/AnnouncementsModal';
-import { getMyRegistrations, getAnnouncements } from '../api';
+import { getMyRegistrations, getAnnouncements, getNotifications } from '../api';
+import {
+  Bell, User, Users, Megaphone, UserPlus, CalendarClock, Phone,
+  MessageSquareWarning, DoorOpen, CalendarDays, FileText, Search, Inbox, Archive,
+} from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const [unread, setUnread] = useState(0);
   const [search, setSearch] = useState('');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
@@ -30,6 +35,11 @@ export default function Home() {
   const [announcements, setAnnouncements] = useState([]);
   useEffect(() => {
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => setAnnouncements([]));
+  }, []);
+
+  // Unread notifications (para sa bell badge)
+  useEffect(() => {
+    getNotifications().then((res) => setUnread(res.data?.unread || 0)).catch(() => setUnread(0));
   }, []);
 
   const year = today.getFullYear();
@@ -90,11 +100,21 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-cream pb-24 max-w-md mx-auto relative">
       {/* Header */}
-      <header className="bg-ink px-5 py-6 rounded-b-3xl">
+      <header className="bg-ink px-5 py-6 rounded-b-3xl flex items-center justify-between">
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👩</div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><User size={20} className="text-ink" /></div>
           <span className="font-bold text-ink">{user.name || 'Resident'}</span>
         </div>
+        {/* Notifications bell */}
+        <button onClick={() => navigate('/notifications')}
+                className="relative w-11 h-11 rounded-full bg-cream flex items-center justify-center shadow shrink-0">
+          <Bell size={20} className="text-ink" />
+          {unread > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
+        </button>
       </header>
 
       <div className="px-5">
@@ -103,7 +123,7 @@ export default function Home() {
         {announcements.length === 0 ? (
           <div className="rounded-3xl p-6 shadow text-white text-center"
                style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
-            <p className="text-3xl mb-1">📣</p>
+            <div className="flex justify-center mb-2"><Megaphone size={30} className="text-white" /></div>
             <p className="font-semibold text-sm">No announcements yet</p>
             <p className="text-white/70 text-xs mt-1">New community announcements will appear here.</p>
           </div>
@@ -114,7 +134,7 @@ export default function Home() {
             {announcements.slice(0, 4).map((a, i) => (
               <div key={a.announcement_id || i}>
                 <div className="flex items-center gap-4 py-3">
-                  <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center text-xl shrink-0">📢</div>
+                  <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shrink-0"><Megaphone size={20} className="text-teal-700" /></div>
                   <p className="font-semibold text-sm">{a.title}</p>
                 </div>
                 {i < Math.min(announcements.length, 4) - 1 && <div className="border-b border-white/20" />}
@@ -129,14 +149,14 @@ export default function Home() {
           <h3 className="text-lg font-extrabold text-ink mb-4">Quick Actions</h3>
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
-              { icon: '➕', label: 'Pre-Register', bg: 'bg-teal-100', action: () => navigate('/pre-register') },
-              { icon: '📅', label: 'Expected Visitors', bg: 'bg-blue-100', action: () => navigate('/schedule') },
-              { icon: '📞', label: 'Contact Guard', bg: 'bg-purple-100', action: () => navigate('/contact-guard') },
-              { icon: '⚠️', label: 'Complaints', bg: 'bg-yellow-100', action: () => navigate('/complaints') },
+              { Icon: UserPlus, label: 'Pre-Register', bg: 'bg-teal-100', action: () => navigate('/pre-register') },
+              { Icon: CalendarClock, label: 'Expected Visitors', bg: 'bg-blue-100', action: () => navigate('/schedule') },
+              { Icon: Phone, label: 'Contact Guard', bg: 'bg-purple-100', action: () => navigate('/contact-guard') },
+              { Icon: MessageSquareWarning, label: 'Complaints', bg: 'bg-yellow-100', action: () => navigate('/complaints') },
             ].map((q) => (
               <button key={q.label} onClick={q.action} className="flex flex-col items-center">
-                <div className={`w-14 h-14 rounded-2xl ${q.bg} flex items-center justify-center text-2xl mb-1`}>
-                  {q.icon}
+                <div className={`w-14 h-14 rounded-2xl ${q.bg} flex items-center justify-center mb-1`}>
+                  <q.Icon size={24} className="text-ink" />
                 </div>
                 <span className="text-xs font-medium text-ink leading-tight">{q.label}</span>
               </button>
@@ -148,7 +168,7 @@ export default function Home() {
         <button onClick={() => { setRideHailing(null); setShowNotifyGate(true); }}
                 className="w-full mt-4 rounded-3xl p-5 shadow flex items-center gap-4 active:scale-[0.99] transition"
                 style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
-          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shrink-0">🚪</div>
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0"><DoorOpen size={24} className="text-white" /></div>
           <div className="text-left">
             <p className="text-white font-extrabold text-lg leading-tight">Notify Gate</p>
             <p className="text-white/80 text-xs">Tell the guard you're waiting for a pick-up</p>
@@ -160,17 +180,17 @@ export default function Home() {
           <div className="bg-teal-100 rounded-3xl p-4 shadow">
             <p className="text-sm text-ink">Today's Visitors</p>
             <p className="text-4xl font-extrabold text-ink my-2">{todaysVisitorsCount}</p>
-            <div className="w-11 h-11 rounded-2xl bg-ink flex items-center justify-center text-white text-lg">👥</div>
+            <div className="w-11 h-11 rounded-2xl bg-ink flex items-center justify-center text-white"><Users size={20} /></div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F1D88A' }}>
             <p className="text-sm text-ink">Expected Today</p>
             <p className="text-4xl font-extrabold my-2" style={{ color: '#8a6d12' }}>{expectedTodayCount}</p>
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#B8901F' }}>📅</div>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: '#B8901F' }}><CalendarDays size={20} /></div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F3C9C9' }}>
             <p className="text-sm text-ink">Visit History</p>
             <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>{visitHistoryCount}</p>
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#A83232' }}>📄</div>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: '#A83232' }}><FileText size={20} /></div>
           </div>
         </div>
 
@@ -205,7 +225,7 @@ export default function Home() {
 
         {/* Search */}
         <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow mt-4">
-          <span className="text-ink/40">🔍</span>
+          <Search size={18} className="text-ink/40" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
                  placeholder="Search name"
                  className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
@@ -219,7 +239,7 @@ export default function Home() {
             <div className="text-center py-8 text-red-600 text-sm">{error}</div>
           ) : filteredSchedule.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-4xl mb-2">📭</p>
+              <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
               <p className="text-ink/60 font-semibold">No visitors on this day</p>
               <p className="text-ink/40 text-sm mt-1">Pre-register a visitor to see them here.</p>
             </div>
@@ -247,7 +267,7 @@ export default function Home() {
         <h3 className="text-xl font-extrabold text-ink mt-8 mb-3">Recent Visit History</h3>
         <div className="bg-white rounded-3xl p-5 shadow">
           <div className="text-center py-6">
-            <p className="text-4xl mb-2">🗂️</p>
+            <div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
             <p className="text-ink/60 font-semibold">No visit history yet</p>
             <p className="text-ink/40 text-sm mt-1">Completed visits will appear here.</p>
           </div>
@@ -262,7 +282,7 @@ export default function Home() {
       {showNotifyGate && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center">
-            <div className="text-5xl mb-3">🚪</div>
+            <div className="flex justify-center mb-3"><DoorOpen size={44} className="text-ink" /></div>
             <h3 className="text-xl font-extrabold text-ink mb-2">Are you waiting for a pick-up?</h3>
             <p className="text-ink/60 text-sm mb-5">
               This will notify the guard that you're waiting at the gate.

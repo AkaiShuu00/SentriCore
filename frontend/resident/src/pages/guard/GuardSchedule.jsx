@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import { getSchedule } from '../../api';
+import { Shield, Search, Users, Pencil, Inbox } from 'lucide-react';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const TABS = ['SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
@@ -150,7 +151,7 @@ export default function GuardSchedule() {
         <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👮</div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
         </div>
       </header>
 
@@ -201,7 +202,7 @@ export default function GuardSchedule() {
         {/* Search + Sort */}
         <div className="flex gap-2 mt-4">
           <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow flex-1">
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
                    placeholder="Search" className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent w-full" />
           </div>
@@ -324,7 +325,7 @@ function GroupCard({ g, label, onOpen }) {
   return (
     <button onClick={onOpen} className="w-full text-left border border-gray-200 rounded-2xl p-4 mb-3 shadow-sm flex items-center gap-3">
       <div className="flex flex-col items-center shrink-0">
-        <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center text-lg">👥</div>
+        <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center"><Users size={20} className="text-ink" /></div>
         <p className="text-lg font-extrabold text-ink mt-1 leading-none">{g.visitors.length}</p>
         <p className="text-[10px] text-ink/60">{label}</p>
       </div>
@@ -335,7 +336,7 @@ function GroupCard({ g, label, onOpen }) {
         <p className="text-xs text-ink/70"><span className="font-bold">Address:</span> {g.address}</p>
         <GroupBadges g={g} />
       </div>
-      <div className="w-9 h-9 rounded-xl bg-ink text-white flex items-center justify-center shrink-0 self-end">✎</div>
+      <div className="w-9 h-9 rounded-xl bg-ink text-white flex items-center justify-center shrink-0 self-end"><Pencil size={16} /></div>
     </button>
   );
 }
@@ -371,7 +372,7 @@ function DetailModal({ group, onClose }) {
         {/* Summary */}
         <div className="flex items-center gap-3 mb-4">
           <div className="flex flex-col items-center shrink-0">
-            <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center text-lg">👥</div>
+            <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center"><Users size={20} className="text-ink" /></div>
             <p className="text-lg font-extrabold text-ink mt-1 leading-none">{group.visitors.length}</p>
             <p className="text-[10px] text-ink/60">{isLinked ? 'Linked' : 'Visitors'}</p>
           </div>
@@ -444,7 +445,7 @@ function DetailModal({ group, onClose }) {
 function EmptyState() {
   return (
     <div className="text-center py-8">
-      <p className="text-4xl mb-2">📭</p>
+      <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
       <p className="text-ink/60 font-semibold">No entries here</p>
       <p className="text-ink/40 text-sm mt-1">Registrations will appear here.</p>
     </div>

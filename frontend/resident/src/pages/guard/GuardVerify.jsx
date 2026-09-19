@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
+import { User, Truck, Camera, Search, RefreshCw } from 'lucide-react';
 
 const teal = '#0F6E6E';
 // Relative na base URL — dumadaan sa ngrok/Vite proxy → backend → OCR.
@@ -18,7 +19,7 @@ function IDCardPlaceholder({ name }) {
         REPUBLIC OF THE PHILIPPINES · NATIONAL ID
       </div>
       <div className="flex gap-3 p-3">
-        <div className="w-14 h-16 rounded bg-gray-200 flex items-center justify-center text-2xl">🧑</div>
+        <div className="w-14 h-16 rounded bg-gray-200 flex items-center justify-center"><User size={26} className="text-gray-400" /></div>
         <div className="flex-1 space-y-1 pt-1">
           <div className="h-2 bg-gray-200 rounded w-3/4" />
           <div className="h-2 bg-gray-200 rounded w-1/2" />
@@ -583,13 +584,13 @@ export default function GuardVerify() {
                 <button onClick={() => setEntryType('VISITOR')}
                         className={`rounded-2xl p-6 flex flex-col items-center gap-3 border-2 ${entryType === 'VISITOR' ? 'border-transparent' : 'border-gray-200'}`}
                         style={entryType === 'VISITOR' ? { backgroundColor: '#CDE7DE' } : {}}>
-                  <span className="text-3xl">🧑</span>
+                  <User size={30} className="text-ink" />
                   <span className="text-xs font-bold text-ink">VISITOR</span>
                 </button>
                 <button onClick={() => setEntryType('DELIVERY')}
                         className={`rounded-2xl p-6 flex flex-col items-center gap-3 border-2 ${entryType === 'DELIVERY' ? 'border-transparent' : 'border-gray-200'}`}
                         style={entryType === 'DELIVERY' ? { backgroundColor: '#CDE7DE' } : {}}>
-                  <span className="text-3xl">🚚</span>
+                  <Truck size={30} className="text-ink" />
                   <span className="text-xs font-bold text-ink">DELIVERY</span>
                 </button>
               </div>
@@ -720,8 +721,8 @@ export default function GuardVerify() {
 
             <div className="flex flex-col items-center gap-2">
               <button onClick={captureFromCamera}
-                      className="px-6 py-3 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#0F6E6E' }}>
-                📸 CAPTURE ID
+                      className="px-6 py-3 rounded-full text-sm font-bold text-white w-52 inline-flex items-center justify-center gap-2" style={{ backgroundColor: '#0F6E6E' }}>
+                <Camera size={16} /> CAPTURE ID
               </button>
 
               {/* Fallback: native camera app / file (gumagana kahit walang camera permission) */}
@@ -812,7 +813,7 @@ export default function GuardVerify() {
             </p>
 
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
-              <span className="text-ink/40">🔍</span>
+              <Search size={18} className="text-ink/40" />
               <input value={activeSearch} onChange={(e) => setActiveSearch(e.target.value)}
                      placeholder="Search visitor name"
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
@@ -847,8 +848,8 @@ export default function GuardVerify() {
 
             <div className="flex flex-col items-center gap-2">
               <button onClick={() => { loadActive(); }}
-                      className="w-60 py-2 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                🔄 REFRESH LIST
+                      className="w-60 py-2 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm inline-flex items-center justify-center gap-2">
+                <RefreshCw size={16} /> REFRESH LIST
               </button>
               <button onClick={() => setStep('scan')}
                       className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
@@ -1015,7 +1016,7 @@ export default function GuardVerify() {
             </p>
 
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
-              <span className="text-ink/40">🔍</span>
+              <Search size={18} className="text-ink/40" />
               <input value={addSearch} onChange={(e) => setAddSearch(e.target.value)}
                      placeholder="Search visitor name"
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
@@ -1087,7 +1088,7 @@ export default function GuardVerify() {
               <h2 className="text-2xl font-extrabold text-ink text-center mb-1">RESIDENT LIST</h2>
               <p className="text-center text-xs text-ink/60 mb-4">Who is being picked up?</p>
               <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
-                <span className="text-ink/40">🔍</span>
+                <Search size={18} className="text-ink/40" />
                 <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
                        placeholder="Search resident name"
                        className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
@@ -1146,7 +1147,7 @@ export default function GuardVerify() {
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">RESIDENT LIST</h2>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
-              <span className="text-ink/40">🔍</span>
+              <Search size={18} className="text-ink/40" />
               <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
                      placeholder="Search resident name"
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
@@ -1193,7 +1194,7 @@ export default function GuardVerify() {
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">ACTIVE VISITORS</h2>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
-              <span className="text-ink/40">🔍</span>
+              <Search size={18} className="text-ink/40" />
               <input value={activeSearch} onChange={(e) => setActiveSearch(e.target.value)}
                      placeholder="Search visitor name"
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
@@ -1246,7 +1247,7 @@ export default function GuardVerify() {
             </div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">RESIDENT LIST</h2>
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-3">
-              <span className="text-ink/40">🔍</span>
+              <Search size={18} className="text-ink/40" />
               <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
                      placeholder="Search resident name or street"
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />

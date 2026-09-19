@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import { getHistory } from '../../api';
+import { Shield, ClipboardList, LogOut, Ban, Search, Download, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
 
@@ -116,7 +117,7 @@ export default function GuardLogs() {
         <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👮</div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
         </div>
       </header>
 
@@ -167,12 +168,12 @@ export default function GuardLogs() {
              style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
           <div className="flex gap-3">
             {[
-              { icon: '📋', val: counts.TOTAL, label: 'TOTAL' },
-              { icon: '🚶', val: counts.DEPARTED, label: 'DEPARTED' },
-              { icon: '⛔', val: counts.EXPIRED, label: 'EXPIRED' },
+              { Icon: ClipboardList, val: counts.TOTAL, label: 'TOTAL' },
+              { Icon: LogOut, val: counts.DEPARTED, label: 'DEPARTED' },
+              { Icon: Ban, val: counts.EXPIRED, label: 'EXPIRED' },
             ].map((s) => (
               <div key={s.label} className="flex-1 rounded-2xl p-4" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
-                <div className="w-11 h-11 rounded-xl bg-cream flex items-center justify-center text-xl mb-3">{s.icon}</div>
+                <div className="w-11 h-11 rounded-xl bg-cream flex items-center justify-center mb-3"><s.Icon size={20} className="text-ink" /></div>
                 <p className="text-3xl font-extrabold text-white">{s.val}</p>
                 <p className="text-[11px] font-bold text-white/90">{s.label}</p>
               </div>
@@ -183,7 +184,7 @@ export default function GuardLogs() {
         {/* Search + Sort + Export */}
         <div className="flex gap-2 mt-4">
           <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow flex-1 min-w-0">
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
                    placeholder="Search" className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent w-full" />
           </div>
@@ -206,7 +207,7 @@ export default function GuardLogs() {
           </div>
           <button onClick={exportCSV}
                   className="flex items-center gap-1 bg-white rounded-full px-4 py-3 shadow text-sm font-semibold text-ink whitespace-nowrap shrink-0">
-            Export ⬇
+            Export <Download size={16} />
           </button>
         </div>
 
@@ -225,7 +226,7 @@ export default function GuardLogs() {
               <div className="text-center py-10 text-ink/50">Loading history…</div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-10">
-                <p className="text-4xl mb-2">🗂️</p>
+                <div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
                 <p className="text-ink/60 font-semibold">No records found</p>
                 <p className="text-ink/40 text-sm mt-1">Completed visits will appear here.</p>
               </div>

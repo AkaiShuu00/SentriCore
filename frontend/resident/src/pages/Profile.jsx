@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { getMyProfile } from '../api';
+import { Home as HomeIcon, Phone, Mail, ShieldCheck, Ban, HelpCircle, MessageSquare, FileText, User } from 'lucide-react';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -27,18 +28,17 @@ export default function Profile() {
   const contact = profile?.contact_number || profile?.contact || profile?.phone || '—';
 
   const personalInfo = [
-    { icon: '🏠', bg: 'bg-teal-100', main: address, sub: 'Unit address' },
-    { icon: '📞', bg: 'bg-yellow-100', main: contact, sub: 'Contact number' },
-    { icon: '✉️', bg: 'bg-red-100', main: email, sub: 'Email address' },
+    { Icon: HomeIcon, bg: 'bg-teal-100', main: address, sub: 'Unit address' },
+    { Icon: Phone, bg: 'bg-yellow-100', main: contact, sub: 'Contact number' },
+    { Icon: Mail, bg: 'bg-red-100', main: email, sub: 'Email address' },
   ];
 
   const settings = [
-    { icon: '🛡️', label: 'Password and Security', action: () => navigate('/password-security') },
-    { icon: '🔔', label: 'Notifications', action: () => navigate('/notifications') },
-    { icon: '🚫', label: 'Blocklisted', action: () => navigate('/blocklist') },
-    { icon: '❓', label: 'Help Center', action: () => navigate('/help-center') },
-    { icon: '💬', label: 'FAQs', action: () => navigate('/faqs') },
-    { icon: '🧾', label: 'Terms and Permissions', action: () => navigate('/terms') },
+    { Icon: ShieldCheck, label: 'Password and Security', action: () => navigate('/password-security') },
+    { Icon: Ban, label: 'Blocklisted', action: () => navigate('/blocklist') },
+    { Icon: HelpCircle, label: 'Help Center', action: () => navigate('/help-center') },
+    { Icon: MessageSquare, label: 'FAQs', action: () => navigate('/faqs') },
+    { Icon: FileText, label: 'Terms and Permissions', action: () => navigate('/terms') },
   ];
 
   return (
@@ -61,8 +61,8 @@ export default function Profile() {
           <div className="h-24" style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }} />
           <div className="px-5 pb-5 -mt-12">
             <div className="flex items-end gap-4">
-              <div className="w-24 h-24 rounded-full bg-yellow-300 border-4 border-white flex items-center justify-center text-4xl shrink-0">
-                👩
+              <div className="w-24 h-24 rounded-full bg-yellow-300 border-4 border-white flex items-center justify-center shrink-0">
+                <User size={44} className="text-ink" />
               </div>
               <h2 className="text-2xl font-extrabold text-white mb-14">{name.toUpperCase()}</h2>
             </div>
@@ -76,7 +76,7 @@ export default function Profile() {
           {personalInfo.map((p, i) => (
             <div key={i}>
               <div className="flex items-center gap-4 py-3">
-                <div className={`w-12 h-12 rounded-2xl ${p.bg} flex items-center justify-center text-xl shrink-0`}>{p.icon}</div>
+                <div className={`w-12 h-12 rounded-2xl ${p.bg} flex items-center justify-center shrink-0`}><p.Icon size={20} className="text-ink" /></div>
                 <div>
                   <p className="font-bold text-ink">{p.main}</p>
                   <p className="text-sm text-ink/60">{p.sub}</p>
@@ -93,7 +93,7 @@ export default function Profile() {
           {settings.map((s, i) => (
             <div key={i}>
               <button onClick={s.action} className="w-full flex items-center gap-4 px-3 py-4">
-                <span className="text-xl w-8 text-center shrink-0">{s.icon}</span>
+                <span className="w-8 flex justify-center shrink-0"><s.Icon size={20} className="text-ink" /></span>
                 <span className="flex-1 text-left font-medium text-ink">{s.label}</span>
                 <span className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-ink">›</span>
               </button>

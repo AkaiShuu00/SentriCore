@@ -2,28 +2,31 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import { getAdminSummary, getAnnouncements } from '../../api';
+import {
+  MapPin, LogIn, CalendarDays, ShieldCheck, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare,
+} from 'lucide-react';
 
 // ── Sample data (iko-connect sa DB after) ──
 // Stat card styling (value + sub galing DB)
 const STAT_META = [
-  { key: 'activeVisitors', label: 'Active Visitors', sub: 'Inside Subdivision', icon: '📍',
+  { key: 'activeVisitors', label: 'Active Visitors', sub: 'Inside Subdivision', Icon: MapPin,
     gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
-  { key: 'todayEntries', label: "Today's Entries", sub: 'Entries logged today', icon: '⤵',
+  { key: 'todayEntries', label: "Today's Entries", sub: 'Entries logged today', Icon: LogIn,
     gradient: 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)', dark: true },
-  { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', icon: '📅',
+  { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', Icon: CalendarDays,
     gradient: 'linear-gradient(135deg,#3FA89A 0%,#2E8C7E 100%)', dark: true },
-  { key: 'activeGates', label: 'Active Gates', sub: 'Gates Currently Monitoring', icon: '🛡️',
+  { key: 'activeGates', label: 'Active Gates', sub: 'Gates Currently Monitoring', Icon: ShieldCheck,
     gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
 ];
 
 const annIcon = (text) => {
   const t = (text || '').toLowerCase();
-  if (t.includes('fire')) return { icon: '🔥', bg: '#F6E7C9' };
-  if (t.includes('water')) return { icon: '💧', bg: '#CDEBE3' };
-  if (t.includes('power')) return { icon: '⚡', bg: '#F6E7C9' };
-  if (t.includes('gate') || t.includes('maintenance')) return { icon: '🛠️', bg: '#CDEBE3' };
-  if (t.includes('meeting') || t.includes('homeowner')) return { icon: '🧑', bg: '#F3D9D9' };
-  return { icon: '📢', bg: '#E8F1EE' };
+  if (t.includes('fire')) return { Icon: Flame, bg: '#F6E7C9' };
+  if (t.includes('water')) return { Icon: Droplet, bg: '#CDEBE3' };
+  if (t.includes('power')) return { Icon: Zap, bg: '#F6E7C9' };
+  if (t.includes('gate') || t.includes('maintenance')) return { Icon: Wrench, bg: '#CDEBE3' };
+  if (t.includes('meeting') || t.includes('homeowner')) return { Icon: Users, bg: '#F3D9D9' };
+  return { Icon: Megaphone, bg: '#E8F1EE' };
 };
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -97,9 +100,9 @@ export default function AdminDashboard() {
               <div key={s.key} className="rounded-3xl p-5 shadow-md relative overflow-hidden"
                    style={{ background: s.gradient, minHeight: 130 }}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0
                                   ${s.dark ? 'bg-white/20 text-white' : 'bg-white text-ink'}`}>
-                    {s.icon}
+                    <s.Icon size={22} />
                   </div>
                   <span className="ml-auto text-[11px] font-bold px-3 py-1 rounded-lg bg-ink/80 text-white">{s.label}</span>
                 </div>
@@ -170,7 +173,7 @@ export default function AdminDashboard() {
             <div className="flex gap-2 mb-4">
               <button onClick={() => navigate('/admin-announcements')}
                       className="flex-1 flex items-center gap-2 bg-ink text-white rounded-xl px-4 py-3 text-sm font-semibold">
-                <span>💬</span> Share an important community update?
+                <MessageSquare size={18} className="inline" /> Share an important community update?
               </button>
               <button onClick={() => navigate('/admin-announcements')}
                       className="bg-white border border-gray-200 rounded-xl px-4 text-xs font-bold text-ink flex items-center gap-1">
@@ -186,7 +189,7 @@ export default function AdminDashboard() {
                 const ic = annIcon(a.title + ' ' + (a.content || ''));
                 return (
                   <div key={a.announcement_id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl px-3 py-3 shadow-sm">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg shrink-0" style={{ backgroundColor: ic.bg }}>{ic.icon}</div>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: ic.bg }}><ic.Icon size={18} className="text-ink" /></div>
                     <p className="flex-1 text-sm text-ink/80 leading-snug">{a.title}</p>
                   </div>
                 );

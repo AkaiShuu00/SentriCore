@@ -3,20 +3,21 @@
 // at active window). Pag-pindot sa isang item → detail pop-up na malinaw.
 import { useState, useEffect } from 'react';
 import { getAnnouncements } from '../api';
+import { Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone } from 'lucide-react';
 
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—';
 
-// Icon base sa category/priority (fallback 📢)
-const iconFor = (a) => {
+// Icon component base sa category/title (fallback Megaphone)
+const IconFor = ({ a, ...p }) => {
   const t = `${a.category || ''} ${a.title || ''}`.toLowerCase();
-  if (t.includes('fire')) return '🔥';
-  if (t.includes('water')) return '💧';
-  if (t.includes('power') || t.includes('electric')) return '⚡';
-  if (t.includes('gate') || t.includes('security')) return '🛑';
-  if (t.includes('meeting') || t.includes('event') || t.includes('election')) return '🧑';
-  if (t.includes('maintenance')) return '🔧';
-  return '📢';
+  if (t.includes('fire')) return <Flame {...p} />;
+  if (t.includes('water')) return <Droplet {...p} />;
+  if (t.includes('power') || t.includes('electric')) return <Zap {...p} />;
+  if (t.includes('gate') || t.includes('security')) return <ShieldAlert {...p} />;
+  if (t.includes('meeting') || t.includes('event') || t.includes('election')) return <Users {...p} />;
+  if (t.includes('maintenance')) return <Wrench {...p} />;
+  return <Megaphone {...p} />;
 };
 
 const priorityStyle = (p) => {
@@ -65,8 +66,8 @@ export default function AnnouncementsModal({ items = null, onClose }) {
                   onClick={() => setDetail(a)}
                   className="w-full text-left flex items-center gap-4 py-4 active:scale-[0.99] transition"
                 >
-                  <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center text-xl shrink-0 shadow-sm">
-                    {iconFor(a)}
+                  <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                    <IconFor a={a} size={20} className="text-teal-700" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-ink truncate">{a.title}</p>
@@ -103,8 +104,8 @@ export default function AnnouncementsModal({ items = null, onClose }) {
                     className="absolute top-4 right-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-ink font-bold">✕</button>
 
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-cream flex items-center justify-center text-2xl shadow-sm"
-                   style={{ backgroundColor: '#F5F2E9' }}>{iconFor(detail)}</div>
+              <div className="w-12 h-12 rounded-full bg-cream flex items-center justify-center shadow-sm"
+                   style={{ backgroundColor: '#F5F2E9' }}><IconFor a={detail} size={22} className="text-teal-700" /></div>
               <div className="flex-1">
                 <h3 className="text-lg font-extrabold text-ink leading-tight">{detail.title}</h3>
                 <div className="flex gap-2 mt-1">

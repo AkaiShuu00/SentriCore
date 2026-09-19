@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../api';
+import { Bell, Megaphone, Ban } from 'lucide-react';
 
 const ink = '#112D31';
-const iconFor = (t) => t === 'blocklist' ? '🚫' : t === 'complaint' ? '📣' : '🔔';
+const IconFor = ({ type, ...p }) => type === 'blocklist' ? <Ban {...p} /> : type === 'complaint' ? <Megaphone {...p} /> : <Bell {...p} />;
 const fmt = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
 export default function Notifications() {
@@ -41,7 +42,7 @@ export default function Notifications() {
           <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
         ) : list.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 shadow-sm text-center">
-            <p className="text-3xl mb-1">🔔</p>
+            <div className="flex justify-center mb-2"><Bell size={30} className="text-ink/40" /></div>
             <p className="font-semibold text-ink text-sm">No notifications yet</p>
             <p className="text-ink/60 text-xs mt-1">Updates about your complaints and account will appear here.</p>
           </div>
@@ -51,7 +52,7 @@ export default function Notifications() {
               <button key={n.notification_id} onClick={() => open(n)}
                       className="w-full text-left rounded-2xl p-4 shadow-sm border flex gap-3"
                       style={{ backgroundColor: n.is_read ? '#fff' : '#EAF4F1', borderColor: n.is_read ? '#eee' : '#0F6E6E33' }}>
-                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-lg shrink-0 shadow-sm">{iconFor(n.type)}</div>
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm"><IconFor type={n.type} size={18} className="text-ink" /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-ink text-sm">{n.title}</p>

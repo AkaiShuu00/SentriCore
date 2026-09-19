@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyBlocklist } from '../api';
+import { Ban } from 'lucide-react';
 
 const ink = '#112D31';
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -37,7 +38,7 @@ export default function Blocklist() {
           <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
         ) : list.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 shadow-sm text-center">
-            <p className="text-3xl mb-1">🚫</p>
+            <div className="flex justify-center mb-2"><Ban size={30} className="text-ink/40" /></div>
             <p className="font-semibold text-ink text-sm">Walang naka-blocklist</p>
             <p className="text-ink/60 text-xs mt-1">Ang mga aprubadong blocklist request mo ay lalabas dito.</p>
           </div>
@@ -45,7 +46,7 @@ export default function Blocklist() {
           <div className="space-y-2">
             {list.map((b) => (
               <div key={b.block_id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl shrink-0" style={{ backgroundColor: '#F3C9C9' }}>🚫</div>
+                <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#F3C9C9' }}><Ban size={20} style={{ color: '#9b2c2c' }} /></div>
                 <div className="flex-1">
                   <p className="font-bold text-ink text-sm">{b.person_name}</p>
                   {b.reason && <p className="text-xs text-ink/60">{b.reason}</p>}

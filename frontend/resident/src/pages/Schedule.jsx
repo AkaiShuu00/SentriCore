@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import { getMyRegistrations } from '../api';
+import { User, Search, Inbox } from 'lucide-react';
 
 const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED'];
 
 export default function Schedule() {
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const today = new Date();
@@ -88,7 +89,7 @@ export default function Schedule() {
       {/* Header */}
       <header className="bg-ink px-5 py-6">
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👩</div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><User size={20} className="text-ink" /></div>
           <span className="font-bold text-ink">{user.name || 'Resident'}</span>
         </div>
       </header>
@@ -138,7 +139,7 @@ export default function Schedule() {
 
         {/* Search */}
         <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow mt-4">
-          <span className="text-ink/40">🔍</span>
+          <Search size={18} className="text-ink/40" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
                  placeholder="Search name"
                  className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
@@ -166,7 +167,7 @@ export default function Schedule() {
             <div className="text-center py-10 text-red-600 text-sm">{error}</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-4xl mb-2">📭</p>
+              <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
               <p className="text-ink/60 font-semibold">No visitors on this day</p>
               <p className="text-ink/40 text-sm mt-1">Pick another date or pre-register a visitor.</p>
             </div>

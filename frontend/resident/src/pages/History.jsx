@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
+import { getMyRegistrations } from '../api';
+import { User, Search, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'VISITORS', 'DELIVERIES'];
 
@@ -11,10 +13,44 @@ export default function History() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  // ── Visit history = completed visits (DEPARTED/EXPIRED) ──
-  // Wala pang source nito hangga't hindi konektado sa backend (nangyayari lang
-  // ito kapag na-check-in/out na ng guard). Empty muna — iko-connect after.
-  const records = [];
+  // ── Visit history = completed visits (DEPARTED/EXPIRED) mula DB ──
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getMyRegistrations()
+      .then((res) => {
+        const regs = res.data || [];
+        const rows = [];
+        regs.forEach((r) => {
+          const isDelivery = r.registration_type === 'Delivery';
+          const dateISO = (r.expected_date || '').slice(0, 10);
+          const vlist = (r.visitors && r.visitors.length)
+            ? r.visitors
+            : [{ name: isDelivery ? 'Delivery Rider' : '—', status: r.status }];
+          vlist.forEach((v) => {
+            const st = (typeof v === 'string' ? (r.status || '') : (v.status || '')).toUpperCase();
+            if (st !== 'DEPARTED' && st !== 'EXPIRED') return;  // history = departed/expired lang
+            rows.push({
+              dateISO,
+              date: dateISO
+                ? new Date(dateISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                : '—',
+              time: '',
+              name: typeof v === 'string' ? v : v.name,
+              kind: isDelivery ? 'Delivery' : 'Visitor',
+              plate: (typeof v === 'string' ? '' : (v.plate_number || '')),
+              status: st,
+              entryId: (typeof v === 'string' ? '' : (v.pass_number || '')),
+              cat: isDelivery ? 'DELIVERIES' : 'VISITORS',
+            });
+          });
+        });
+        setRecords(rows);
+      })
+      .catch(() => setRecords([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const counts = {
     TOTAL: records.length,
@@ -37,18 +73,12 @@ export default function History() {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Convert a record's "June 2, 2026" to a Date for comparison
-  const recordDate = (r) => {
-    const d = new Date(r.date);
-    return isNaN(d) ? null : d;
-  };
-
   const filtered = records
     .filter(r => filter === 'ALL' || r.cat === filter)
     .filter(r => r.name.toLowerCase().includes(search.toLowerCase()))
     .filter(r => {
       if (!fromDate || !toDate) return true;
-      const rd = recordDate(r);
+      const rd = r.dateISO ? new Date(r.dateISO + 'T00:00:00') : null;
       if (!rd) return true;
       const from = new Date(fromDate + 'T00:00:00');
       const to = new Date(toDate + 'T23:59:59');
@@ -60,7 +90,7 @@ export default function History() {
       {/* Header */}
       <header className="bg-ink px-5 py-6">
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👩</div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><User size={20} className="text-ink" /></div>
           <span className="font-bold text-ink">{user.name || 'Resident'}</span>
         </div>
       </header>
@@ -88,7 +118,7 @@ export default function History() {
         {/* Search + date range */}
         <div className="flex gap-2 mt-4">
           <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow flex-1">
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
                    placeholder="Search name"
                    className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent w-full" />
@@ -145,9 +175,11 @@ export default function History() {
 
           {/* Rows */}
           <div className="max-h-[50vh] overflow-y-auto">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-10 text-ink/50">Loading history…</div>
+            ) : filtered.length === 0 ? (
               <div className="text-center py-10 px-4">
-                <p className="text-4xl mb-2">🗂️</p>
+                <div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
                 <p className="text-ink/60 font-semibold">No visit history yet</p>
                 <p className="text-ink/40 text-sm mt-1">
                   Completed visits will appear here once your visitors have checked in and out.
@@ -159,13 +191,13 @@ export default function History() {
                   {/* Date & Time */}
                   <div className="text-[10px] text-ink">
                     <p className="font-bold">{r.date}</p>
-                    <p className="text-ink/60 whitespace-pre-line">{r.time}</p>
+                    {r.time && <p className="text-ink/60 whitespace-pre-line">{r.time}</p>}
                   </div>
                   {/* Details */}
                   <div className="text-[10px] text-ink">
                     <p className="font-bold">{r.name}</p>
-                    <p className="text-ink/60">{r.vehicle} | {r.kind}</p>
-                    <p className="text-ink/60">Plate No. {r.plate}</p>
+                    <p className="text-ink/60">{r.kind}</p>
+                    {r.plate && <p className="text-ink/60">Plate No. {r.plate}</p>}
                   </div>
                   {/* Status */}
                   <div className="text-center">
@@ -174,7 +206,7 @@ export default function History() {
                     </span>
                   </div>
                   {/* Entry ID */}
-                  <div className="text-[10px] font-bold text-ink text-center">{r.entryId}</div>
+                  <div className="text-[10px] font-bold text-ink text-center">{r.entryId || '—'}</div>
                 </div>
               ))
             )}

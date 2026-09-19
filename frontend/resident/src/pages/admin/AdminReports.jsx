@@ -4,12 +4,13 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import { adminMonthlyReport, adminListComplaints, adminResolveComplaint, adminAuditReport } from '../../api';
+import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X } from 'lucide-react';
 
 const REPORT_CARDS = [
-  { key: 'monthly',    title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days.', icon: '📈' },
-  { key: 'complaints', title: 'Complaints',          desc: 'Resident-filed complaints & resolutions.', icon: '📣' },
-  { key: 'incident',   title: 'Incident Monitoring', desc: 'Rejected entries, unresolved exits.', icon: '🛡️' },
-  { key: 'audit',      title: 'Audit Trails',        desc: 'Track all system actions.', icon: '🕐' },
+  { key: 'monthly',    title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days.', Icon: TrendingUp },
+  { key: 'complaints', title: 'Complaints',          desc: 'Resident-filed complaints & resolutions.', Icon: Megaphone },
+  { key: 'incident',   title: 'Incident Monitoring', desc: 'Rejected entries, unresolved exits.', Icon: ShieldAlert },
+  { key: 'audit',      title: 'Audit Trails',        desc: 'Track all system actions.', Icon: Clock },
 ];
 
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '—';
@@ -147,8 +148,8 @@ export default function AdminReports() {
         <p className="text-sm text-ink/60">Generated reports and long-term analytics.</p>
       </div>
       <div className="flex gap-2">
-        <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink">📄 Export PDF</button>
-        <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>📊 Export Excel</button>
+        <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink"><FileDown size={16} /> Export PDF</button>
+        <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
       </div>
     </div>
   );
@@ -161,7 +162,7 @@ export default function AdminReports() {
       {view === 'overview' && (
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-5 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
           </div>
 
@@ -199,7 +200,7 @@ export default function AdminReports() {
                   <button onClick={() => setView(c.key)}
                           className="text-ink text-sm font-bold px-8 py-2 rounded-full bg-white border border-gray-200 shadow-sm">View</button>
                 </div>
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center text-2xl shadow-sm">{c.icon}</div>
+                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-sm"><c.Icon size={26} className="text-teal-700" /></div>
               </div>
             ))}
           </div>
@@ -210,7 +211,7 @@ export default function AdminReports() {
       {view === 'monthly' && (
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
           </div>
 
@@ -313,7 +314,7 @@ export default function AdminReports() {
                 {statuses.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Status' : s}</option>)}
               </select>
               <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 flex-1 min-w-[180px]" style={{ backgroundColor: '#F5F2E9' }}>
-                <span className="text-ink/40">🔍</span>
+                <Search size={18} className="text-ink/40" />
                 <input value={compSearch} onChange={(e) => setCompSearch(e.target.value)}
                        placeholder="Search subject, type, resident..." className="flex-1 outline-none text-sm bg-transparent" />
               </div>
@@ -457,7 +458,7 @@ export default function AdminReports() {
 
             {/* Search */}
             <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
-              <span className="text-ink/40">🔍</span>
+              <Search size={18} className="text-ink/40" />
               <input value={auditSearch} onChange={(e) => setAuditSearch(e.target.value)}
                      placeholder="Search actor, action, details..."
                      className="flex-1 outline-none text-sm bg-transparent" />
@@ -498,8 +499,8 @@ export default function AdminReports() {
       {showGen && view === 'monthly' && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setShowGen(false)}>
           <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setShowGen(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center">✕</button>
-            <h2 className="text-lg font-extrabold text-ink mb-1">📄 Generate — Monthly Report</h2>
+            <button onClick={() => setShowGen(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
+            <h2 className="text-lg font-extrabold text-ink mb-1 flex items-center gap-2"><FileDown size={18} /> Generate — Monthly Report</h2>
             <p className="text-xs text-ink/60 mb-4">
               Generated for {overview.monthLabel}. Includes month-over-month trend, total entries, and peak visitation days.
             </p>
@@ -527,7 +528,7 @@ export default function AdminReports() {
         return (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setResolveTarget(null)}>
             <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => setResolveTarget(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center">✕</button>
+              <button onClick={() => setResolveTarget(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
 
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{c.category} Complaint</span>

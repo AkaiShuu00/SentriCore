@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createComplaint } from '../api';
+import { UserX, Shield, Siren, Building2 } from 'lucide-react';
 
 const CATEGORIES = [
-  { key: 'visitor', icon: '🧑‍⚠️', label: 'VISITOR COMPLAINT' },
-  { key: 'guard', icon: '👮', label: 'GUARD COMPLAINT' },
-  { key: 'security', icon: '🛡️', label: 'SECURITY CONCERN' },
-  { key: 'hoa', icon: '🏠', label: 'HOA CONCERN' },
+  { key: 'visitor', Icon: UserX, label: 'VISITOR COMPLAINT' },
+  { key: 'guard', Icon: Shield, label: 'GUARD COMPLAINT' },
+  { key: 'security', Icon: Siren, label: 'SECURITY CONCERN' },
+  { key: 'hoa', Icon: Building2, label: 'HOA CONCERN' },
 ];
 
 const TYPES_BY_CATEGORY = {
@@ -89,7 +90,7 @@ export default function Complaints() {
               return (
                 <button key={c.key} onClick={() => selectCategory(c.key)}
                         className={`rounded-2xl p-5 flex flex-col items-center gap-2 shadow-sm border-2 transition bg-white ${isSel ? 'border-ink opacity-100' : 'border-gray-200 opacity-60'}`}>
-                  <span className="text-2xl">{c.icon}</span>
+                  <c.Icon size={26} className={isSel ? 'text-ink' : 'text-ink/50'} />
                   <span className={`text-xs font-bold ${isSel ? 'text-ink' : 'text-ink/50'}`}>{c.label}</span>
                 </button>
               );

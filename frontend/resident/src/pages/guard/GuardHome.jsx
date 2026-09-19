@@ -3,6 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
 import { getAnnouncements } from '../../api';
+import {
+  Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone, Shield, Clock,
+  ScanLine, CalendarDays, Phone, LogOut, FileText, Search, Inbox,
+} from 'lucide-react';
+
+const AnnIcon = ({ a, ...p }) => {
+  const t = `${a.category || ''} ${a.title || ''}`.toLowerCase();
+  if (t.includes('fire')) return <Flame {...p} />;
+  if (t.includes('water')) return <Droplet {...p} />;
+  if (t.includes('power') || t.includes('electric')) return <Zap {...p} />;
+  if (t.includes('gate') || t.includes('security')) return <ShieldAlert {...p} />;
+  if (t.includes('meeting') || t.includes('event') || t.includes('election')) return <Users {...p} />;
+  if (t.includes('maintenance')) return <Wrench {...p} />;
+  return <Megaphone {...p} />;
+};
 
 export default function GuardHome() {
   const navigate = useNavigate();
@@ -17,17 +32,6 @@ export default function GuardHome() {
   useEffect(() => {
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => setAnnouncements([]));
   }, []);
-
-  const annIcon = (a) => {
-    const t = `${a.category || ''} ${a.title || ''}`.toLowerCase();
-    if (t.includes('fire')) return '🔥';
-    if (t.includes('water')) return '💧';
-    if (t.includes('power') || t.includes('electric')) return '⚡';
-    if (t.includes('gate') || t.includes('security')) return '🛑';
-    if (t.includes('meeting') || t.includes('event') || t.includes('election')) return '🧑';
-    if (t.includes('maintenance')) return '🔧';
-    return '📢';
-  };
 
   // ── Community entries: shared sa buong community (galing localStorage muna) ──
   const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
@@ -74,7 +78,7 @@ export default function GuardHome() {
         <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard One'}</span>
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center text-xl">👮</div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
         </div>
       </header>
 
@@ -82,7 +86,7 @@ export default function GuardHome() {
         {/* Shift banner */}
         <div className="bg-white rounded-full shadow px-5 py-4 mt-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🕐</span>
+            <Clock size={22} className="text-ink" />
             <span className="text-ink">Shift ends in <span className="font-extrabold">4h 18m</span></span>
           </div>
           <button
@@ -104,8 +108,8 @@ export default function GuardHome() {
           ) : announcements.slice(0, 4).map((a, i) => (
             <div key={a.announcement_id || i}>
               <div className="flex items-center gap-4 py-3">
-                <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center text-xl shrink-0">
-                  {annIcon(a)}
+                <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shrink-0">
+                  <AnnIcon a={a} size={20} className="text-teal-700" />
                 </div>
                 <p className="font-semibold text-sm truncate">{a.title}</p>
               </div>
@@ -120,14 +124,14 @@ export default function GuardHome() {
         <div className="bg-white rounded-3xl p-5 shadow">
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
-              { icon: '🔓', label: 'Verify Entry', bg: 'bg-teal-100', action: () => navigate('/guard-verify') },
-              { icon: '📅', label: 'Schedule', bg: 'bg-blue-100', action: () => navigate('/guard-schedule') },
-              { icon: '📞', label: 'Contact Resident', bg: 'bg-purple-100', action: () => alert('Contact Resident') },
-              { icon: '📤', label: 'Verify Exit', bg: 'bg-red-100', action: () => navigate('/guard-verify?mode=exit') },
+              { Icon: ScanLine, label: 'Verify Entry', bg: 'bg-teal-100', action: () => navigate('/guard-verify') },
+              { Icon: CalendarDays, label: 'Schedule', bg: 'bg-blue-100', action: () => navigate('/guard-schedule') },
+              { Icon: Phone, label: 'Contact Resident', bg: 'bg-purple-100', action: () => alert('Contact Resident') },
+              { Icon: LogOut, label: 'Verify Exit', bg: 'bg-red-100', action: () => navigate('/guard-verify?mode=exit') },
             ].map((q) => (
               <button key={q.label} onClick={q.action} className="flex flex-col items-center">
-                <div className={`w-14 h-14 rounded-2xl ${q.bg} flex items-center justify-center text-2xl mb-1`}>
-                  {q.icon}
+                <div className={`w-14 h-14 rounded-2xl ${q.bg} flex items-center justify-center mb-1`}>
+                  <q.Icon size={24} className="text-ink" />
                 </div>
                 <span className="text-xs font-medium text-ink leading-tight">{q.label}</span>
               </button>
@@ -140,17 +144,17 @@ export default function GuardHome() {
           <div className="bg-teal-100 rounded-3xl p-4 shadow">
             <p className="text-sm text-ink">Active Entries</p>
             <p className="text-4xl font-extrabold text-ink my-2">{activeCount}</p>
-            <div className="w-11 h-11 rounded-2xl bg-ink flex items-center justify-center text-white text-lg">👥</div>
+            <div className="w-11 h-11 rounded-2xl bg-ink flex items-center justify-center text-white"><Users size={20} /></div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F1D88A' }}>
             <p className="text-sm text-ink">Expected Today</p>
             <p className="text-4xl font-extrabold my-2" style={{ color: '#8a6d12' }}>{expectedCount}</p>
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#B8901F' }}>📅</div>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#B8901F' }}><CalendarDays size={20} /></div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F3C9C9' }}>
             <p className="text-sm text-ink">Total</p>
             <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>{totalCount}</p>
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#A83232' }}>📄</div>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#A83232' }}><FileText size={20} /></div>
           </div>
         </div>
 
@@ -185,7 +189,7 @@ export default function GuardHome() {
 
         {/* Search */}
         <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow mt-4">
-          <span className="text-ink/40">🔍</span>
+          <Search size={18} className="text-ink/40" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
                  placeholder="Search name"
                  className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
@@ -196,7 +200,7 @@ export default function GuardHome() {
           <h3 className="text-lg font-extrabold text-ink mb-4">ACTIVE ENTRIES IN THE COMMUNITY</h3>
           {filteredEntries.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-4xl mb-2">📭</p>
+              <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
               <p className="text-ink/60 font-semibold">No active entries</p>
               <p className="text-ink/40 text-sm mt-1">Entries in the community will appear here.</p>
             </div>

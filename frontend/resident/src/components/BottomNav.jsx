@@ -1,14 +1,15 @@
 import { useNavigate } from 'react-router-dom';
+import { Home, CalendarClock, History, User, Plus } from 'lucide-react';
 
 export default function BottomNav({ active }) {
   const navigate = useNavigate();
 
   const items = [
-    { key: 'home', icon: '🏠', label: 'Home', path: '/home' },
-    { key: 'schedule', icon: '📅', label: '', path: '/schedule' },
+    { key: 'home', Icon: Home, label: 'Home', path: '/home' },
+    { key: 'schedule', Icon: CalendarClock, label: '', path: '/schedule' },
     { key: 'spacer' },
-    { key: 'history', icon: '📋', label: '', path: '/history' },
-    { key: 'profile', icon: '👤', label: '', path: '/profile' },
+    { key: 'history', Icon: History, label: '', path: '/history' },
+    { key: 'profile', Icon: User, label: '', path: '/profile' },
   ];
 
   return (
@@ -16,9 +17,9 @@ export default function BottomNav({ active }) {
       {/* Center floating + button */}
       <button
         onClick={() => navigate('/pre-register')}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full bg-ink text-white text-3xl shadow-lg flex items-center justify-center z-20 max-w-md"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full bg-ink text-white shadow-lg flex items-center justify-center z-20 max-w-md"
       >
-        ⊕
+        <Plus size={30} />
       </button>
 
       {/* Bottom bar */}
@@ -33,7 +34,7 @@ export default function BottomNav({ active }) {
                 onClick={() => navigate(it.path)}
                 className="flex flex-col items-center"
               >
-                <span className={`text-2xl ${active === it.key ? '' : 'opacity-50'}`}>{it.icon}</span>
+                <it.Icon size={24} className={`text-ink ${active === it.key ? '' : 'opacity-50'}`} />
                 {active === it.key && it.label && (
                   <span className="text-xs font-semibold text-ink mt-0.5 border-b-2 border-ink">{it.label}</span>
                 )}

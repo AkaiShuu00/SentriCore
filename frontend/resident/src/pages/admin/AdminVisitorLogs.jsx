@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
+import { Search, X, FileDown, FileSpreadsheet } from 'lucide-react';
 import { getAllVisitorLogs } from '../../api';
 
 const statusBg = {
@@ -105,8 +106,8 @@ export default function AdminVisitorLogs() {
           <p className="text-sm text-ink/60">Complete Visitor Transaction History</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={exportPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink">📄 Export PDF</button>
-          <button onClick={exportExcel} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>📊 Export Excel</button>
+          <button onClick={exportPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink"><FileDown size={16} /> Export PDF</button>
+          <button onClick={exportExcel} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
         </div>
       </div>
 
@@ -114,7 +115,7 @@ export default function AdminVisitorLogs() {
         {/* Filters */}
         <div className="flex gap-2 mb-4">
           <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
                    className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
           </div>
@@ -167,7 +168,7 @@ export default function AdminVisitorLogs() {
       {detail && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setDetail(null)}>
           <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setDetail(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink">✕</button>
+            <button onClick={() => setDetail(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
             <h2 className="text-2xl font-extrabold text-teal-800 mb-5">{modalTitle[detail.kind] || 'Visitor Details'}</h2>
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-5">

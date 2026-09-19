@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
+import { Search, Settings, X, KeyRound } from 'lucide-react';
 import {
   adminListResidents, adminResidentActive, adminAddResident,
   adminUpdateResident, adminResetResidentPassword,
@@ -69,7 +70,7 @@ export default function AdminResidents() {
         {/* Search + filters */}
         <div className="flex items-center gap-2 mb-4">
           <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
                    className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
           </div>
@@ -112,7 +113,7 @@ export default function AdminResidents() {
               <span className="text-center font-bold">{r.monthlyVisitors}</span>
               <span className="text-center">
                 <button onClick={() => setEditModal({ ...r })} title="Edit / Settings"
-                        className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink">⚙️</button>
+                        className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink"><Settings size={16} /></button>
               </span>
             </div>
           ))}
@@ -123,7 +124,7 @@ export default function AdminResidents() {
       {activeModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setActiveModal(null)}>
           <div className="bg-white rounded-3xl w-full max-w-2xl p-6 relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setActiveModal(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center">✕</button>
+            <button onClick={() => setActiveModal(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
             <h2 className="text-2xl font-extrabold text-ink mb-5">Active Visitors</h2>
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -184,7 +185,7 @@ export default function AdminResidents() {
       {credModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setCredModal(null)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center text-3xl mx-auto mb-4">🔑</div>
+            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4"><KeyRound size={30} className="text-teal-700" /></div>
             <h2 className="text-lg font-extrabold text-ink mb-1">Login Credentials</h2>
             <p className="text-sm text-ink/60 mb-4">Ibigay ito sa resident. Ipakita lang isang beses.</p>
             <div className="bg-cream rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
@@ -219,7 +220,7 @@ function ResidentForm({ title, initial, showReset, onClose, onSubmit, onReset })
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink">✕</button>
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
         <h2 className="text-xl font-extrabold text-ink mb-1">{title}</h2>
         {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
         {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-bold">{initial.username}</span></p>}
@@ -241,7 +242,7 @@ function ResidentForm({ title, initial, showReset, onClose, onSubmit, onReset })
 
         {showReset && (
           <button onClick={onReset} className="w-full mt-4 py-2.5 rounded-full border border-amber-400 text-amber-700 font-bold text-sm bg-amber-50">
-            🔑 Reset Password (records stay intact)
+            Reset Password (records stay intact)
           </button>
         )}
 

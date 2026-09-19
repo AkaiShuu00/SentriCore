@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { Award } from 'lucide-react';
 
 export default function PasswordChanged() {
   const navigate = useNavigate();
@@ -6,7 +7,7 @@ export default function PasswordChanged() {
   return (
     <div className="min-h-screen bg-ink/40 flex items-center justify-center px-6">
       <div className="bg-white rounded-3xl shadow-lg w-full max-w-md p-10 text-center">
-        <div className="text-7xl mb-6">🏅</div>
+        <div className="flex justify-center mb-6"><Award size={64} className="text-teal-700" /></div>
         <h1 className="text-3xl font-extrabold text-ink mb-4">Password changed!</h1>
         <p className="text-ink/70 mb-8">
           You have successfully created a new password. Kindly click the button below to sign in again.

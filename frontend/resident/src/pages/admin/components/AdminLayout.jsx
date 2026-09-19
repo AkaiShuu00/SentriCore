@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { LayoutDashboard, ClipboardList, User, Shield, BarChart3, Search, ChevronDown } from 'lucide-react';
 
 // Shared admin shell: dark sidebar (left) + top header + content area
 export default function AdminLayout({ children }) {
@@ -7,11 +8,11 @@ export default function AdminLayout({ children }) {
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
 
   const nav = [
-    { key: 'dashboard', label: 'Dashboard',    icon: '🏠', to: '/admin-dashboard' },
-    { key: 'logs',      label: 'Visitor Logs', icon: '📋', to: '/admin-visitor-logs' },
-    { key: 'resident',  label: 'Resident',     icon: '👤', to: '/admin-residents' },
-    { key: 'guards',    label: 'Guards',       icon: '🛡️', to: '/admin-guards' },
-    { key: 'reports',   label: 'Reports',      icon: '📊', to: '/admin-reports' },
+    { key: 'dashboard', label: 'Dashboard',    Icon: LayoutDashboard, to: '/admin-dashboard' },
+    { key: 'logs',      label: 'Visitor Logs', Icon: ClipboardList,   to: '/admin-visitor-logs' },
+    { key: 'resident',  label: 'Resident',     Icon: User,            to: '/admin-residents' },
+    { key: 'guards',    label: 'Guards',       Icon: Shield,          to: '/admin-guards' },
+    { key: 'reports',   label: 'Reports',      Icon: BarChart3,       to: '/admin-reports' },
   ];
 
   const isActive = (to) => location.pathname === to;
@@ -35,7 +36,7 @@ export default function AdminLayout({ children }) {
                       style={active
                         ? { background: 'linear-gradient(135deg,#1E7E7E,#3FA89A)', color: '#fff' }
                         : { backgroundColor: '#fff', color: '#0E2A2E' }}>
-                <span className="text-base w-5 text-center">{n.icon}</span>
+                <n.Icon size={18} className="shrink-0" />
                 {n.label}
               </button>
             );
@@ -48,7 +49,7 @@ export default function AdminLayout({ children }) {
         {/* Top header */}
         <header className="flex items-center justify-between px-8 py-5">
           <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm w-96 max-w-full">
-            <span className="text-ink/40">🔍</span>
+            <Search size={18} className="text-ink/40" />
             <input placeholder="Search anything..."
                    className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
           </div>
@@ -58,14 +59,14 @@ export default function AdminLayout({ children }) {
               <p className="text-sm font-bold text-ink">{user.name || 'Madeline Perez'}</p>
               <p className="text-[10px] text-ink/50">Admin</p>
             </div>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg text-white"
-                 style={{ background: 'linear-gradient(135deg,#1E7E7E,#3FA89A)' }}>👤</div>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                 style={{ background: 'linear-gradient(135deg,#1E7E7E,#3FA89A)' }}><User size={20} /></div>
             <button onClick={() => {
                       localStorage.removeItem('sentricore_token');
                       localStorage.removeItem('sentricore_user');
                       navigate('/admin-signin');
                     }}
-                    className="text-ink/50 text-sm ml-1" title="Log out">⌄</button>
+                    className="text-ink/50 ml-1" title="Log out"><ChevronDown size={18} /></button>
           </div>
         </header>
 

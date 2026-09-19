@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { CheckCircle2 } from 'lucide-react';
 
 const API = '/api';
 
@@ -326,7 +327,7 @@ function StepBatchConfirm({ form, onCancel, onConfirmEntry }) {
 function StepSuccess({ count, onDone }) {
   return (
     <div style={{ ...styles.modalCard, textAlign: 'center' }}>
-      <div style={{ fontSize: 52, marginBottom: 12 }}>✅</div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><CheckCircle2 size={52} color={COLORS.teal} /></div>
       <h2 style={{ ...styles.modalTitle, marginBottom: 8 }}>Pre-Registered!</h2>
       <p style={{ fontSize: 13, color: '#777', lineHeight: 1.6, marginBottom: 24 }}>
         {count > 1
