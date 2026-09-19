@@ -80,7 +80,6 @@ function App() {
         <Route path="/admin-residents" element={<AdminResidents />} />
         <Route path="/admin-reports" element={<AdminReports />} />
 
-
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
