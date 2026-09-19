@@ -14,6 +14,7 @@ import History from './pages/History';
 import Profile from './pages/Profile';
 import PasswordSecurity from './pages/PasswordSecurity';
 import NotificationSettings from './pages/NotificationSettings';
+import Notifications from './pages/Notifications';
 import HelpCenter from './pages/HelpCenter';
 import Blocklist from './pages/Blocklist';
 import FAQs from './pages/FAQs';
@@ -22,7 +23,7 @@ import ContactGuard from './pages/ContactGuard';
 import Complaints from './pages/Complaints';
 import PreRegister from './pages/PreRegister';
 
-// ── Guard pages 
+// ── Guard pages
 import GuardHome from './pages/guard/GuardHome';
 import GuardSchedule from './pages/guard/GuardSchedule';
 import GuardProfile from './pages/guard/GuardProfile';
@@ -59,6 +60,7 @@ function App() {
         <Route path="/password-changed" element={<PasswordChanged />} />
         <Route path="/password-security" element={<PasswordSecurity />} />
         <Route path="/notification-settings" element={<NotificationSettings />} />
+        <Route path="/notifications" element={<Notifications />} />
         <Route path="/help-center" element={<HelpCenter />} />
         <Route path="/blocklist" element={<Blocklist />} />
         <Route path="/faqs" element={<FAQs />} />
@@ -66,10 +68,11 @@ function App() {
 
         {/* Guard */}
         <Route path="/guard-home" element={<GuardHome />} />
-        <Route path="/guard-schedule" element={<GuardSchedule />} /> 
+        <Route path="/guard-schedule" element={<GuardSchedule />} />
         <Route path="/guard-profile" element={<GuardProfile />} />
         <Route path="/guard-logs" element={<GuardLogs />} />
         <Route path="/guard-verify" element={<GuardVerify />} />
+        <Route path="/guard-notifications" element={<Notifications />} />
 
         {/* Admin */}
         <Route path="/admin-signin" element={<AdminSignIn />} />

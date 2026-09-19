@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { notifyUser } = require('./notificationController');
 
 // POST /api/complaints  (Resident) — mag-file ng reklamo
 async function createComplaint(req, res) {
@@ -87,24 +88,83 @@ async function getAllComplaints(req, res) {
   }
 }
 
-// PUT /api/admin/complaints/:id  (Admin) — mag-acknowledge/resolve
+// PUT /api/admin/complaints/:id  (Admin) — mag-acknowledge/resolve (+ optional allow-blocklist)
 async function resolveComplaint(req, res) {
   try {
     const { id } = req.params;
     const adminId = req.user?.userId || null;
-    const { status, resolution } = req.body;
+    const { status, resolution, approveBlocklist } = req.body;
 
     const newStatus = ['Pending', 'Acknowledged', 'Resolved'].includes(status) ? status : 'Acknowledged';
     const resolvedAt = newStatus === 'Resolved' ? new Date() : null;
 
-    const [result] = await pool.query(
+    // Kunin ang complaint bago i-update (para sa notif + blocklist)
+    const [rows] = await pool.query(
+      `SELECT resident_id, category, subject, complaint_type, blocklist FROM Complaints WHERE complaint_id = ?`,
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Complaint not found.' });
+    const c = rows[0];
+
+    await pool.query(
       `UPDATE Complaints
        SET status = ?, resolution = ?, resolved_by = ?, resolved_at = ?
        WHERE complaint_id = ?`,
       [newStatus, resolution ? String(resolution).trim() : null, adminId, resolvedAt, id]
     );
-    if (result.affectedRows === 0) return res.status(404).json({ message: 'Complaint not found.' });
-    res.json({ message: 'Complaint updated.' });
+
+    // Hanapin ang user_id ng residenteng nag-file
+    let residentUserId = null;
+    if (c.resident_id) {
+      try {
+        const [[r]] = await pool.query(`SELECT user_id FROM Residents WHERE resident_id = ?`, [c.resident_id]);
+        residentUserId = r ? r.user_id : null;
+      } catch (e) { /* ignore */ }
+    }
+
+    // Kung Visitor complaint na may blocklist request AT in-allow ng admin → idagdag sa Blocklist
+    let blocklisted = false;
+    if (approveBlocklist && c.category === 'Visitor' && c.blocklist) {
+      try {
+        const [exists] = await pool.query(
+          `SELECT block_id FROM Blocklist WHERE resident_id = ? AND person_name = ? LIMIT 1`,
+          [c.resident_id, c.subject]
+        );
+        if (exists.length === 0) {
+          await pool.query(
+            `INSERT INTO Blocklist (resident_id, person_name, reason, complaint_id)
+             VALUES (?, ?, ?, ?)`,
+            [c.resident_id, c.subject, `Complaint: ${c.complaint_type}`, id]
+          );
+        }
+        blocklisted = true;
+      } catch (e) { console.warn('Blocklist insert skipped:', e.message); }
+    }
+
+    // Notify ang resident
+    if (residentUserId) {
+      const msg = newStatus === 'Resolved'
+        ? `Your ${c.category} complaint about "${c.subject}" has been resolved.${resolution ? ' ' + resolution : ''}`
+        : `Your ${c.category} complaint about "${c.subject}" has been acknowledged by the admin.`;
+      await notifyUser(residentUserId, `Complaint ${newStatus}`, msg, 'complaint');
+      if (blocklisted) {
+        await notifyUser(residentUserId, 'Visitor Blocklisted',
+          `"${c.subject}" has been added to your blocklist as requested.`, 'blocklist');
+      }
+    }
+
+    // Notify din ang guard kung ang complaint ay tungkol sa kanya (Guard category, tugmang pangalan)
+    if (c.category === 'Guard') {
+      try {
+        const [[g]] = await pool.query(`SELECT user_id FROM Guards WHERE full_name = ?`, [c.subject]);
+        if (g && g.user_id) {
+          await notifyUser(g.user_id, `Complaint ${newStatus}`,
+            `A complaint involving you has been ${newStatus.toLowerCase()} by the admin.`, 'complaint');
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    res.json({ message: 'Complaint updated.', blocklisted });
   } catch (err) {
     res.status(500).json({ message: 'Error updating complaint.', error: err.message });
   }

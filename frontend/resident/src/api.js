@@ -1,9 +1,6 @@
 import axios from 'axios';
 
-// Relative na base URL — tumutugma sa SignIn.jsx/PreRegister.jsx ('/api').
-// Gumagana ito sa laptop AT sa phone dahil dumadaan sa Vite proxy patungo sa backend.
-// (Kung wala kang Vite proxy, palitan ito ng iyong laptop IP, hal:
-//   const API = 'http://192.168.100.9:3000/api';  )
+
 const API = '/api';
 
 // Axios instance na may auto-attach ng token.
@@ -78,6 +75,14 @@ export const createComplaint = (data) => api.post('/complaints', data);
 export const getMyComplaints = () => api.get('/complaints/mine');
 export const adminListComplaints = (params) => api.get('/admin/complaints', { params });
 export const adminResolveComplaint = (id, data) => api.put(`/admin/complaints/${id}`, data);
+
+// ── Notifications ──
+export const getNotifications = () => api.get('/notifications');
+export const markNotificationRead = (id) => api.put(`/notifications/${id}/read`);
+export const markAllNotificationsRead = () => api.put('/notifications/read-all');
+
+// ── Blocklist (resident view) ──
+export const getMyBlocklist = () => api.get('/blocklist');
 
 // ── Entry (guard) ──
 export const matchVisitor = (params) => api.get('/entry/match', { params });

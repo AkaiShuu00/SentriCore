@@ -51,6 +51,7 @@ export default function AdminReports() {
   const [resolveTarget, setResolveTarget] = useState(null); // napiling complaint
   const [resolText, setResolText] = useState('');
   const [resolStatus, setResolStatus] = useState('Resolved');
+  const [approveBl, setApproveBl] = useState(false);
   const [savingResol, setSavingResol] = useState(false);
 
   const loadComplaints = () =>
@@ -73,12 +74,13 @@ export default function AdminReports() {
     setResolveTarget(c);
     setResolText(c.resolution || '');
     setResolStatus(c.status === 'Resolved' ? 'Resolved' : 'Acknowledged');
+    setApproveBl(false);
   };
   const saveResolve = async () => {
     if (!resolveTarget) return;
     setSavingResol(true);
     try {
-      await adminResolveComplaint(resolveTarget.complaint_id, { status: resolStatus, resolution: resolText });
+      await adminResolveComplaint(resolveTarget.complaint_id, { status: resolStatus, resolution: resolText, approveBlocklist: approveBl });
       await loadComplaints();
       setResolveTarget(null);
     } catch {
@@ -556,6 +558,18 @@ export default function AdminReports() {
               <textarea value={resolText} onChange={(e) => setResolText(e.target.value)} rows={3}
                         placeholder="Type or pick a resolution above…"
                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none mb-3" />
+
+              {/* Allow blocklist — kapag hiniling ng resident sa Visitor complaint */}
+              {c.category === 'Visitor' && c.blocklist ? (
+                <button type="button" onClick={() => setApproveBl(!approveBl)}
+                        className="w-full flex items-center justify-between rounded-xl px-4 py-3 mb-4 border"
+                        style={{ borderColor: approveBl ? '#9b2c2c' : '#e5e7eb', backgroundColor: approveBl ? '#F3C9C9' : '#fff' }}>
+                  <span className="text-sm font-bold text-ink text-left">Allow blocklist request<br /><span className="text-[11px] font-normal text-ink/60">Idadagdag si "{c.subject}" sa blocklist ng resident.</span></span>
+                  <span className="w-10 h-6 rounded-full flex items-center px-0.5" style={{ backgroundColor: approveBl ? '#9b2c2c' : '#d1d5db', justifyContent: approveBl ? 'flex-end' : 'flex-start' }}>
+                    <span className="w-5 h-5 rounded-full bg-white" />
+                  </span>
+                </button>
+              ) : null}
 
               <label className="block text-[10px] font-bold text-ink/60 mb-1">STATUS</label>
               <div className="flex gap-2 mb-5">

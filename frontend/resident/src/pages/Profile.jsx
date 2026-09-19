@@ -34,7 +34,7 @@ export default function Profile() {
 
   const settings = [
     { icon: '🛡️', label: 'Password and Security', action: () => navigate('/password-security') },
-    { icon: '🔔', label: 'Notifications', action: () => navigate('/notification-settings') },
+    { icon: '🔔', label: 'Notifications', action: () => navigate('/notifications') },
     { icon: '🚫', label: 'Blocklisted', action: () => navigate('/blocklist') },
     { icon: '❓', label: 'Help Center', action: () => navigate('/help-center') },
     { icon: '💬', label: 'FAQs', action: () => navigate('/faqs') },
