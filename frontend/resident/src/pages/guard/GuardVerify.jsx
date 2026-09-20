@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getResidentsForGuard, getActiveVisitors, getCompanions } from '../../api';
+import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule } from '../../api';
 import { User, Truck, Camera, Search, RefreshCw } from 'lucide-react';
 
 const teal = '#0F6E6E';
@@ -35,6 +35,12 @@ function IDCardPlaceholder({ name }) {
     </div>
   );
 }
+
+// Kunin ang unang value mula sa listahan ng posibleng field names (robust sa iba't ibang schema).
+const pick = (obj, keys) => {
+  for (const k of keys) if (obj && obj[k] != null && obj[k] !== '') return obj[k];
+  return null;
+};
 
 const nameTokens = (s) => (s || '').toUpperCase().replace(/[.,\-]/g, ' ').split(/\s+/).filter((w) => w.length >= 2);
 const nameMatches = (scanned, dbName) => {
@@ -92,6 +98,8 @@ export default function GuardVerify() {
   const [residentsDB, setResidentsDB] = useState([]);
   const [activeDB, setActiveDB] = useState([]);
   const [entryCompanions, setEntryCompanions] = useState([]);   // para sa ENTRY accompanying
+  const [registeredDB, setRegisteredDB] = useState([]);         // lahat ng registered/expected visitors (manual search)
+  const [regSearch, setRegSearch] = useState('');
 
   const token = () => localStorage.getItem('sentricore_token');
   // Header para hindi ibalik ng ngrok-free ang HTML warning page sa mga API call.
@@ -132,6 +140,44 @@ export default function GuardVerify() {
       setActiveDB(list);
       return list;
     }).catch(() => { setActiveDB([]); return []; });
+
+  // ── Kunin LAHAT ng registered/expected visitors para sa manual search ──
+  // Robust sa iba't ibang field name at kaya ang batch (visitors array) o single row.
+  const loadRegistered = () =>
+    getSchedule().then((res) => {
+      const rows = res.data || [];
+      const flat = [];
+      rows.forEach((reg) => {
+        const base = {
+          registrationId: pick(reg, ['registrationId', 'registration_id']),
+          registrationType: pick(reg, ['registrationType', 'registration_type']) || 'Single',
+          purpose: pick(reg, ['purpose']) || 'N/A',
+          expectedDate: pick(reg, ['expectedDate', 'expected_date', 'expected_time', 'visit_date']) || '',
+          residentName: pick(reg, ['residentName', 'resident_name', 'resident']) || '',
+          residentAddress: pick(reg, ['residentAddress', 'resident_address', 'unit_address', 'address']) || '',
+          residentId: pick(reg, ['residentId', 'resident_id']) || null,
+        };
+        const list = Array.isArray(reg.visitors) && reg.visitors.length ? reg.visitors : [reg];
+        list.forEach((v) => {
+          const nm = pick(v, ['registeredName', 'registered_name', 'visitorName', 'visitor_name', 'name', 'full_name']);
+          if (!nm) return;
+          const status = String(pick(v, ['status', 'entry_status']) || '').toUpperCase();
+          // Ipakita lang ang HINDI pa pumapasok (walang time-in / hindi active / hindi departed)
+          const entered = pick(v, ['timeIn', 'entry_time', 'time_in']);
+          if (status === 'ACTIVE' || status === 'DEPARTED' || status === 'EXPIRED' || entered) return;
+          flat.push({
+            ...base,
+            registeredName: nm,
+            residentName: pick(v, ['residentName', 'resident_name', 'resident']) || base.residentName,
+            residentAddress: pick(v, ['residentAddress', 'resident_address', 'unit_address', 'address']) || base.residentAddress,
+            residentId: pick(v, ['residentId', 'resident_id']) || base.residentId,
+            purpose: pick(v, ['purpose']) || base.purpose,
+          });
+        });
+      });
+      setRegisteredDB(flat);
+      return flat;
+    }).catch(() => { setRegisteredDB([]); return []; });
 
   useEffect(() => {
     getResidentsForGuard()
@@ -732,10 +778,17 @@ export default function GuardVerify() {
                       className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
                 TAKE PHOTO OF ID
               </button>
-              <button onClick={() => { stopCamera(); setStep('reading'); }}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
-                TYPE INFO MANUALLY
-              </button>
+              {(!isExit && !isDriverFlow) ? (
+                <button onClick={() => { stopCamera(); loadRegistered(); setRegSearch(''); setStep('visitorSearch'); }}
+                        className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
+                  SEARCH REGISTERED VISITOR
+                </button>
+              ) : (
+                <button onClick={() => { stopCamera(); setStep('reading'); }}
+                        className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
+                  TYPE INFO MANUALLY
+                </button>
+              )}
               <button onClick={() => { stopCamera(); setStep(isExit ? 'exitSelect' : 'choose'); }}
                       className="px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
                 {isExit ? 'MANUAL SEARCH' : 'BACK'}
@@ -799,6 +852,68 @@ export default function GuardVerify() {
               <button onClick={() => setStep('scan')}
                       className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
                 RETRY SCAN
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SEARCH REGISTERED VISITOR — manual (type-to-search) sa halip na scan */}
+        {step === 'visitorSearch' && (
+          <div>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">SEARCH REGISTERED VISITOR</h2>
+            <p className="text-center text-xs text-ink/60 mb-4">
+              I-type ang pangalan para hanapin sa listahan ng mga registered visitor. Pindutin ang tama para magpatuloy.
+            </p>
+
+            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
+              <Search size={18} className="text-ink/40" />
+              <input value={regSearch} onChange={(e) => setRegSearch(e.target.value)} autoFocus
+                     placeholder="Search visitor name"
+                     className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow mb-4">
+              <div className="max-h-[52vh] overflow-y-auto space-y-2">
+                {registeredDB.length === 0 ? (
+                  <p className="text-center text-ink/50 py-8 text-sm">Walang registered visitor na nakalista.</p>
+                ) : (() => {
+                  const q = regSearch.toLowerCase();
+                  const results = registeredDB.filter((c) =>
+                    (c.registeredName || '').toLowerCase().includes(q) ||
+                    (c.residentName || '').toLowerCase().includes(q) ||
+                    (c.residentAddress || '').toLowerCase().includes(q)
+                  );
+                  if (results.length === 0) {
+                    return <p className="text-center text-ink/50 py-8 text-sm">Walang tumugmang bisita.</p>;
+                  }
+                  return results.map((c, i) => (
+                    <button key={(c.registrationId || i) + '-' + c.registeredName} onClick={() => pickCandidate(c)}
+                            className="w-full text-left rounded-2xl p-3 border border-gray-200 shadow-sm active:scale-[0.99] transition hover:border-teal-500">
+                      <p className="font-bold text-ink text-sm">{c.registeredName}</p>
+                      <p className="text-xs text-ink/70 mt-1"><span className="font-bold">Resident:</span> {c.residentName || '—'}</p>
+                      <p className="text-xs text-ink/60"><span className="font-bold">Address:</span> {c.residentAddress || '—'}</p>
+                      <div className="flex gap-2 mt-1 items-center">
+                        <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-teal-100 text-teal-800">{c.registrationType || 'Single'}</span>
+                        {c.purpose && <span className="text-[9px] text-ink/50 py-1">Purpose: {c.purpose}</span>}
+                      </div>
+                    </button>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <button onClick={() => loadRegistered()}
+                      className="w-60 py-2 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm inline-flex items-center justify-center gap-2">
+                <RefreshCw size={16} /> REFRESH LIST
+              </button>
+              <button onClick={() => setStep('residentList')}
+                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                NOT LISTED — CONTACT RESIDENT
+              </button>
+              <button onClick={() => setStep('scan')}
+                      className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                BACK TO SCAN
               </button>
             </div>
           </div>

@@ -1,109 +1,84 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { changePassword } from '../api';
+import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 export default function PasswordSecurity() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
-  const [step, setStep] = useState(1); // 1=email, 2=new password, 3=success
-  const [email, setEmail] = useState('');
-  const [oldPw, setOldPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [confirmPw, setConfirmPw] = useState('');
-  const [error, setError] = useState('');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function handleProceed() {
-    setError('');
-    if (!email) { setError('Please enter your email address.'); return; }
-    setStep(2);
-  }
+  const submit = async () => {
+    setErr('');
+    if (!current || !next || !confirm) { setErr('Please fill in all fields.'); return; }
+    if (next.length < 6) { setErr('New password must be at least 6 characters.'); return; }
+    if (next !== confirm) { setErr('New passwords do not match.'); return; }
+    if (next === current) { setErr('New password must be different from the current one.'); return; }
+    setLoading(true);
+    try {
+      await changePassword({ currentPassword: current, newPassword: next });
+      navigate('/password-changed');
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Failed to change password.');
+    } finally { setLoading(false); }
+  };
 
-  function handleConfirm() {
-    setError('');
-    if (!oldPw || !newPw || !confirmPw) { setError('Please fill in all fields.'); return; }
-    if (newPw !== confirmPw) { setError('New passwords do not match.'); return; }
-    setStep(3);
-  }
-
-  function handleSignIn() {
-    localStorage.removeItem('sentricore_token');
-    localStorage.removeItem('sentricore_user');
-    navigate('/signin');
-  }
+  const field = (label, value, setter, placeholder) => (
+    <div className="mb-4">
+      <label className="block text-sm font-bold text-ink mb-2">{label}</label>
+      <div className="relative">
+        <input type={show ? 'text' : 'password'} value={value} onChange={(e) => setter(e.target.value)}
+               placeholder={placeholder}
+               className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 pr-12 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30" />
+        <button type="button" onClick={() => setShow((v) => !v)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-ink/40">
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-cream max-w-md mx-auto relative">
-      {/* Dark header */}
+    <div className="min-h-screen bg-cream max-w-md mx-auto">
       <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => step === 1 ? navigate('/profile') : setStep(step - 1)}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">
-          ‹
-        </button>
+        <button onClick={() => navigate('/profile')}
+                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
         <div>
-          <h1 className="text-2xl font-extrabold text-white">Password and Security</h1>
-          <p className="text-white/70 text-sm">Verify and update your password</p>
+          <h1 className="text-2xl font-extrabold text-white">Password &amp; Security</h1>
+          <p className="text-white/70 text-sm">Change your account password</p>
         </div>
       </header>
 
-      <div className="flex items-center justify-center px-6 py-16">
-        {/* Step 1 — Change Password (email) */}
-        {step === 1 && (
-          <div className="bg-white rounded-3xl shadow-lg w-full p-8">
-            <button onClick={() => navigate('/profile')}
-                    className="w-12 h-12 rounded-full bg-cream shadow flex items-center justify-center text-2xl text-ink mb-6">‹</button>
-            <h2 className="text-4xl font-extrabold text-ink mb-2">Change Password</h2>
-            <p className="text-ink/70 mb-8">Enter your email address below to proceed</p>
-            <label className="block text-lg font-bold text-ink mb-2">Email Address</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                   placeholder="you@gmail.com"
-                   className="w-full border border-ink/30 rounded-2xl px-5 py-4 text-ink mb-6 focus:outline-none focus:ring-2 focus:ring-ink/30" />
-            {error && <p className="text-red-700 bg-red-100 rounded-xl px-4 py-2 text-sm mb-4 text-center">{error}</p>}
-            <button onClick={handleProceed}
-                    className="w-full bg-ink text-white font-bold text-xl py-4 rounded-full tracking-wide active:scale-95 transition">
-              PROCEED
-            </button>
+      <div className="px-6 py-6">
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mb-2">
+            <ShieldCheck size={30} className="text-teal-700" />
           </div>
-        )}
+          <p className="text-ink/60 text-sm text-center">Enter your current password, then set a new one.</p>
+        </div>
 
-        {/* Step 2 — Create new password */}
-        {step === 2 && (
-          <div className="bg-white rounded-3xl shadow-lg w-full p-8">
-            <button onClick={() => setStep(1)}
-                    className="w-12 h-12 rounded-full bg-cream shadow flex items-center justify-center text-2xl text-ink mb-6">‹</button>
-            <h2 className="text-4xl font-extrabold text-ink mb-2">Create new password</h2>
-            <p className="text-ink/70 mb-8">Enter your current and new password below</p>
-            {[
-              { label: 'Old Password', val: oldPw, set: setOldPw },
-              { label: 'New Password', val: newPw, set: setNewPw },
-              { label: 'Confirm Password', val: confirmPw, set: setConfirmPw },
-            ].map((f) => (
-              <div key={f.label} className="mb-5">
-                <label className="block text-lg font-bold text-ink mb-2">{f.label}</label>
-                <input type="password" value={f.val} onChange={(e) => f.set(e.target.value)}
-                       className="w-full border border-ink/30 rounded-2xl px-5 py-4 text-ink focus:outline-none focus:ring-2 focus:ring-ink/30" />
-              </div>
-            ))}
-            {error && <p className="text-red-700 bg-red-100 rounded-xl px-4 py-2 text-sm mb-4 text-center">{error}</p>}
-            <button onClick={handleConfirm}
-                    className="w-full bg-ink text-white font-bold text-xl py-4 rounded-full mt-4 tracking-wide active:scale-95 transition">
-              CONFIRM
-            </button>
-          </div>
-        )}
+        {err && <p className="text-red-700 bg-red-100 rounded-xl px-4 py-2 text-sm mb-4 text-center">{err}</p>}
 
-        {/* Step 3 — Password changed */}
-        {step === 3 && (
-          <div className="bg-white rounded-3xl shadow-lg w-full p-10 text-center">
-            <div className="text-7xl mb-6">🏅</div>
-            <h2 className="text-3xl font-extrabold text-ink mb-4">Password changed!</h2>
-            <p className="text-ink/70 mb-8">
-              You have successfully created a new password. Kindly click the button below to sign in again.
-            </p>
-            <button onClick={handleSignIn}
-                    className="w-full bg-ink text-white font-bold text-xl py-4 rounded-full tracking-wide active:scale-95 transition">
-              SIGN IN
-            </button>
-          </div>
-        )}
+        <div className="bg-white rounded-3xl p-5 shadow">
+          {field('Current Password', current, setCurrent, 'Enter current password')}
+          {field('New Password', next, setNext, 'At least 6 characters')}
+          {field('Confirm New Password', confirm, setConfirm, 'Re-type new password')}
+
+          <button onClick={submit} disabled={loading}
+                  className="w-full text-white font-bold text-lg py-4 rounded-full mt-2 active:scale-95 transition disabled:opacity-60"
+                  style={{ backgroundColor: '#0F6E6E' }}>
+            {loading ? 'SAVING...' : 'CHANGE PASSWORD'}
+          </button>
+        </div>
+
+        <p className="text-center text-ink/60 text-sm mt-5">
+          Forgot your current password?{' '}
+          <button onClick={() => navigate('/forgot-password')} className="font-bold underline text-ink">Reset via email</button>
+        </p>
       </div>
     </div>
   );

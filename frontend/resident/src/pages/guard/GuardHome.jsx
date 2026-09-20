@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
-import { getAnnouncements } from '../../api';
+import { getAnnouncements, getActiveVisitors, getSchedule } from '../../api';
 import {
   Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone, Shield, Clock,
   ScanLine, CalendarDays, Phone, LogOut, FileText, Search, Inbox,
@@ -19,6 +19,28 @@ const AnnIcon = ({ a, ...p }) => {
   return <Megaphone {...p} />;
 };
 
+const fmtTime = (ts) =>
+  ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
+
+// Kunin ang unang value mula sa listahan ng posibleng field names (robust sa iba't ibang schema).
+const pick = (obj, keys) => {
+  for (const k of keys) if (obj && obj[k] != null && obj[k] !== '') return obj[k];
+  return null;
+};
+
+// I-normalize ang kahit anong petsa/timestamp patungo sa LOCAL na YYYY-MM-DD.
+const toLocalISO = (val) => {
+  if (!val) return null;
+  const s = String(val);
+  // PURE date-only string (walang oras/timezone) → gamitin as-is (iwas shift).
+  const dateOnly = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (dateOnly) return dateOnly[1];
+  // May oras/Z (hal. 2026-09-20T16:00:00.000Z) → i-convert sa LOCAL na petsa.
+  const d = new Date(s);
+  if (isNaN(d)) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export default function GuardHome() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
@@ -33,26 +55,49 @@ export default function GuardHome() {
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => setAnnouncements([]));
   }, []);
 
-  // ── Community entries: shared sa buong community (galing localStorage muna) ──
-  const registered = JSON.parse(localStorage.getItem('sentricore_expected') || '[]');
-  const entries = registered.map((r) => ({
-    start: '2:00 PM',
-    end: '-----',
-    name: r.name,
-    type: r.regType === 'Delivery' ? 'Delivery' : 'Visitor',
-    purpose: r.purpose || (r.regType === 'Delivery' ? 'Delivery' : 'N/A'),
-    status: 'ACTIVE',
-  }));
+  // ── Live data mula DB: active visitors + today's schedule ──
+  const [activeList, setActiveList] = useState([]);
+  const [schedule, setSchedule] = useState([]);
+  useEffect(() => {
+    getActiveVisitors()
+      .then((res) => setActiveList((res.data || []).map((t) => ({
+        name: t.visitor_name,
+        type: t.visitor_type || 'Visitor',
+        purpose: t.purpose || 'N/A',
+        start: fmtTime(t.entry_time),
+      }))))
+      .catch(() => setActiveList([]));
+    getSchedule().then((res) => setSchedule(res.data || [])).catch(() => setSchedule([]));
+  }, []);
 
-  // ── Stat counts ──
-  const activeCount = entries.length;      // active entries sa community
-  const expectedCount = entries.length;    // expected today
-  const totalCount = entries.length;       // total
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const todayISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  // ── Stat counts (para sa ARAW na ito) ── robust sa field names + date format
+  const activeCount = activeList.length;   // kasalukuyang nasa loob
+  let expectedToday = 0, departedToday = 0;
+  schedule.forEach((reg) => {
+    // petsa ng expected — subukan lahat ng posibleng field name
+    const regDate = toLocalISO(pick(reg, ['expectedDate', 'expected_date', 'expected_time', 'visit_date', 'date']));
+    // ang mga bisita ay maaaring nasa reg.visitors, o ang reg mismo ay isang row na
+    const visitors = Array.isArray(reg.visitors) && reg.visitors.length ? reg.visitors : [reg];
+    visitors.forEach((v) => {
+      const status = String(pick(v, ['status', 'entry_status', 'entryStatus']) || '').toUpperCase();
+      const vDate = toLocalISO(pick(v, ['expectedDate', 'expected_date', 'expected_time', 'visit_date'])) || regDate;
+      const out = pick(v, ['timeOut', 'exit_time', 'time_out']);
+      const entered = pick(v, ['timeIn', 'entry_time', 'time_in']);
+      // Malinaw na status
+      if (status === 'EXPECTED' && vDate === todayISO) { expectedToday++; return; }
+      if (status === 'DEPARTED' && toLocalISO(out) === todayISO) { departedToday++; return; }
+      // Fallback kung walang status field: expected today = may petsa today, wala pang pasok/labas
+      if (!status && vDate === todayISO && !entered && !out) expectedToday++;
+    });
+  });
+  const totalToday = activeCount + expectedToday + departedToday;
 
   // Build ALL days of the current month with correct day labels
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  const year = today.getFullYear();
-  const month = today.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthDays = [];
   for (let i = 1; i <= daysInMonth; i++) {
@@ -67,7 +112,7 @@ export default function GuardHome() {
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
 
-  const filteredEntries = entries.filter((e) =>
+  const filteredEntries = activeList.filter((e) =>
     e.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -148,12 +193,12 @@ export default function GuardHome() {
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F1D88A' }}>
             <p className="text-sm text-ink">Expected Today</p>
-            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a6d12' }}>{expectedCount}</p>
+            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a6d12' }}>{expectedToday}</p>
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#B8901F' }}><CalendarDays size={20} /></div>
           </div>
           <div className="rounded-3xl p-4 shadow" style={{ backgroundColor: '#F3C9C9' }}>
-            <p className="text-sm text-ink">Total</p>
-            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>{totalCount}</p>
+            <p className="text-sm text-ink">Total Today</p>
+            <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>{totalToday}</p>
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#A83232' }}><FileText size={20} /></div>
           </div>
         </div>
@@ -208,7 +253,7 @@ export default function GuardHome() {
             filteredEntries.map((e, i) => (
               <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3 flex items-center gap-3">
                 <div className="text-xs font-bold text-ink text-center w-16 shrink-0 leading-tight">
-                  {e.start}<br />to<br />{e.end}
+                  {e.start}
                 </div>
                 <div className="flex-1">
                   <p className="font-bold text-ink">{e.name}</p>

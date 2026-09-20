@@ -1,28 +1,23 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, Settings, X, KeyRound, Trash2 } from 'lucide-react';
+import { Search, Settings, X, KeyRound, Trash2, Plus } from 'lucide-react';
 import {
-  adminListGuards, adminGuardActivity, adminAddGuard, adminUpdateGuard,
+  adminListGuards, adminAddGuard, adminUpdateGuard,
   adminAssignGate, adminResetGuardPassword, adminDeleteGuard,
 } from '../../api';
 
-const TABS = ['Guard List', 'Activity Logs', 'Schedule'];
-
-const statusBg = {
-  'On Duty':  { backgroundColor: '#2ea44f', color: '#fff' },
-  'ON DUTY':  { backgroundColor: '#2ea44f', color: '#fff' },
-  'Off Duty': { backgroundColor: '#B7B7B7', color: '#fff' },
-  'OFF DUTY': { backgroundColor: '#B7B7B7', color: '#fff' },
-  'On Break': { backgroundColor: '#F1C542', color: '#5a4a12' },
+const dutyBg = (s) => {
+  const v = (s || '').toLowerCase();
+  if (v.includes('on')) return { backgroundColor: '#2ea44f', color: '#fff' };   // On Duty
+  if (v.includes('break')) return { backgroundColor: '#F1C542', color: '#5a4a12' };
+  return { backgroundColor: '#B7B7B7', color: '#fff' };                          // Off Duty
 };
 
-const fmt = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+const GATE_LABEL = (id) => (id ? `GATE ${String(id).toUpperCase()}` : 'UNASSIGNED');
 
 export default function AdminGuards() {
-  const [tab, setTab] = useState('Guard List');
   const [search, setSearch] = useState('');
   const [guards, setGuards] = useState([]);
-  const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [showAdd, setShowAdd] = useState(false);
@@ -32,157 +27,109 @@ export default function AdminGuards() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([
-      adminListGuards().then((res) => setGuards(res.data || [])).catch(() => setGuards([])),
-      adminGuardActivity().then((res) => setActivity(res.data || [])).catch(() => setActivity([])),
-    ]).finally(() => setLoading(false));
+    adminListGuards()
+      .then((res) => setGuards(res.data || []))
+      .catch(() => setGuards([]))
+      .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
-  const filteredGuards = guards.filter((g) => g.fullName.toLowerCase().includes(search.toLowerCase()));
+  const match = (g) => g.fullName.toLowerCase().includes(search.toLowerCase());
 
-  // Group guards by gate para sa Schedule tab
-  const gates = Array.from(new Set(guards.map((g) => g.gate).filter((x) => x && x !== '—')));
-  if (gates.length === 0) gates.push('Gate 1', 'Gate 2');
+  // Buuin ang listahan ng gates: distinct gateId na meron + laging Gate 1 & 2, at Unassigned kung kailangan
+  const gateIds = Array.from(new Set(guards.map((g) => g.gateId).filter((x) => x != null)));
+  ['1', '2'].forEach((d) => { if (!gateIds.map(String).includes(d)) gateIds.push(d); });
+  gateIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const hasUnassigned = guards.some((g) => g.gateId == null);
+
+  const toggleDuty = async (g) => {
+    const next = (g.status || '').toLowerCase().includes('on') ? 'Off Duty' : 'On Duty';
+    try {
+      await adminUpdateGuard(g.guardId, { fullName: g.fullName, gateId: g.gateId, shift: g.shift === '—' ? '' : g.shift, status: next });
+      load();
+    } catch (err) { alert(err.response?.data?.message || 'Failed to update duty.'); }
+  };
+
+  const GateCard = ({ gateId }) => {
+    const list = guards.filter((g) => String(g.gateId ?? '') === String(gateId ?? '') && match(g));
+    return (
+      <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#EFEBDD' }}>
+          <span className="font-extrabold text-ink">{GATE_LABEL(gateId)}</span>
+          <button onClick={() => setAssignModal({ gateId })}
+                  className="flex items-center gap-1 text-white text-xs font-bold px-3 py-1.5 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>
+            <Plus size={14} /> Assign Guard
+          </button>
+        </div>
+        <div className="p-4 min-h-[160px]">
+          {list.length === 0 ? (
+            <p className="text-center text-ink/40 py-8 text-sm">No guards assigned.</p>
+          ) : list.map((g, i) => (
+            <div key={g.guardId}>
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="font-bold text-ink">{g.fullName}</p>
+                  <p className="text-xs text-ink/60">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => toggleDuty(g)} title="Toggle duty"
+                          className="text-[10px] font-bold px-4 py-1.5 rounded-full" style={dutyBg(g.status)}>
+                    {(g.status || 'Off Duty').replace(' ', '-')}
+                  </button>
+                  <button onClick={() => setEditModal({ ...g })} title="Edit"
+                          className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink"><Settings size={16} /></button>
+                </div>
+              </div>
+              {i < list.length - 1 && <div className="border-b border-gray-100" />}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <AdminLayout>
       <div className="flex items-end justify-between mb-5">
         <div>
           <h1 className="text-3xl font-extrabold text-teal-800">Guards</h1>
-          <p className="text-sm text-ink/60">Security personnel management.</p>
+          <p className="text-sm text-ink/60">Gate assignments, shifts, and guard accounts.</p>
         </div>
         <button onClick={() => setShowAdd(true)}
                 className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>
-          + Add Guard
+          <Plus size={16} /> Add Guard
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm p-4">
-        {/* Search + tabs */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
-            <Search size={18} className="text-ink/40" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
-                   className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
-          </div>
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)}
-                    className={`px-5 py-2 rounded-full text-sm font-bold ${tab === t ? 'text-white' : 'bg-white border border-gray-200 text-ink'}`}
-                    style={tab === t ? { backgroundColor: '#0F6E6E' } : {}}>
-              {t}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
-        ) : (
-          <>
-            {/* GUARD LIST */}
-            {tab === 'Guard List' && (
-              <>
-                <div className="grid grid-cols-5 gap-2 mb-2">
-                  {['Guard Name', 'Shift Schedule', 'Gate Assignment', 'Status', ''].map((h, i) => (
-                    <span key={i} className={`text-[11px] font-bold text-white px-3 py-2 rounded-lg ${i >= 2 ? 'text-center' : ''}`}
-                          style={i === 4 ? { backgroundColor: 'transparent' } : { backgroundColor: '#3a4a4a' }}>{h}</span>
-                  ))}
-                </div>
-                {filteredGuards.length === 0 ? (
-                  <p className="text-center text-ink/50 py-10 text-sm">No guards yet.</p>
-                ) : filteredGuards.map((g) => (
-                  <div key={g.guardId} className="grid grid-cols-5 gap-2 px-2 py-3 border-b border-gray-100 text-sm text-ink items-center">
-                    <span className="font-semibold">{g.fullName}</span>
-                    <span className="text-ink/70">{g.shift}</span>
-                    <span className="text-center text-ink/70">{g.gate}</span>
-                    <span className="text-center">
-                      <span className="text-[10px] font-bold px-4 py-1.5 rounded-full" style={statusBg[g.status] || statusBg['Off Duty']}>{g.status}</span>
-                    </span>
-                    <span className="text-center">
-                      <button onClick={() => setEditModal({ ...g })} className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink" title="Edit"><Settings size={16} /></button>
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* ACTIVITY LOGS */}
-            {tab === 'Activity Logs' && (
-              <>
-                <div className="grid grid-cols-6 gap-2 mb-2">
-                  {['Guard Name', 'Date and Time', 'Visitor Name', 'Unit No.', 'Pass No.', 'Action'].map((h, i) => (
-                    <span key={i} className={`text-[11px] font-bold text-white px-3 py-2 rounded-lg ${i === 5 ? 'text-center' : ''}`}
-                          style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
-                  ))}
-                </div>
-                {activity.length === 0 ? (
-                  <p className="text-center text-ink/50 py-10 text-sm">No activity yet.</p>
-                ) : activity.filter((a) => a.guard.toLowerCase().includes(search.toLowerCase())).map((a, i) => (
-                  <div key={i} className="grid grid-cols-6 gap-2 px-2 py-3 border-b border-gray-100 text-sm text-ink items-center">
-                    <span className="font-semibold">{a.guard}</span>
-                    <span className="text-ink/70">{fmt(a.datetime)}</span>
-                    <span className="text-ink/70">{a.visitor}</span>
-                    <span className="text-ink/70">{a.unit}</span>
-                    <span className="font-bold">{a.pass}</span>
-                    <span className="text-center">
-                      <span className="text-[10px] font-bold px-4 py-1.5 rounded-full"
-                            style={a.action === 'Entry' ? { backgroundColor: '#F1C542', color: '#5a4a12' } : { backgroundColor: '#F3C9C9', color: '#8a2b2b' }}>
-                        {a.action}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* SCHEDULE */}
-            {tab === 'Schedule' && (
-              <div className="grid grid-cols-2 gap-6">
-                {gates.map((gate) => (
-                  <div key={gate} className="border border-gray-100 rounded-2xl overflow-hidden">
-                    <div className="text-white font-bold px-4 py-2.5" style={{ backgroundColor: '#3a4a4a' }}>{gate.toUpperCase()}</div>
-                    <div className="p-4">
-                      <div className="flex justify-end mb-3">
-                        <button onClick={() => setAssignModal({ gate })}
-                                className="flex items-center gap-1 text-white text-xs font-bold px-4 py-1.5 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>
-                          + Assign Guard
-                        </button>
-                      </div>
-                      {guards.filter((g) => g.gate === gate).length === 0 ? (
-                        <p className="text-center text-ink/40 py-6 text-sm">No guards assigned.</p>
-                      ) : guards.filter((g) => g.gate === gate).map((g) => (
-                        <div key={g.guardId} className="flex items-center justify-between mb-4">
-                          <div>
-                            <p className="font-bold text-ink">{g.fullName}</p>
-                            <p className="text-xs text-ink/60">{g.shift}</p>
-                          </div>
-                          <span className="text-[10px] font-bold px-4 py-1.5 rounded-full" style={statusBg[g.status] || statusBg['Off Duty']}>{g.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+      {/* Search */}
+      <div className="flex items-center gap-2 rounded-full px-4 py-2 mb-5 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
+        <Search size={18} className="text-ink/40" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
+               className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
       </div>
+
+      {loading ? (
+        <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-6">
+          {gateIds.map((id) => <GateCard key={id} gateId={id} />)}
+          {hasUnassigned && <GateCard gateId={null} />}
+        </div>
+      )}
 
       {/* Add Guard */}
       {showAdd && <GuardForm title="Add Guard"
         onClose={() => setShowAdd(false)}
         onSubmit={async (data) => {
-          try {
-            const res = await adminAddGuard(data);
-            setShowAdd(false); setCredModal(res.data.credentials); load();
-          } catch (err) { alert(err.response?.data?.message || 'Failed to add guard.'); }
+          try { const res = await adminAddGuard(data); setShowAdd(false); setCredModal(res.data.credentials); load(); }
+          catch (err) { alert(err.response?.data?.message || 'Failed to add guard.'); }
         }} />}
 
       {/* Edit Guard */}
       {editModal && <GuardForm title="Edit Guard" initial={editModal} showManage
         onClose={() => setEditModal(null)}
         onReset={async () => {
-          if (!window.confirm('Reset this guard\'s password?')) return;
+          if (!window.confirm("Reset this guard's password?")) return;
           try { const res = await adminResetGuardPassword(editModal.guardId); setEditModal(null); setCredModal({ username: editModal.username, password: res.data.password }); }
           catch (err) { alert(err.response?.data?.message || 'Failed to reset.'); }
         }}
@@ -192,7 +139,7 @@ export default function AdminGuards() {
           catch (err) { alert(err.response?.data?.message || 'Failed to delete.'); }
         }}
         onSubmit={async (data) => {
-          try { await adminUpdateGuard(editModal.guardId, { ...data, status: editModal.status }); setEditModal(null); load(); }
+          try { await adminUpdateGuard(editModal.guardId, data); setEditModal(null); load(); }
           catch (err) { alert(err.response?.data?.message || 'Failed to update.'); }
         }} />}
 
@@ -201,14 +148,15 @@ export default function AdminGuards() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setAssignModal(null)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setAssignModal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
-            <h2 className="text-xl font-extrabold text-ink mb-1">Assign Guard to {assignModal.gate}</h2>
-            <p className="text-xs text-ink/60 mb-4">Ang guard ay malilipat sa gate na ito.</p>
+            <h2 className="text-xl font-extrabold text-ink mb-1">Assign to {GATE_LABEL(assignModal.gateId)}</h2>
+            <p className="text-xs text-ink/60 mb-4">Piliin ang guard na ilalagay sa gate na ito.</p>
             <div className="max-h-64 overflow-y-auto space-y-2">
-              {guards.map((g) => (
+              {guards.length === 0 ? (
+                <p className="text-center text-ink/50 py-6 text-sm">No guards yet.</p>
+              ) : guards.map((g) => (
                 <button key={g.guardId}
                         onClick={async () => {
-                          const gateId = assignModal.gate.replace(/\D/g, '') || null;
-                          try { await adminAssignGate(g.guardId, gateId); setAssignModal(null); load(); }
+                          try { await adminAssignGate(g.guardId, assignModal.gateId); setAssignModal(null); load(); }
                           catch (err) { alert(err.response?.data?.message || 'Failed to assign.'); }
                         }}
                         className="w-full text-left rounded-xl p-3 border border-gray-200 hover:border-teal-500 flex items-center justify-between">
@@ -228,7 +176,7 @@ export default function AdminGuards() {
             <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4"><KeyRound size={30} className="text-teal-700" /></div>
             <h2 className="text-lg font-extrabold text-ink mb-1">Guard Login Credentials</h2>
             <p className="text-sm text-ink/60 mb-4">Ibigay ito sa guard. Ipakita lang isang beses.</p>
-            <div className="bg-cream rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
+            <div className="rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
               <p className="text-xs font-bold text-ink/50">Username</p>
               <p className="text-base font-extrabold text-teal-800 mb-2">{credModal.username}</p>
               <p className="text-xs font-bold text-ink/50">Temporary Password</p>
@@ -250,10 +198,9 @@ export default function AdminGuards() {
 function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onDelete }) {
   const [form, setForm] = useState({
     fullName: initial?.fullName || '',
-    gateId: initial?.gateId || '',
+    gateId: initial?.gateId ?? '',
     shift: initial?.shift && initial.shift !== '—' ? initial.shift : '',
-    contact: initial?.contact || '',
-    email: initial?.email || '',
+    status: initial?.status || 'Off Duty',
   });
 
   return (
@@ -281,10 +228,28 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
             </div>
             <div>
               <label className="block text-xs font-bold text-ink mb-1">Shift Schedule</label>
-              <input value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}
-                     placeholder="6:00 AM - 2:00 PM" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
+              <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
+                <option value="">Select Shift</option>
+                <option value="6:00 AM - 6:00 PM">6:00 AM - 6:00 PM</option>
+                <option value="6:00 PM - 6:00 AM">6:00 PM - 6:00 AM</option>
+              </select>
             </div>
           </div>
+          {initial && (
+            <div>
+              <label className="block text-xs font-bold text-ink mb-1">Duty Status</label>
+              <div className="flex gap-2">
+                {['On Duty', 'Off Duty'].map((s) => (
+                  <button key={s} type="button" onClick={() => setForm({ ...form, status: s })}
+                          className="flex-1 py-2 rounded-full text-xs font-bold border-2"
+                          style={form.status === s ? { ...dutyBg(s), borderColor: 'transparent' } : { borderColor: '#e5e7eb', color: '#112D31' }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {showManage && (

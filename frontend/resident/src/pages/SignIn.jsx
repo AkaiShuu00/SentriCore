@@ -10,7 +10,6 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showForgot, setShowForgot] = useState(false);
   const [showNoAccount, setShowNoAccount] = useState(false);
 
   async function handleSignIn() {
@@ -21,22 +20,16 @@ export default function SignIn() {
     }
     setLoading(true);
     try {
-      // Walang hardcoded role — ang backend na ang magsasabi kung Resident o Guard
       const res = await axios.post(`${API}/auth/login`, { username, password });
 
       const user = res.data.user;
-      // IMPORTANTE: localStorage (hindi localStorage) para pare-pareho sa PreRegister/GuardVerify
-      // at para hindi mawala ang session kapag nag-refresh o nagbukas ng bagong tab.
+      // localStorage (pare-pareho sa buong app)
       localStorage.setItem('sentricore_token', res.data.token);
       localStorage.setItem('sentricore_user', JSON.stringify(user));
 
-      // Role-based redirect
       const role = (user.role || '').toLowerCase();
-      if (role === 'guard') {
-        navigate('/guard-home');
-      } else {
-        navigate('/home');
-      }
+      if (role === 'guard') navigate('/guard-home');
+      else navigate('/home');
     } catch (err) {
       setError(err.response?.data?.message || 'Sign in failed. Please try again.');
       setLoading(false);
@@ -77,9 +70,9 @@ export default function SignIn() {
             className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30 mb-2"
           />
 
-          {/* Forgot password → modal */}
+          {/* Forgot password → email-code reset flow */}
           <div className="text-right mb-4">
-            <button onClick={() => setShowForgot(true)} className="text-ink underline text-sm">
+            <button onClick={() => navigate('/forgot-password')} className="text-ink underline text-sm">
               Forgot your password?
             </button>
           </div>
@@ -105,25 +98,6 @@ export default function SignIn() {
           </p>
         </div>
 
-        {/* Forgot password modal */}
-        {showForgot && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
-            <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full">
-              <div className="flex justify-center mb-4"><ForgotIcon /></div>
-              <h3 className="text-2xl font-extrabold text-ink mb-3">Forgot password?</h3>
-              <p className="text-ink/70 mb-6">
-                Please contact your HOA administrator to request a change of login credentials.
-              </p>
-              <button
-                onClick={() => setShowForgot(false)}
-                className="w-full bg-ink text-white font-bold py-4 rounded-full active:scale-95 transition"
-              >
-                BACK TO SIGN IN
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* No account modal */}
         {showNoAccount && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
@@ -144,18 +118,6 @@ export default function SignIn() {
         )}
       </div>
     </div>
-  );
-}
-
-// ─── Icons ───────────────────────────────────────────────────────────────────
-function ForgotIcon() {
-  return (
-    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M24 30v-6a12 12 0 0 1 24 0v6" stroke="#112D31" strokeWidth="5" strokeLinecap="round" />
-      <circle cx="36" cy="20" r="8" fill="#112D31" />
-      <rect x="12" y="30" width="48" height="20" rx="4" fill="#112D31" />
-      <text x="36" y="45" fontSize="16" fill="white" textAnchor="middle" fontWeight="bold" fontFamily="monospace">✱✱✱✱</text>
-    </svg>
   );
 }
 
