@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
-import { getAdminSummary, getAnnouncements } from '../../api';
+import { getAdminSummary, getAnnouncements, adminListComplaints } from '../../api';
 import {
-  MapPin, LogIn, CalendarDays, ShieldCheck, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare,
+  MapPin, LogIn, CalendarDays, ShieldCheck, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle,
 } from 'lucide-react';
 
 // ── Sample data (iko-connect sa DB after) ──
@@ -44,12 +44,20 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ activeVisitors: 0, todayEntries: 0, expectedToday: 0, activeGates: 0, total: 0 });
   const [recent, setRecent] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [pendingComplaints, setPendingComplaints] = useState(0);
 
   useEffect(() => {
     getAdminSummary()
       .then((res) => { setStats(res.data.stats || {}); setRecent(res.data.recent || []); })
       .catch(() => {});
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => {});
+    // Bilang ng bagong (Pending) na complaints mula sa residents
+    adminListComplaints()
+      .then((res) => {
+        const list = res.data?.list || [];
+        setPendingComplaints(list.filter((c) => (c.status || 'Pending') === 'Pending').length);
+      })
+      .catch(() => setPendingComplaints(0));
   }, []);
 
   const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
@@ -196,6 +204,30 @@ export default function AdminDashboard() {
               })}
             </div>
           </div>
+
+          {/* Complaint Reports — notification kapag may bagong reklamo mula sa residents */}
+          <button onClick={() => navigate('/admin-reports?view=complaints')}
+                  className="w-full mt-5 bg-white rounded-3xl p-5 shadow-sm flex items-center gap-4 text-left active:scale-[0.99] transition">
+            <div className="relative shrink-0">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#F3C9C9' }}>
+                <AlertTriangle size={22} style={{ color: '#9b2c2c' }} />
+              </div>
+              {pendingComplaints > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow">
+                  {pendingComplaints > 9 ? '9+' : pendingComplaints}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-extrabold text-ink">Complaint Reports</p>
+              <p className="text-xs text-ink/60">
+                {pendingComplaints > 0
+                  ? `${pendingComplaints} new complaint${pendingComplaints > 1 ? 's' : ''} reported by residents`
+                  : 'No new complaints — tap to view all'}
+              </p>
+            </div>
+            <span className="text-ink/40 shrink-0">›</span>
+          </button>
         </div>
       </div>
 

@@ -12,7 +12,8 @@ const {
   getResidentsForGuard,
   getCompanions,
   getSchedule,
-  expireOld
+  expireOld,
+  previewPasses
 } = require('../controllers/entryController');
 
 // ── Guard routes ──
@@ -23,6 +24,7 @@ router.get('/residents', verifyToken, requireRole('Guard'), getResidentsForGuard
 router.get('/companions', verifyToken, requireRole('Guard'), getCompanions);
 router.get('/schedule', verifyToken, requireRole('Guard'), getSchedule);
 router.post('/group', verifyToken, requireRole('Guard'), createGroupEntry);
+router.post('/preview-pass', verifyToken, requireRole('Guard'), previewPasses);
 
 // ── Admin routes ──
 router.get('/all-logs', verifyToken, requireRole('Admin', 'Guard'), getAllLogs);

@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 
+const tokenize = (s) => (s || '').toUpperCase().split(/[\s,.\-]+/).filter((t) => t.length >= 2);
+
 // POST /api/blocklist  (Resident) - add a person to block
 async function addToBlocklist(req, res) {
   try {
@@ -56,21 +58,35 @@ async function removeFromBlocklist(req, res) {
   }
 }
 
-// GET /api/blocklist/check?name=  (Guard) - check if a visitor is blocked
+// GET /api/blocklist/check?name=  (Guard) - check if a visitor's name matches a blocked person.
+// Token-based matching (para hindi mag-over/under match) + isinasama ang detalye
+// ng nag-report na resident (pangalan, unit, contact) para sa mabilis+secure na verification.
 async function checkBlocklist(req, res) {
   try {
     const name = (req.query.name || '').trim();
     if (!name) return res.json({ blocked: false, matches: [] });
+    const scanned = tokenize(name);
+    if (scanned.length === 0) return res.json({ blocked: false, matches: [] });
 
     const [rows] = await pool.query(
-      `SELECT b.person_name, b.reason, res.full_name AS reported_by
+      `SELECT b.block_id, b.person_name, b.reason, b.added_at,
+              res.resident_id, res.full_name AS reported_by,
+              res.unit_address, res.phone_number AS reported_by_contact
        FROM BlockList b
        JOIN Residents res ON res.resident_id = b.resident_id
-       WHERE b.person_name LIKE ?`,
-      [`%${name}%`]
+       ORDER BY b.block_id DESC`
     );
 
-    res.json({ blocked: rows.length > 0, matches: rows });
+    // Tugma kung LAHAT ng token ng blocklisted name ay nasa scanned name (o kabaligtaran).
+    const matches = rows.filter((r) => {
+      const bl = tokenize(r.person_name);
+      if (bl.length === 0) return false;
+      const allBlInScan = bl.every((t) => scanned.includes(t));
+      const allScanInBl = scanned.every((t) => bl.includes(t));
+      return allBlInScan || allScanInBl;
+    });
+
+    res.json({ blocked: matches.length > 0, matches });
   } catch (err) {
     res.status(500).json({ message: 'Error checking block list.', error: err.message });
   }

@@ -13,6 +13,25 @@ const statusBg = {
 const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
 
+// I-convert ang timestamp patungo sa LOCAL na YYYY-MM-DD (para tugma sa nakikitang petsa
+// at sa date filter — iwas sa UTC off-by-one kung saan naiiwan ang mga entry ng unang araw).
+const toLocalISO = (ts) => {
+  if (!ts) return '';
+  const s = String(ts);
+  const dateOnly = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (dateOnly) return dateOnly[1];
+  const d = new Date(s);
+  if (isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+// Local HH:MM key (para sa exit grouping — sino ang magkasabay na lumabas)
+const localMinuteKey = (ts) => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  return `${toLocalISO(ts)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 export default function GuardLogs() {
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
@@ -22,6 +41,7 @@ export default function GuardLogs() {
   const [toDate, setToDate] = useState('');
   const [sortOpen, setSortOpen] = useState(false);
   const [sortBy, setSortBy] = useState('Newest first');
+  const [linkMode, setLinkMode] = useState('ENTRY'); // para sa LINKED filter: ENTRY o EXIT
 
   // ── History mula DB ──
   const [records, setRecords] = useState([]);
@@ -35,7 +55,7 @@ export default function GuardLogs() {
           const prefix = type === 'DELIVERY' ? 'DLV' : type === 'BATCH' ? 'BTC' : 'VST';
           const st = (t.status || 'Departed').toUpperCase(); // DEPARTED o EXPIRED
           return {
-            dateISO: (t.entry_time || t.exit_time || '').slice(0, 10),
+            dateISO: toLocalISO(t.entry_time || t.exit_time),  // LOCAL date (tugma sa display + filter)
             date: t.entry_time ? new Date(t.entry_time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '-----',
             time: st === 'EXPIRED' ? 'Did not arrive' : `${fmtTime(t.entry_time)} to ${fmtTime(t.exit_time)}`,
             name: t.visitor_name,
@@ -46,6 +66,11 @@ export default function GuardLogs() {
             status: st,
             entryId: t.pass_number || `${prefix} ${t.transaction_id || '—'}`,
             type,
+            // Linked info
+            arrivalId: t.arrival_id || null,
+            linked: !!t.arrival_id,
+            entryTime: t.entry_time || null,
+            exitTime: t.exit_time || null,
           };
         });
         setRecords(mapped);
@@ -62,7 +87,7 @@ export default function GuardLogs() {
 
   // ── Filtering ──
   let filtered = records
-    .filter((r) => filter === 'ALL' || r.type === filter)
+    .filter((r) => filter === 'ALL' || (filter === 'LINKED' ? r.linked : r.type === filter))
     .filter((r) => {
       const q = search.toLowerCase();
       return r.name.toLowerCase().includes(q) || r.entryId.toLowerCase().includes(q);
@@ -89,6 +114,34 @@ export default function GuardLogs() {
     DEPARTED: filtered.filter((r) => r.status === 'DEPARTED').length,
     EXPIRED: filtered.filter((r) => r.status === 'EXPIRED').length,
   };
+
+  // ── LINKED grouping ──
+  // ENTRY = magkasabay na pumasok (parehong arrival_id)
+  // EXIT  = magkasabay na lumabas (parehong petsa+oras ng exit, hanggang minuto)
+  const buildLinkedGroups = () => {
+    const map = new Map();
+    if (linkMode === 'ENTRY') {
+      filtered.forEach((r) => {
+        if (!r.arrivalId) return;
+        const k = 'A' + r.arrivalId;
+        if (!map.has(k)) map.set(k, { key: k, when: r.entryTime, members: [] });
+        map.get(k).members.push(r);
+      });
+    } else {
+      filtered.forEach((r) => {
+        if (r.status !== 'DEPARTED' || !r.exitTime) return;
+        const k = localMinuteKey(r.exitTime);
+        if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] });
+        map.get(k).members.push(r);
+      });
+    }
+    let groups = Array.from(map.values()).filter((g) => g.members.length >= 2); // 2+ = tunay na linked
+    groups.sort((a, b) => (sortBy === 'Oldest first'
+      ? new Date(a.when) - new Date(b.when)
+      : new Date(b.when) - new Date(a.when)));
+    return groups;
+  };
+  const linkedGroups = filter === 'LINKED' ? buildLinkedGroups() : [];
 
   const exportCSV = () => {
     if (filtered.length === 0) { alert('No records to export.'); return; }
@@ -211,7 +264,75 @@ export default function GuardLogs() {
           </button>
         </div>
 
-        {/* Table */}
+        {/* LINKED: Entry / Exit toggle */}
+        {filter === 'LINKED' && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-ink/60 mb-2">Show linked groups by:</p>
+            <div className="flex gap-2">
+              {['ENTRY', 'EXIT'].map((m) => (
+                <button key={m} onClick={() => setLinkMode(m)}
+                        className={`flex-1 py-2 rounded-full text-xs font-bold shadow ${linkMode === m ? 'text-white' : 'bg-white text-ink'}`}
+                        style={linkMode === m ? { backgroundColor: '#0F6E6E' } : {}}>
+                  {m === 'ENTRY' ? 'LINKED ENTRY' : 'LINKED EXIT'}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-ink/50 mt-2">
+              {linkMode === 'ENTRY'
+                ? 'Mga taong magkasabay na PUMASOK (iisang arrival).'
+                : 'Mga taong magkasabay na LUMABAS (iisang oras ng exit).'}
+            </p>
+          </div>
+        )}
+
+        {/* LINKED grouped view */}
+        {filter === 'LINKED' && (
+          <div className="mt-4 mb-4 space-y-3">
+            {loading ? (
+              <div className="text-center py-10 text-ink/50">Loading history…</div>
+            ) : linkedGroups.length === 0 ? (
+              <div className="bg-white rounded-3xl shadow text-center py-10">
+                <div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
+                <p className="text-ink/60 font-semibold">No linked {linkMode === 'ENTRY' ? 'entries' : 'exits'} found</p>
+                <p className="text-ink/40 text-sm mt-1">Groups of 2+ who {linkMode === 'ENTRY' ? 'entered' : 'exited'} together appear here.</p>
+              </div>
+            ) : (
+              linkedGroups.map((g) => (
+                <div key={g.key} className="bg-white rounded-3xl shadow overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#E8F0EE' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ backgroundColor: '#0F6E6E' }}>
+                        LINKED {linkMode}
+                      </span>
+                      <span className="text-xs font-bold text-ink">{g.members.length} people</span>
+                    </div>
+                    <span className="text-[11px] text-ink/60">
+                      {new Date(g.when).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {g.members.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between px-4 py-3 gap-2">
+                        <div className="min-w-0">
+                          <p className="font-bold text-ink text-sm truncate">{r.name}</p>
+                          <p className="text-[11px] text-ink/60 truncate">{r.kind} · {r.resident} · {r.address}</p>
+                          <p className="text-[11px] text-ink/50">{r.time}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[11px] font-bold text-ink">{r.entryId}</p>
+                          <span className="text-[8px] font-bold px-2 py-1 rounded-full inline-block mt-1" style={statusBg[r.status]}>{r.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Table (SINGLE/BATCH/DELIVERY/ALL) */}
+        {filter !== 'LINKED' && (
         <div className="bg-white rounded-3xl shadow mt-4 overflow-hidden mb-4">
           <div className="grid grid-cols-5 gap-1 bg-gray-100 px-3 py-3 text-center">
             <span className="text-[10px] font-bold text-ink">Date & Time</span>
@@ -255,6 +376,7 @@ export default function GuardLogs() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       <GuardBottomNav active="logs" />

@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getGuards } from '../api';
+import { Search, Phone, ShieldCheck, RefreshCw } from 'lucide-react';
 
 const FILTERS = ['ALL', 'ON DUTY', 'ON BREAK', 'OFF DUTY', 'UNAVAILABLE'];
 
@@ -7,14 +9,20 @@ export default function ContactGuard() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
+  const [guards, setGuards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Sample data (ikokonekta sa backend after — /api/guards/on-duty)
-  const guards = [
-    { name: 'Aiyana B. Fruto', phone: '0917 123 4567', email: 'guardone@gmail.com', gate: 'Gate 1', status: 'ON DUTY' },
-    { name: 'Tywin Lannister', phone: '0918 689 3205', email: 'guardtwo@gmail.com', gate: 'Gate 2', status: 'ON BREAK' },
-    { name: 'Sansa Stark', phone: '0978 461 1289', email: 'guardthree@gmail.com', gate: '-', status: 'OFF DUTY' },
-    { name: 'Margaery Tyrell', phone: '0946 385 1222', email: 'guardfour@gmail.com', gate: '-', status: 'UNAVAILABLE' },
-  ];
+  const load = () => {
+    setLoading(true);
+    setError('');
+    getGuards()
+      .then((res) => setGuards(res.data || []))
+      .catch(() => setError('Hindi ma-load ang listahan ng guards.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
 
   const statusStyle = {
     'ON DUTY': { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
@@ -24,8 +32,16 @@ export default function ContactGuard() {
   };
 
   const filtered = guards
-    .filter(g => filter === 'ALL' || g.status === filter)
-    .filter(g => g.name.toLowerCase().includes(search.toLowerCase()));
+    .filter((g) => filter === 'ALL' || g.status === filter)
+    .filter((g) => (g.name || '').toLowerCase().includes(search.toLowerCase()));
+
+  // Call → buksan ang Phone app (tel:). Pagkatapos ng tawag, babalik mismo
+  // ang resident sa SentriCore (walang extra step — standard sa mobile).
+  const callGuard = (g) => {
+    const number = (g.phone || '').replace(/[^\d+]/g, '');
+    if (!number) { alert('Walang contact number ang guard na ito.'); return; }
+    window.location.href = `tel:${number}`;
+  };
 
   return (
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
@@ -41,7 +57,7 @@ export default function ContactGuard() {
 
         {/* Search */}
         <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow">
-          <span className="text-ink/40">🔍</span>
+          <Search size={18} className="text-ink/40" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
                  placeholder="Search guard name"
                  className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
@@ -60,31 +76,45 @@ export default function ContactGuard() {
 
         {/* Guard list card */}
         <div className="bg-white rounded-3xl p-5 shadow mt-4">
-          <p className="text-ink/70 mb-3">Select guard to contact</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-ink/70">Select guard to contact</p>
+            <button onClick={load} className="inline-flex items-center gap-1 text-xs font-bold text-teal-700">
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
           <div className="border-b border-gray-200 mb-4" />
 
           <div className="max-h-[55vh] overflow-y-auto space-y-4">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <p className="text-center text-ink/50 py-6">Loading guards...</p>
+            ) : error ? (
+              <p className="text-center text-red-600 py-6">{error}</p>
+            ) : filtered.length === 0 ? (
               <p className="text-center text-ink/50 py-6">No guards found.</p>
             ) : (
               filtered.map((g, i) => {
-                const canCall = g.status === 'ON DUTY';
+                const canCall = g.status === 'ON DUTY' && !!g.phone;
                 return (
-                  <div key={i} className="border border-gray-100 rounded-2xl p-4 shadow-sm relative">
-                    <span className="absolute top-3 right-3 text-[10px] font-bold px-2 py-1 rounded" style={statusStyle[g.status]}>
+                  <div key={g.guardId || i} className="border border-gray-100 rounded-2xl p-4 shadow-sm relative">
+                    <span className="absolute top-3 right-3 text-[10px] font-bold px-2 py-1 rounded" style={statusStyle[g.status] || statusStyle['OFF DUTY']}>
                       {g.status}
                     </span>
-                    <p className="font-bold text-ink pr-20">{g.name}</p>
-                    <p className="text-sm text-ink/70">Contact Number: {g.phone}</p>
-                    <p className="text-sm text-ink/70">Email Address: {g.email}</p>
-                    <p className="text-sm text-ink/70">Assigned Gate: {g.gate}</p>
+                    <div className="flex items-center gap-2 pr-20">
+                      <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
+                        <ShieldCheck size={18} className="text-ink" />
+                      </div>
+                      <p className="font-bold text-ink">{g.name}</p>
+                    </div>
+                    <p className="text-sm text-ink/70 mt-2">Contact Number: {g.phone || '—'}</p>
+                    <p className="text-sm text-ink/70">Email Address: {g.email || '—'}</p>
+                    <p className="text-sm text-ink/70">Assigned Gate: {g.gate || '-'}</p>
                     <div className="flex justify-center mt-3">
                       <button
                         disabled={!canCall}
-                        onClick={() => canCall && (window.location.href = `tel:${g.phone.replace(/\s/g, '')}`)}
-                        className={`px-8 py-2 rounded-full font-bold flex items-center gap-2 ${canCall ? 'text-ink' : 'text-ink/40'}`}
+                        onClick={() => canCall && callGuard(g)}
+                        className={`px-8 py-2 rounded-full font-bold inline-flex items-center gap-2 ${canCall ? 'text-ink' : 'text-ink/40'}`}
                         style={{ backgroundColor: canCall ? '#A9D0F5' : '#D9D9D9' }}>
-                        CALL 📞
+                        <Phone size={16} /> CALL
                       </button>
                     </div>
                   </div>

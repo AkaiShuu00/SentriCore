@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -36,7 +37,8 @@ const STATUS_COLOR = {
 };
 
 export default function AdminReports() {
-  const [view, setView] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const [view, setView] = useState(searchParams.get('view') || 'overview');
   const [showGen, setShowGen] = useState(false);
 
   const [report, setReport] = useState(null);

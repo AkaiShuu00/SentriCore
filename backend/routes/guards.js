@@ -6,14 +6,28 @@ const {
   createGuard,
   updateGuard,
   getMyProfile,
-  getOnDutyGuards
+  getOnDutyGuards,
+  getGuardDirectory,
+  getMyShift,
+  endShift,
+  getGuardShifts,
 } = require('../controllers/guardController');
 
 // Guard's own profile
 router.get('/me', verifyToken, requireRole('Guard'), getMyProfile);
 
+// Guard shift (time-in/out)
+router.get('/my-shift', verifyToken, requireRole('Guard'), getMyShift);
+router.post('/end-shift', verifyToken, requireRole('Guard'), endShift);
+
+// Admin: guard time-in/out records
+router.get('/shifts', verifyToken, requireRole('Admin'), getGuardShifts);
+
 // On-duty guards (for resident's "Contact Guard")
 router.get('/on-duty', verifyToken, getOnDutyGuards);
+
+// FULL guard directory + status (resident Contact Guard screen)
+router.get('/directory', verifyToken, getGuardDirectory);
 
 // Admin-only management
 router.get('/', verifyToken, requireRole('Admin'), getGuards);

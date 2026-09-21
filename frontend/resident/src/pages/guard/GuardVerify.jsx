@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule } from '../../api';
-import { User, Truck, Camera, Search, RefreshCw } from 'lucide-react';
+import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist } from '../../api';
+import { User, Truck, Camera, Search, RefreshCw, ShieldAlert, Phone } from 'lucide-react';
 
 const teal = '#0F6E6E';
 // Relative na base URL — dumadaan sa ngrok/Vite proxy → backend → OCR.
@@ -100,6 +100,10 @@ export default function GuardVerify() {
   const [entryCompanions, setEntryCompanions] = useState([]);   // para sa ENTRY accompanying
   const [registeredDB, setRegisteredDB] = useState([]);         // lahat ng registered/expected visitors (manual search)
   const [regSearch, setRegSearch] = useState('');
+  const [passMap, setPassMap] = useState({});                   // preview: NAME(UPPER) → pass number (V-001/D-001)
+  const [gatePickups, setGatePickups] = useState([]);           // residents na naghihintay ng pickup (DB, cross-device)
+  const [blockInfo, setBlockInfo] = useState(null);             // { blocked, matches } para sa na-scan na bisita
+  const [blockNote, setBlockNote] = useState('');               // note kapag kinumpirma ni guard na ibang tao
 
   const token = () => localStorage.getItem('sentricore_token');
   // Header para hindi ibalik ng ngrok-free ang HTML warning page sa mga API call.
@@ -242,14 +246,21 @@ export default function GuardVerify() {
     return matchQ && matchBlock;
   });
 
+  // Call Resident → buksan ang Phone app gamit ang TOTOONG contact number ng resident
+  // (galing DB: contact_number). Pagkatapos ng tawag, babalik mismo si guard sa SentriCore.
   const callResident = (r) => {
     setContactedResident(r);
-    window.location.href = `tel:${(r.contact || '').replace(/\s/g, '')}`;
+    const number = String(r.contact || r.contact_number || r.phone || '').replace(/[^\d+]/g, '');
+    if (!number) {
+      alert('Walang contact number ang resident na ito.');
+    } else {
+      window.location.href = `tel:${number}`;
+    }
     setShowCallResult(true);
   };
 
-  // ── Save ENTRY sa DATABASE (bawat companion may sariling resident/registration) ──
-  const saveArrival = async () => {
+  // ── Bumuo ng visitors payload (ginagamit ng saveArrival AT ng pass preview) ──
+  const buildEntryVisitors = () => {
     // typeOverride: per-row visitor type (Visitor / Driver / Delivery)
     const mk = (name, resId, regId, typeOverride) => ({
       residentId: resId || null,
@@ -283,6 +294,12 @@ export default function GuardVerify() {
     if (visitors.length === 0 && entryInfo.visitor) {
       visitors.push(mk(entryInfo.visitor, entryInfo.residentId, entryInfo.registrationId, 'Visitor'));
     }
+    return visitors;
+  };
+
+  // ── Save ENTRY sa DATABASE (bawat companion may sariling resident/registration) ──
+  const saveArrival = async () => {
+    const visitors = buildEntryVisitors();
 
     const res = await fetch(`${API}/entry/group`, {
       method: 'POST',
@@ -569,6 +586,46 @@ export default function GuardVerify() {
     }
   }, [step, photoFile]);
 
+  // ── Pagpasok sa PICKUP RESIDENT step → kunin ang naghihintay na pickups mula DB ──
+  useEffect(() => {
+    if (step !== 'pickupResidents') return;
+    getGatePickups().then((res) => setGatePickups(res.data || [])).catch(() => setGatePickups([]));
+  }, [step]);
+
+  // ── Pagpasok sa MATCHED (entry visitor) → i-check kung tumutugma sa blocklist ──
+  useEffect(() => {
+    if (step !== 'matched' || isExit || isDriverFlow) { return; }
+    const nm = (matchData.visitor || scannedName || '').trim();
+    if (!nm) { setBlockInfo(null); return; }
+    checkBlocklist(nm)
+      .then((res) => setBlockInfo(res.data || { blocked: false, matches: [] }))
+      .catch(() => setBlockInfo(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, matchData.visitor, scannedName]);
+
+  // ── Pagpasok sa CONFIRM step (entry) → i-preview ang mga totoong pass number ──
+  // Ginagamit ang parehong payload at backend logic para tugma sa aktwal na maiimbak.
+  useEffect(() => {
+    if (step !== 'confirmed' || isExit) return;
+    const visitors = buildEntryVisitors();
+    if (visitors.length === 0) { setPassMap({}); return; }
+    fetch(`${API}/entry/preview-pass`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ visitors }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const m = {};
+        (d.passes || []).forEach((p) => {
+          if (p.visitorName != null) m[String(p.visitorName).toUpperCase()] = p.passNumber;
+        });
+        setPassMap(m);
+      })
+      .catch(() => setPassMap({}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   const close = () => navigate('/guard-home');
 
   const handleApprove = async () => {
@@ -606,12 +663,14 @@ export default function GuardVerify() {
 
   // Confirmed cards: main + companions (bawat isa may sariling resident/address/purpose)
   const confirmedList = [
-    { name: entryInfo.visitor, resident: entryInfo.resident, address: entryInfo.address, purpose: entryInfo.purpose },
+    { name: entryInfo.visitor, resident: entryInfo.resident, address: entryInfo.address, purpose: entryInfo.purpose, pass: entryInfo.passId },
     ...selectedCompanions.map((c) => ({
       name: c.name,
       resident: c.resident || entryInfo.resident,
       address: c.address || entryInfo.address,
       purpose: c.purpose || entryInfo.purpose,
+      // bawat active companion ay may sariling pass_number galing DB (para sa EXIT)
+      pass: c.passNumber || c.passId || '',
     })),
   ].filter((x, i) => i === 0 || x.name);
 
@@ -819,9 +878,6 @@ export default function GuardVerify() {
         {/* SELECT VISITOR — kapag maraming tumugmang pangalan (magkaibang resident) */}
         {step === 'selectVisitor' && (
           <div>
-            <div className="bg-white rounded-2xl p-3 shadow mb-4">
-              <IDCardPlaceholder name={scannedName} />
-            </div>
             <h2 className="text-xl font-extrabold text-ink text-center mb-1">SELECT VISITOR</h2>
             <p className="text-center text-xs text-ink/60 mb-4">
               Multiple visitors match this name. Ask which resident they're visiting, then select.
@@ -978,9 +1034,6 @@ export default function GuardVerify() {
         {step === 'matched' && (
           isDriverFlow ? (
             <div>
-              <div className="bg-white rounded-2xl p-3 shadow mb-4">
-                <IDCardPlaceholder name={driverName} />
-              </div>
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">DRIVER INFORMATION</h2>
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
                 {(isDelivery
@@ -1050,9 +1103,6 @@ export default function GuardVerify() {
             </div>
           ) : (
             <div>
-              <div className="bg-white rounded-2xl p-3 shadow mb-4">
-                <IDCardPlaceholder name={scannedName} />
-              </div>
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">
                 {isExit ? 'ACTIVE VISITOR' : 'VISITOR MATCHED'}
               </h2>
@@ -1098,16 +1148,37 @@ export default function GuardVerify() {
                 </div>
               )}
 
+              {/* BLOCKLIST FLAG — kapag ang pangalan ay tumugma sa isang blocked person */}
+              {!isExit && blockInfo?.blocked && (
+                <div className="rounded-2xl p-4 mb-4 border-2" style={{ backgroundColor: '#FDECEC', borderColor: '#9b2c2c' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldAlert size={20} style={{ color: '#9b2c2c' }} />
+                    <p className="text-sm font-extrabold" style={{ color: '#9b2c2c' }}>BLOCKLIST MATCH</p>
+                  </div>
+                  <p className="text-xs text-ink/70">
+                    This name matches {blockInfo.matches.length} blocklisted {blockInfo.matches.length > 1 ? 'entries' : 'entry'}.
+                    Verify identity before allowing entry — it could be a different person with the same name.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
                   <button onClick={() => setStep(isExit ? 'exitSelect' : 'residentList')}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                     MANUAL SEARCH
                   </button>
-                  <button disabled={!matchData.visitor} onClick={onConfirmMatch}
-                          className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-40" style={{ backgroundColor: '#112D31' }}>
-                    CONFIRM MATCH
-                  </button>
+                  {!isExit && blockInfo?.blocked ? (
+                    <button disabled={!matchData.visitor} onClick={() => { setBlockNote(''); setStep('blocklistAlert'); }}
+                            className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-40" style={{ backgroundColor: '#9b2c2c' }}>
+                      REVIEW BLOCKLIST
+                    </button>
+                  ) : (
+                    <button disabled={!matchData.visitor} onClick={onConfirmMatch}
+                            className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-40" style={{ backgroundColor: '#112D31' }}>
+                      CONFIRM MATCH
+                    </button>
+                  )}
                 </div>
                 <button onClick={() => setStep('scan')}
                         className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
@@ -1187,17 +1258,23 @@ export default function GuardVerify() {
 
         {/* PICKUP RESIDENT — Notify Gate residents nasa taas */}
         {step === 'pickupResidents' && (() => {
-          const notifs = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
-          const waitingNames = notifs.map((n) => n.name);
-          const waitingResidents = notifs.map((n) => {
-            const db = residentsDB.find((r) => r.name === n.name) || {};
+          // Naghihintay na pickups mula DB (cross-device) — pinned sa itaas
+          const fmtWhen = (ts) => ts
+            ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            : '';
+          const waitingResidents = gatePickups.map((n) => {
+            const db = residentsDB.find((r) => r.residentId === n.resident_id) || {};
             return {
-              residentId: db.residentId || null, name: n.name,
-              address: db.address || n.address || '', waiting: true, rideHailing: n.rideHailing, time: n.time,
+              residentId: n.resident_id, name: n.full_name || db.name,
+              address: n.unit_address || db.address || '',
+              contact: n.contact_number || db.contact || '',
+              waiting: true, rideHailing: !!n.ride_hailing, time: fmtWhen(n.created_at),
+              pickupId: n.pickup_id,
             };
           });
-          const others = residentsDB.filter((r) => !waitingNames.includes(r.name)).map((r) => ({ ...r, waiting: false }));
-          const list = [...waitingResidents, ...others].filter((r) => r.name.toLowerCase().includes(residentSearch.toLowerCase()));
+          const waitingIds = new Set(waitingResidents.map((w) => w.residentId));
+          const others = residentsDB.filter((r) => !waitingIds.has(r.residentId)).map((r) => ({ ...r, waiting: false }));
+          const list = [...waitingResidents, ...others].filter((r) => (r.name || '').toLowerCase().includes(residentSearch.toLowerCase()));
           return (
             <div>
               <h2 className="text-2xl font-extrabold text-ink text-center mb-1">RESIDENT LIST</h2>
@@ -1349,6 +1426,77 @@ export default function GuardVerify() {
           </div>
         )}
 
+        {/* BLOCKLIST ALERT — verify identity (call reporting resident + exact name check) */}
+        {step === 'blocklistAlert' && (
+          <div>
+            <div className="rounded-2xl p-4 mb-4 border-2 text-center" style={{ backgroundColor: '#FDECEC', borderColor: '#9b2c2c' }}>
+              <div className="flex justify-center mb-2"><ShieldAlert size={34} style={{ color: '#9b2c2c' }} /></div>
+              <h2 className="text-xl font-extrabold" style={{ color: '#9b2c2c' }}>BLOCKLIST MATCH</h2>
+              <p className="text-xs text-ink/70 mt-1">
+                "{matchData.visitor || scannedName}" matches a blocklisted person. This may be a different person with
+                the same name — verify before deciding.
+              </p>
+            </div>
+
+            {/* Mga tugmang blocklist entries + tawag sa nag-report */}
+            <div className="space-y-3 mb-4">
+              {(blockInfo?.matches || []).map((m, i) => {
+                const num = String(m.reported_by_contact || '').replace(/[^\d+]/g, '');
+                return (
+                  <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                    <p className="font-bold text-ink text-sm">{m.person_name}</p>
+                    {m.reason && <p className="text-xs text-ink/70 mt-1"><span className="font-bold">Reason:</span> {m.reason}</p>}
+                    <p className="text-xs text-ink/60 mt-1"><span className="font-bold">Reported by:</span> {m.reported_by || '—'}{m.unit_address ? ` · ${m.unit_address}` : ''}</p>
+                    <button onClick={() => {
+                              if (!num) { alert('Walang contact number ang nag-report na resident.'); return; }
+                              window.location.href = `tel:${num}`;
+                            }}
+                            className="mt-3 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-bold text-white"
+                            style={{ backgroundColor: '#1a5fa8' }}>
+                      <Phone size={16} /> Call {m.reported_by || 'reporting resident'} to verify
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Verification note (kailangan kapag papapasukin bilang ibang tao) */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-4">
+              <label className="block text-[11px] font-bold text-ink/60 mb-1">VERIFICATION NOTE</label>
+              <p className="text-[11px] text-ink/50 mb-2">
+                Kumpirmahin ang buong pangalan sa pisikal na ID at, kung kaya, sa pamamagitan ng tawag sa nag-report.
+                Ilagay ang resulta ng verification bago magpatuloy.
+              </p>
+              <textarea value={blockNote} onChange={(e) => setBlockNote(e.target.value)} rows={2}
+                        placeholder="Hal. Kausap ang resident — ibang tao, magkapangalan lang. ID name exact match."
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none" />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                        console.log('[BLOCKLIST] DENY', { name: matchData.visitor || scannedName, matches: blockInfo?.matches });
+                        alert(`Entry DENIED — "${matchData.visitor || scannedName}" is on the blocklist.`);
+                        navigate('/guard-home');
+                      }}
+                      className="w-full py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#9b2c2c' }}>
+                DENY ENTRY (blocklisted)
+              </button>
+              <button onClick={() => {
+                        if (!blockNote.trim()) { alert('Please add a short verification note first.'); return; }
+                        console.log('[BLOCKLIST] VERIFIED DIFFERENT PERSON', { name: matchData.visitor || scannedName, note: blockNote });
+                        onConfirmMatch();
+                      }}
+                      className="w-full py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#0F6E6E' }}>
+                VERIFIED — DIFFERENT PERSON, PROCEED
+              </button>
+              <button onClick={() => setStep('matched')}
+                      className="w-full py-2 rounded-full text-sm font-bold text-ink border border-gray-300">
+                BACK
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* RESIDENT LIST — Contact Resident / Manual search */}
         {step === 'residentList' && (
           <div>
@@ -1404,9 +1552,6 @@ export default function GuardVerify() {
         {/* UNLISTED VISITOR INFORMATION */}
         {step === 'unlisted' && (
           <div>
-            <div className="bg-white rounded-2xl p-3 shadow mb-4">
-              <IDCardPlaceholder name={scannedName} />
-            </div>
             <h2 className="text-xl font-extrabold text-ink text-center mb-4">UNLISTED VISITOR INFORMATION</h2>
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
               {[
@@ -1448,14 +1593,20 @@ export default function GuardVerify() {
             {!entryInfo.subtitle && <div className="mb-4" />}
 
             <div className="space-y-4 max-h-[55vh] overflow-y-auto mb-4">
-              {confirmedList.map((c, i) => (
+              {confirmedList.map((c, i) => {
+                const cPass = isExit
+                  ? (c.pass || '')  // per-visitor pass galing DB (hindi na iisang pass sa lahat)
+                  : (passMap[(c.name || '').toUpperCase()] || '');
+                const driverPass = passMap[(entryInfo.driver || '').toUpperCase()] || '';
+                return (
                 <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
                   {[
-                    ['Visitor Pass', isExit ? (entryInfo.passId || '—') : 'Auto-assigned on approval'],
+                    ...(entryInfo.driver ? [['Driver Name', entryInfo.driver]] : []),
+                    ...(!isExit && entryInfo.driver && i === 0 ? [['Driver Pass', driverPass]] : []),
+                    ['Visitor Name', c.name],
+                    ['Visitor Pass', cPass],
                     ['Resident Name', c.resident],
                     ['Address', c.address],
-                    ...(entryInfo.driver ? [['Driver Name', entryInfo.driver]] : []),
-                    ['Visitor Name', c.name],
                     ['Purpose', c.purpose],
                   ].filter(([, val]) => val && val !== '—').map(([label, val]) => (
                     <div key={label} className="px-4 py-3">
@@ -1463,7 +1614,8 @@ export default function GuardVerify() {
                     </div>
                   ))}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* OPTIONAL EXIT NOTE — only on exit, before final approval (not required) */}

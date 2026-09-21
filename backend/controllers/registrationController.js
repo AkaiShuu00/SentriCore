@@ -10,8 +10,23 @@ async function createRegistration(req, res) {
     if (!registrationType || !expectedDate) {
       return res.status(400).json({ message: 'Registration type and expected date are required.' });
     }
-    if (!Array.isArray(visitorNames) || visitorNames.length === 0) {
-      return res.status(400).json({ message: 'At least one visitor name is required.' });
+
+    // Linisin ang pangalan
+    const cleanNames = Array.isArray(visitorNames)
+      ? visitorNames.map((n) => (n || '').trim()).filter(Boolean)
+      : [];
+
+    const isDelivery = String(registrationType).toLowerCase() === 'delivery';
+
+    // Para sa DELIVERY, OPTIONAL ang pangalan (madalas walang pangalan ang rider).
+    // Kung walang name, gagamit tayo ng placeholder para may makita pa rin ang guard.
+    let effectiveNames = cleanNames;
+    if (cleanNames.length === 0) {
+      if (isDelivery) {
+        effectiveNames = ['Delivery Rider'];
+      } else {
+        return res.status(400).json({ message: 'At least one visitor name is required.' });
+      }
     }
 
     await conn.beginTransaction();
@@ -31,20 +46,18 @@ async function createRegistration(req, res) {
     );
     const registrationId = reg.insertId;
 
-    for (const name of visitorNames) {
-      if (name && name.trim()) {
-        await conn.query(
-          `INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`,
-          [registrationId, name.trim()]
-        );
-      }
+    for (const name of effectiveNames) {
+      await conn.query(
+        `INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`,
+        [registrationId, name]
+      );
     }
 
     await conn.commit();
     res.status(201).json({
       message: 'Registration created.',
       registrationId,
-      visitorCount: visitorNames.filter((n) => n && n.trim()).length,
+      visitorCount: effectiveNames.length,
     });
   } catch (err) {
     await conn.rollback();

@@ -43,6 +43,20 @@ export const deleteRegistration = (id) => api.delete(`/registrations/${id}`);
 // ── Resident profile ──
 export const getMyProfile = () => api.get('/residents/me');
 
+// ── Guards (Contact Guard, resident side) ──
+export const getGuards = () => api.get('/guards/directory');
+
+// ── Guard shift (time-in/out) ──
+export const getMyShift = () => api.get('/guards/my-shift');
+export const endGuardShift = () => api.post('/guards/end-shift');
+export const adminGuardShifts = () => api.get('/guards/shifts');
+
+// ── Gate pickup (resident notifies gate → guard sees waiting) ──
+export const notifyGatePickup = (data) => api.post('/pickups', data);
+export const getMyGatePickup = () => api.get('/pickups/mine');
+export const getGatePickups = () => api.get('/pickups');
+export const resolveGatePickup = (id) => api.put(`/pickups/${id}/done`);
+
 // ── Announcements (all logged-in) ──
 export const getAnnouncements = () => api.get('/announcements');
 export const createAnnouncement = (data) => api.post('/announcements', data);
@@ -86,6 +100,8 @@ export const markAllNotificationsRead = () => api.put('/notifications/read-all')
 
 // ── Blocklist (resident view) ──
 export const getMyBlocklist = () => api.get('/blocklist');
+// Guard: check kung ang pangalan ng bisita ay tumutugma sa blocklist
+export const checkBlocklist = (name) => api.get('/blocklist/check', { params: { name } });
 
 // ── Password ──
 export const forgotPassword = (email) => api.post('/auth/forgot', { email });

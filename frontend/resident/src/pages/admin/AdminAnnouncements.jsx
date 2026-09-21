@@ -4,8 +4,29 @@ import { getAnnouncements, createAnnouncement, deleteAnnouncement } from '../../
 import { Flame, Droplet, Zap, Wrench, Users, Megaphone, Search, X } from 'lucide-react';
 
 const statusBg = {
-  Active:  { backgroundColor: '#F1D88A', color: '#8a6d12' },
-  Expired: { backgroundColor: '#D9D9D9', color: '#555' },
+  Active:    { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
+  Completed: { backgroundColor: '#D9D9D9', color: '#555' },
+};
+
+// Local YYYY-MM-DD (iwas UTC shift)
+const toDay = (d) => {
+  if (!d) return null;
+  const s = String(d);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (m) return m[1];
+  const dt = new Date(s);
+  if (isNaN(dt)) return null;
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+};
+const todayLocalISO = () => {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+};
+// Completed kapag lumampas na ang end_date; kung wala, Active
+const annStatus = (a) => {
+  const e = toDay(a.end_date);
+  if (!e) return 'Active';
+  return e < todayLocalISO() ? 'Completed' : 'Active';
 };
 
 const IconFor = ({ text, ...p }) => {
@@ -20,6 +41,7 @@ const IconFor = ({ text, ...p }) => {
 
 export default function AdminAnnouncements() {
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [detail, setDetail] = useState(null);
   const [showCompose, setShowCompose] = useState(false);
   const [composeTab, setComposeTab] = useState('details');
@@ -85,7 +107,9 @@ export default function AdminAnnouncements() {
     }
   };
 
-  const filtered = items.filter((a) => (a.title || '').toLowerCase().includes(search.toLowerCase()));
+  const filtered = items
+    .filter((a) => (a.title || '').toLowerCase().includes(search.toLowerCase()))
+    .filter((a) => statusFilter === 'All' || annStatus(a) === statusFilter);
   const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—');
 
   return (
@@ -107,6 +131,17 @@ export default function AdminAnnouncements() {
                className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
       </div>
 
+      {/* Status filter */}
+      <div className="flex gap-2 mb-4">
+        {['All', 'Active', 'Completed'].map((s) => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-sm ${statusFilter === s ? 'text-white' : 'bg-white text-ink'}`}
+                  style={statusFilter === s ? { backgroundColor: '#0F6E6E' } : {}}>
+            {s}
+          </button>
+        ))}
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="grid grid-cols-4 gap-2 px-6 py-3 bg-ink text-white text-[11px] font-bold">
@@ -121,7 +156,7 @@ export default function AdminAnnouncements() {
             <div key={a.announcement_id} className="grid grid-cols-4 gap-2 px-6 py-4 border-b border-gray-100 text-sm text-ink items-center">
               <span className="font-semibold">{a.title}</span>
               <span className="text-ink/70">{a.category || '—'}</span>
-              <span><span className="text-[9px] font-bold px-3 py-1 rounded-full" style={statusBg.Active}>Active</span></span>
+              <span><span className="text-[9px] font-bold px-3 py-1 rounded-full" style={statusBg[annStatus(a)]}>{annStatus(a)}</span></span>
               <span className="text-center">
                 <button onClick={() => setDetail(a)} className="text-[11px] font-bold text-teal-700">View</button>
               </span>
@@ -138,7 +173,7 @@ export default function AdminAnnouncements() {
             <h2 className="text-xl font-extrabold text-ink mb-4">Details</h2>
             <div className="flex items-center gap-3 mb-3">
               <span className="text-white text-sm font-bold px-4 py-1.5 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>{detail.category || 'General'}</span>
-              <span className="text-xs font-bold px-3 py-1.5 rounded-full ml-auto" style={{ backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>ACTIVE</span>
+              <span className="text-xs font-bold px-3 py-1.5 rounded-full ml-auto" style={statusBg[annStatus(detail)]}>{annStatus(detail).toUpperCase()}</span>
             </div>
             <p className="font-bold text-ink mb-1">{detail.title}</p>
             <div className="flex items-center justify-between mt-4 mb-1">

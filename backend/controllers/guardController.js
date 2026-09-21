@@ -116,4 +116,84 @@ async function getOnDutyGuards(req, res) {
   }
 }
 
-module.exports = { getGuards, createGuard, updateGuard, getMyProfile, getOnDutyGuards };
+// GET /api/guards/directory  (Resident/Guard) - LAHAT ng guards + status para sa Contact Guard screen.
+// Nagbabalik ng hugis na direktang nababasa ng ContactGuard.jsx (name/phone/email/gate/status).
+// Status mapping: DB 'Active' → ON DUTY; iba → OFF DUTY (walang hiwalay na break/unavailable sa schema).
+async function getGuardDirectory(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT g.guard_id, g.full_name, g.phone_number, g.email, g.status,
+              g.shift_start, g.shift_end, gt.gate_name
+       FROM Guards g
+       LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
+       ORDER BY g.guard_id`
+    );
+    const guards = rows.map((r) => ({
+      guardId: r.guard_id,
+      name: r.full_name || 'Guard',
+      phone: r.phone_number || '',
+      email: r.email || '',
+      gate: r.gate_name || '-',
+      status: String(r.status || '').toLowerCase() === 'active' ? 'ON DUTY' : 'OFF DUTY',
+    }));
+    res.json(guards);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching guard directory.', error: err.message });
+  }
+}
+
+// GET /api/guards/my-shift  (Guard) - kasalukuyang bukas na shift + naka-schedule na oras
+async function getMyShift(req, res) {
+  try {
+    const guardId = req.user.guardId;
+    const [[g]] = await pool.query('SELECT shift_start, shift_end FROM Guards WHERE guard_id = ?', [guardId]);
+    const [open] = await pool.query(
+      `SELECT shift_id, time_in FROM GuardShifts WHERE guard_id = ? AND time_out IS NULL ORDER BY shift_id DESC LIMIT 1`,
+      [guardId]
+    );
+    res.json({
+      shiftStart: g ? g.shift_start : null,
+      shiftEnd: g ? g.shift_end : null,
+      timeIn: open.length ? open[0].time_in : null,
+      shiftId: open.length ? open[0].shift_id : null,
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching shift.', error: err.message });
+  }
+}
+
+// POST /api/guards/end-shift  (Guard) - itala ang time-out ng kasalukuyang bukas na shift
+async function endShift(req, res) {
+  try {
+    const guardId = req.user.guardId;
+    const [r] = await pool.query(
+      `UPDATE GuardShifts SET time_out = NOW()
+       WHERE guard_id = ? AND time_out IS NULL
+       ORDER BY shift_id DESC LIMIT 1`,
+      [guardId]
+    );
+    res.json({ message: 'Shift ended.', ended: r.affectedRows > 0 });
+  } catch (err) {
+    res.status(500).json({ message: 'Error ending shift.', error: err.message });
+  }
+}
+
+// GET /api/guards/shifts  (Admin) - mga time-in/time-out records ng lahat ng guard
+async function getGuardShifts(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT gs.shift_id, gs.guard_id, gs.time_in, gs.time_out,
+              g.full_name, gt.gate_name
+       FROM GuardShifts gs
+       JOIN Guards g ON g.guard_id = gs.guard_id
+       LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
+       ORDER BY gs.shift_id DESC
+       LIMIT 200`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching guard shifts.', error: err.message });
+  }
+}
+
+module.exports = { getGuards, createGuard, updateGuard, getMyProfile, getOnDutyGuards, getGuardDirectory, getMyShift, endShift, getGuardShifts };

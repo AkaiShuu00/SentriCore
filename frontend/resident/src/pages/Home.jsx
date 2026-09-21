@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import AnnouncementsModal from '../components/AnnouncementsModal';
-import { getMyRegistrations, getAnnouncements, getNotifications } from '../api';
+import { getMyRegistrations, getAnnouncements, getNotifications, notifyGatePickup } from '../api';
 import {
   Bell, User, Users, Megaphone, UserPlus, CalendarClock, Phone,
   MessageSquareWarning, DoorOpen, CalendarDays, FileText, Search, Inbox, Archive,
@@ -18,6 +18,7 @@ export default function Home() {
   const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [showNotifyGate, setShowNotifyGate] = useState(false);
   const [rideHailing, setRideHailing] = useState(null);
+  const [notifying, setNotifying] = useState(false);
 
   // ── Real data from DB ──
   const [registrations, setRegistrations] = useState([]);
@@ -307,22 +308,22 @@ export default function Home() {
                       className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                 CANCEL
               </button>
-              <button onClick={() => {
+              <button disabled={notifying} onClick={async () => {
                         if (rideHailing === null) { alert('Please select if this is a ride-hailing pickup.'); return; }
-                        const notif = {
-                          id: Date.now(),
-                          name: user.name || 'Resident',
-                          address: user.address || '',
-                          rideHailing,
-                          time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-                        };
-                        const existing = JSON.parse(localStorage.getItem('sentricore_gate_notifications') || '[]');
-                        localStorage.setItem('sentricore_gate_notifications', JSON.stringify([notif, ...existing]));
-                        setShowNotifyGate(false);
-                        alert('Gate notified! The guard has been informed that you are waiting for a pick-up. ✅');
+                        setNotifying(true);
+                        try {
+                          // I-save sa DATABASE para makita ng guard sa kahit anong device
+                          await notifyGatePickup({ rideHailing });
+                          setShowNotifyGate(false);
+                          alert('Gate notified! The guard has been informed that you are waiting for a pick-up.');
+                        } catch (err) {
+                          alert(err.response?.data?.message || 'Failed to notify the gate. Please try again.');
+                        } finally {
+                          setNotifying(false);
+                        }
                       }}
-                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                NOTIFY GATE
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: '#112D31' }}>
+                {notifying ? 'NOTIFYING…' : 'NOTIFY GATE'}
               </button>
             </div>
           </div>

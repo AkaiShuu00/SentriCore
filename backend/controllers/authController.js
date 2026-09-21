@@ -32,8 +32,30 @@ async function login(req, res) {
       const [r] = await pool.query('SELECT resident_id, full_name FROM Residents WHERE user_id = ?', [user.user_id]);
       if (r.length) { profile.residentId = r[0].resident_id; profile.name = r[0].full_name; }
     } else if (user.role_name === 'Guard') {
-      const [g] = await pool.query('SELECT guard_id, gate_id, full_name FROM Guards WHERE user_id = ?', [user.user_id]);
-      if (g.length) { profile.guardId = g[0].guard_id; profile.gateId = g[0].gate_id; profile.name = g[0].full_name; }
+      const [g] = await pool.query('SELECT guard_id, gate_id, full_name, shift_start FROM Guards WHERE user_id = ?', [user.user_id]);
+      if (g.length) {
+        profile.guardId = g[0].guard_id; profile.gateId = g[0].gate_id; profile.name = g[0].full_name;
+        // ── AUTO TIME-IN sa login (kung walang bukas na shift pa) ──
+        // Kung nag-login nang mas maaga sa naka-schedule na shift start, ang time-in ay
+        // itatakda sa shift start (hindi binibilang ang maagang login). Kung after na, ngayon.
+        try {
+          const [open] = await pool.query(
+            `SELECT shift_id FROM GuardShifts WHERE guard_id = ? AND time_out IS NULL ORDER BY shift_id DESC LIMIT 1`,
+            [g[0].guard_id]
+          );
+          if (!open.length) {
+            let timeIn = new Date();
+            const ss = g[0].shift_start; // TIME 'HH:MM:SS'
+            if (ss) {
+              const [hh, mm] = String(ss).split(':').map(Number);
+              const sched = new Date();
+              sched.setHours(hh || 0, mm || 0, 0, 0);
+              if (timeIn < sched) timeIn = sched; // maagang login → time-in = shift start
+            }
+            await pool.query(`INSERT INTO GuardShifts (guard_id, time_in) VALUES (?, ?)`, [g[0].guard_id, timeIn]);
+          }
+        } catch (shiftErr) { console.warn('Time-in skipped:', shiftErr.message); }
+      }
     } else if (user.role_name === 'Admin') {
       profile.name = user.username;
     }

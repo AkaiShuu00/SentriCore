@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { getMyProfile } from '../api';
-import { Home as HomeIcon, Phone, Mail, ShieldCheck, Ban, HelpCircle, MessageSquare, FileText, User } from 'lucide-react';
+import { Home as HomeIcon, Phone, ShieldCheck, Ban, HelpCircle, MessageSquare, FileText, User } from 'lucide-react';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -23,14 +23,12 @@ export default function Profile() {
 
   // Kunin mula profile (DB) na may fallback sa token — robust sa field names
   const name    = profile?.full_name || profile?.name || user.name || 'Resident';
-  const email   = profile?.email || user.email || '—';
   const address = profile?.unit_address || profile?.address || '—';
   const contact = profile?.contact_number || profile?.contact || profile?.phone || '—';
 
   const personalInfo = [
     { Icon: HomeIcon, bg: 'bg-teal-100', main: address, sub: 'Unit address' },
     { Icon: Phone, bg: 'bg-yellow-100', main: contact, sub: 'Contact number' },
-    { Icon: Mail, bg: 'bg-red-100', main: email, sub: 'Email address' },
   ];
 
   const settings = [
@@ -64,9 +62,8 @@ export default function Profile() {
               <div className="w-24 h-24 rounded-full bg-yellow-300 border-4 border-white flex items-center justify-center shrink-0">
                 <User size={44} className="text-ink" />
               </div>
-              <h2 className="text-2xl font-extrabold text-white mb-14">{name.toUpperCase()}</h2>
+              <h2 className="text-2xl font-extrabold text-white mb-14 break-words">{name.toUpperCase()}</h2>
             </div>
-            <p className="text-ink/70 mt-2">{email}</p>
           </div>
         </div>
 
@@ -77,8 +74,8 @@ export default function Profile() {
             <div key={i}>
               <div className="flex items-center gap-4 py-3">
                 <div className={`w-12 h-12 rounded-2xl ${p.bg} flex items-center justify-center shrink-0`}><p.Icon size={20} className="text-ink" /></div>
-                <div>
-                  <p className="font-bold text-ink">{p.main}</p>
+                <div className="min-w-0">
+                  <p className="font-bold text-ink break-words">{p.main}</p>
                   <p className="text-sm text-ink/60">{p.sub}</p>
                 </div>
               </div>

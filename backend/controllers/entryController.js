@@ -188,7 +188,7 @@ async function getHistory(req, res) {
     const [txRows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
-              t.exit_note, t.exit_additional_note,
+              t.arrival_id, t.exit_note, t.exit_additional_note,
               res.full_name AS resident_name, res.unit_address, vr.registration_type
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
@@ -208,6 +208,7 @@ async function getHistory(req, res) {
       exit_time: t.exit_time,
       status: 'Departed',
       registration_id: t.registration_id,
+      arrival_id: t.arrival_id,
       exit_note: t.exit_note,
       exit_additional_note: t.exit_additional_note,
       resident_name: t.resident_name,
@@ -237,6 +238,7 @@ async function getHistory(req, res) {
       exit_time: null,
       status: 'Expired',
       registration_id: r.registration_id,
+      arrival_id: null,
       exit_note: null,
       exit_additional_note: null,
       resident_name: r.resident_name,
@@ -502,7 +504,41 @@ async function expireOld(req, res) {
   }
 }
 
+// POST /api/entry/preview-pass  (Guard)
+// I-preview ang mga pass number na i-a-assign kapag na-approve — WALANG insert.
+// Ginagamit ang PAREHONG logic (kindOf + getFreePasses) tulad ng createGroupEntry,
+// para tiyak na tugma ang ipinapakita sa confirm screen at ang aktwal na maiimbak.
+async function previewPasses(req, res) {
+  try {
+    const { visitors } = req.body;
+    if (!Array.isArray(visitors) || visitors.length === 0) {
+      return res.json({ passes: [] });
+    }
+    const kindOf = (v) => (v.visitorType === 'Delivery' ? 'Delivery' : 'Visitor');
+    const needV = visitors.filter((v) => kindOf(v) === 'Visitor').length;
+    const needD = visitors.filter((v) => kindOf(v) === 'Delivery').length;
+
+    // Walang transaction — read-only preview lang (pool.query ay sapat na para sa getFreePasses).
+    const freeV = needV ? await getFreePasses(pool, 'Visitor', needV) : [];
+    const freeD = needD ? await getFreePasses(pool, 'Delivery', needD) : [];
+
+    let vi = 0, di = 0;
+    const passes = visitors.map((v) => {
+      const kind = kindOf(v);
+      const num = kind === 'Delivery' ? freeD[di++] : freeV[vi++];
+      return {
+        visitorName: v.visitorName,
+        visitorType: v.visitorType || 'Visitor',
+        passNumber: (num != null) ? formatPass(kind, num) : null,
+      };
+    });
+    res.json({ passes });
+  } catch (err) {
+    res.status(500).json({ message: 'Error previewing passes.', error: err.message });
+  }
+}
+
 module.exports = {
   matchVisitor, createGroupEntry, getActiveVisitors, getHistory, getAllLogs, getAdminSummary,
-  getResidentsForGuard, getCompanions, getSchedule, recordExit, expireOld,
+  getResidentsForGuard, getCompanions, getSchedule, recordExit, expireOld, previewPasses,
 };

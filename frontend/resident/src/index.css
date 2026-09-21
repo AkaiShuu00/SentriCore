@@ -9,3 +9,31 @@ body {
   font-family: 'Poppins', sans-serif;
   background-color: #F9F6ED;
 }
+
+/* ============================================================
+   Mobile overflow fix — pinipigilan ang mahahabang salita
+   (pangalan, email, address, purpose) na lumagpas sa text box,
+   at inaalis ang horizontal scroll ng buong app.
+   ============================================================ */
+
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+p, span, h1, h2, h3, h4, label, li, a, div, td, th, button {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+input, textarea, select {
+  max-width: 100%;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+}

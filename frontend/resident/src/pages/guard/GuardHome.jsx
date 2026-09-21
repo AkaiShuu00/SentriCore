@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
-import { getAnnouncements, getActiveVisitors, getSchedule } from '../../api';
+import { getAnnouncements, getActiveVisitors, getSchedule, getMyShift, endGuardShift } from '../../api';
 import {
   Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone, Shield, Clock,
-  ScanLine, CalendarDays, Phone, LogOut, FileText, Search, Inbox,
+  CalendarDays, FileText, Search, Inbox,
 } from 'lucide-react';
 
 const AnnIcon = ({ a, ...p }) => {
@@ -48,12 +48,55 @@ export default function GuardHome() {
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [showAnnouncements, setShowAnnouncements] = useState(false);
+  const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null, timeIn: null });
+  const [showEnd, setShowEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
 
   // ── Announcements (mula DB — naka-filter na para sa Guards + active window) ──
   const [announcements, setAnnouncements] = useState([]);
   useEffect(() => {
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => setAnnouncements([]));
+    getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
   }, []);
+
+  // Bawat minuto i-update ang "shift ends in" countdown
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ── Shift end computation (kaya ang cross-midnight, hal. 6PM–6AM) ──
+  const parseHM = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return { h: h || 0, m: m || 0 }; };
+  const shiftEndDate = (() => {
+    if (!shift.shiftEnd) return null;
+    const anchor = shift.timeIn ? new Date(shift.timeIn) : new Date();
+    const { h, m } = parseHM(shift.shiftEnd);
+    const end = new Date(anchor); end.setHours(h, m, 0, 0);
+    if (end <= anchor) end.setDate(end.getDate() + 1); // tumawid ng hatinggabi
+    return end;
+  })();
+  const nowMs = nowTick;
+  const isShiftOver = shiftEndDate ? nowMs >= shiftEndDate.getTime() : false;
+  const remainingLabel = (() => {
+    if (!shiftEndDate) return '—';
+    const diff = shiftEndDate.getTime() - nowMs;
+    if (diff <= 0) return 'Shift is over';
+    const hrs = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    return `${hrs}h ${mins}m`;
+  })();
+
+  const doEndShift = async () => {
+    if (ending) return;
+    setEnding(true);
+    try {
+      await endGuardShift();
+    } catch { /* ituloy pa rin ang logout kahit pumalya ang tala */ }
+    localStorage.removeItem('sentricore_token');
+    localStorage.removeItem('sentricore_user');
+    navigate('/signin');
+  };
 
   // ── Live data mula DB: active visitors + today's schedule ──
   const [activeList, setActiveList] = useState([]);
@@ -132,12 +175,15 @@ export default function GuardHome() {
         <div className="bg-white rounded-full shadow px-5 py-4 mt-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Clock size={22} className="text-ink" />
-            <span className="text-ink">Shift ends in <span className="font-extrabold">4h 18m</span></span>
+            <span className="text-ink">
+              {isShiftOver ? <span className="font-extrabold">Shift is over</span>
+                : <>Shift ends in <span className="font-extrabold">{remainingLabel}</span></>}
+            </span>
           </div>
           <button
-            onClick={() => alert('End shift — iko-connect sa backend')}
+            onClick={() => setShowEnd(true)}
             className="text-white text-xs font-bold px-4 py-2 rounded-full"
-            style={{ backgroundColor: '#8FA99B' }}
+            style={{ backgroundColor: isShiftOver ? '#0F6E6E' : '#8FA99B' }}
           >
             END SHIFT
           </button>
@@ -163,26 +209,6 @@ export default function GuardHome() {
           ))}
           {announcements.length > 0 && <p className="text-center font-semibold mt-3">--- More ---</p>}
         </button>
-
-        {/* Quick Actions */}
-        <h3 className="text-xl font-extrabold text-ink mt-8 mb-3">QUICK ACTIONS</h3>
-        <div className="bg-white rounded-3xl p-5 shadow">
-          <div className="grid grid-cols-4 gap-2 text-center">
-            {[
-              { Icon: ScanLine, label: 'Verify Entry', bg: 'bg-teal-100', action: () => navigate('/guard-verify') },
-              { Icon: CalendarDays, label: 'Schedule', bg: 'bg-blue-100', action: () => navigate('/guard-schedule') },
-              { Icon: Phone, label: 'Contact Resident', bg: 'bg-purple-100', action: () => alert('Contact Resident') },
-              { Icon: LogOut, label: 'Verify Exit', bg: 'bg-red-100', action: () => navigate('/guard-verify?mode=exit') },
-            ].map((q) => (
-              <button key={q.label} onClick={q.action} className="flex flex-col items-center">
-                <div className={`w-14 h-14 rounded-2xl ${q.bg} flex items-center justify-center mb-1`}>
-                  <q.Icon size={24} className="text-ink" />
-                </div>
-                <span className="text-xs font-medium text-ink leading-tight">{q.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-3 gap-3 mt-6">
@@ -270,6 +296,48 @@ export default function GuardHome() {
       <GuardBottomNav active="home" />
 
       {showAnnouncements && <AnnouncementsModal onClose={() => setShowAnnouncements(false)} />}
+
+      {/* END SHIFT modal — iba ang mensahe kung tapos na o hindi pa ang shift */}
+      {showEnd && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center">
+            <div className="flex justify-center mb-3">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center"
+                   style={{ backgroundColor: isShiftOver ? '#DCF3E4' : '#F1D88A' }}>
+                <Clock size={28} style={{ color: isShiftOver ? '#1e6b2e' : '#8a6d12' }} />
+              </div>
+            </div>
+            {isShiftOver ? (
+              <>
+                <h3 className="text-xl font-extrabold text-ink mb-2">Thank you for your work today!</h3>
+                <p className="text-ink/60 text-sm mb-5">
+                  Your shift is complete. Ending your shift will log your time-out and sign you out.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-extrabold text-ink mb-2">Your shift isn't over yet</h3>
+                <p className="text-ink/60 text-sm mb-5">
+                  {shiftEndDate
+                    ? <>You still have <span className="font-bold">{remainingLabel}</span> left. Do you still want to leave and end your shift?</>
+                    : 'Do you still want to leave and end your shift?'}
+                </p>
+              </>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setShowEnd(false)} disabled={ending}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
+                {isShiftOver ? 'NOT YET' : 'STAY'}
+              </button>
+              <button onClick={doEndShift} disabled={ending}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-60"
+                      style={{ backgroundColor: isShiftOver ? '#0F6E6E' : '#9b2c2c' }}>
+                {ending ? 'ENDING…' : (isShiftOver ? 'END SHIFT' : 'LEAVE & END')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
