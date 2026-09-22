@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, Settings, X, KeyRound, Trash2, Plus } from 'lucide-react';
+import { useRef } from 'react';
+import { Search, Settings, X, KeyRound, Trash2, Plus, User, Camera } from 'lucide-react';
 import {
   adminListGuards, adminAddGuard, adminUpdateGuard,
   adminAssignGate, adminResetGuardPassword, adminDeleteGuard,
@@ -14,6 +15,36 @@ const dutyBg = (s) => {
 };
 
 const GATE_LABEL = (id) => (id ? `GATE ${String(id).toUpperCase()}` : 'UNASSIGNED');
+
+// Avatar — larawan ng guard o icon fallback
+function Avatar({ src, size = 40 }) {
+  return (
+    <div className="rounded-full bg-teal-100 flex items-center justify-center overflow-hidden shrink-0"
+         style={{ width: size, height: size }}>
+      {src ? <img src={src} alt="" className="w-full h-full object-cover" />
+           : <User size={Math.round(size * 0.5)} className="text-ink" />}
+    </div>
+  );
+}
+
+// I-crop sa square + i-resize (max 320px) → base64 (para maliit lang ang 1x1 photo)
+const fileToSquare = (file, max = 320) =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+      const dim = Math.min(side, max);
+      const canvas = document.createElement('canvas');
+      canvas.width = dim; canvas.height = dim;
+      canvas.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, dim, dim);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
 
 export default function AdminGuards() {
   const [search, setSearch] = useState('');
@@ -36,9 +67,9 @@ export default function AdminGuards() {
 
   const match = (g) => g.fullName.toLowerCase().includes(search.toLowerCase());
 
-  // Buuin ang listahan ng gates: distinct gateId na meron + laging Gate 1 & 2, at Unassigned kung kailangan
+  // Isang gate lang ang komunidad — distinct gateId na meron, o Gate 1 bilang default
   const gateIds = Array.from(new Set(guards.map((g) => g.gateId).filter((x) => x != null)));
-  ['1', '2'].forEach((d) => { if (!gateIds.map(String).includes(d)) gateIds.push(d); });
+  if (gateIds.length === 0) gateIds.push('1');
   gateIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
   const hasUnassigned = guards.some((g) => g.gateId == null);
 
@@ -67,9 +98,12 @@ export default function AdminGuards() {
           ) : list.map((g, i) => (
             <div key={g.guardId}>
               <div className="flex items-center justify-between py-3">
-                <div>
-                  <p className="font-bold text-ink">{g.fullName}</p>
-                  <p className="text-xs text-ink/60">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar src={g.photo} />
+                  <div className="min-w-0">
+                    <p className="font-bold text-ink truncate">{g.fullName}</p>
+                    <p className="text-xs text-ink/60">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => toggleDuty(g)} title="Toggle duty"
@@ -196,20 +230,49 @@ export default function AdminGuards() {
 
 // ── Reusable Add/Edit form ──
 function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onDelete }) {
+  const fileRef = useRef(null);
   const [form, setForm] = useState({
     fullName: initial?.fullName || '',
     gateId: initial?.gateId ?? '',
     shift: initial?.shift && initial.shift !== '—' ? initial.shift : '',
     status: initial?.status || 'Off Duty',
+    contact: initial?.contact || '',
+    email: initial?.email || '',
+    photo: initial?.photo || null,
   });
+
+  const onPickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const b64 = await fileToSquare(file);
+    if (b64) setForm((f) => ({ ...f, photo: b64 }));
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-3xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
         <h2 className="text-xl font-extrabold text-ink mb-1">{title}</h2>
         {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
         {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-bold">{initial.username}</span></p>}
+
+        {/* Profile photo (1x1) — icon fallback kung wala pa */}
+        <div className="flex flex-col items-center mb-4">
+          <div className="relative">
+            <Avatar src={form.photo} size={84} />
+            <button type="button" onClick={() => fileRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full text-white flex items-center justify-center shadow"
+                    style={{ backgroundColor: '#0F6E6E' }}>
+              <Camera size={15} />
+            </button>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
+          <p className="text-[11px] text-ink/50 mt-2">Upload 1x1 photo (optional)</p>
+          {form.photo && (
+            <button type="button" onClick={() => setForm((f) => ({ ...f, photo: null }))}
+                    className="text-[11px] font-bold text-red-600 mt-1">Remove photo</button>
+          )}
+        </div>
 
         <div className="space-y-3 mt-2">
           <div>
@@ -219,11 +282,23 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
+              <label className="block text-xs font-bold text-ink mb-1">Contact Number</label>
+              <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })}
+                     placeholder="0917 123 4567" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-ink mb-1">Email</label>
+              <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                     placeholder="guard@sentricore.com" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="block text-xs font-bold text-ink mb-1">Gate Assignment</label>
               <select value={form.gateId} onChange={(e) => setForm({ ...form, gateId: e.target.value })}
                       className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
                 <option value="">Select Gate</option>
-                <option value="1">Gate 1</option><option value="2">Gate 2</option>
+                <option value="1">Gate 1</option>
               </select>
             </div>
             <div>

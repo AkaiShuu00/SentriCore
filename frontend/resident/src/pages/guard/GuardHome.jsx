@@ -66,6 +66,12 @@ export default function GuardHome() {
     return () => clearInterval(t);
   }, []);
 
+  // I-scroll sa harapan ang petsa NGAYON sa day strip
+  useEffect(() => {
+    const el = document.getElementById('guard-today-cell');
+    if (el) el.scrollIntoView({ inline: 'start', block: 'nearest' });
+  }, []);
+
   // ── Shift end computation (kaya ang cross-midnight, hal. 6PM–6AM) ──
   const parseHM = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return { h: h || 0, m: m || 0 }; };
   const shiftEndDate = (() => {
@@ -163,7 +169,7 @@ export default function GuardHome() {
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       {/* Header */}
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
+        <img src="/logo.png" alt="SentriCore" className="w-12 h-12 object-contain" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard One'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
@@ -245,10 +251,14 @@ export default function GuardHome() {
                style={{ scrollbarWidth: 'none' }}>
             {monthDays.map((d) => {
               const isActive = d.dayNum === selectedDay;
+              const isToday = d.dayNum === today.getDate();
+              const style = isActive ? { backgroundColor: '#0F6E6E' }
+                : isToday ? { backgroundColor: '#F1D88A' } : {};
               return (
-                <button key={d.dayNum} onClick={() => setSelectedDay(d.dayNum)}
-                        className={`flex flex-col items-center rounded-2xl px-4 py-3 min-w-[64px] shadow shrink-0 ${isActive ? 'text-white' : 'bg-white text-ink'}`}
-                        style={isActive ? { backgroundColor: '#0F6E6E' } : {}}>
+                <button key={d.dayNum} id={isToday ? 'guard-today-cell' : undefined}
+                        onClick={() => setSelectedDay(d.dayNum)}
+                        className={`flex flex-col items-center rounded-2xl px-4 py-3 min-w-[64px] shadow shrink-0 ${isActive ? 'text-white' : 'text-ink'} ${!isActive && !isToday ? 'bg-white' : ''}`}
+                        style={style}>
                   <span className="text-xs font-semibold">{d.dayLabel}</span>
                   <span className="text-2xl font-extrabold">{d.dayNum}</span>
                 </button>

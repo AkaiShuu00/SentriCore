@@ -29,9 +29,9 @@ export default function Blocklist() {
       </header>
 
       <div className="px-4 py-5">
-        {/* Paalala: through complaints na lang ang pag-blocklist */}
+        {/* Reminder: blocklisting is done through complaints */}
         <div className="rounded-2xl px-4 py-3 mb-4 text-sm" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
-          Para mag-blocklist ng bisita, mag-file ng <span className="font-bold">Visitor Complaint</span> at i-on ang blocklist option. Ire-review ito ng admin bago maidagdag dito.
+          To blocklist a visitor, file a <span className="font-bold">Visitor Complaint</span> and turn on the blocklist option. The admin will review it before it is added here.
         </div>
 
         {loading ? (
@@ -39,8 +39,8 @@ export default function Blocklist() {
         ) : list.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 shadow-sm text-center">
             <div className="flex justify-center mb-2"><Ban size={30} className="text-ink/40" /></div>
-            <p className="font-semibold text-ink text-sm">Walang naka-blocklist</p>
-            <p className="text-ink/60 text-xs mt-1">Ang mga aprubadong blocklist request mo ay lalabas dito.</p>
+            <p className="font-semibold text-ink text-sm">No one is on the blocklist</p>
+            <p className="text-ink/60 text-xs mt-1">Your approved blocklist requests will appear here.</p>
           </div>
         ) : (
           <div className="space-y-2">

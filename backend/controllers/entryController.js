@@ -303,6 +303,14 @@ async function getAdminSummary(req, res) {
     }
     const [[total]] = await pool.query(`SELECT COUNT(*) AS n FROM VisitorTransactions`);
 
+    // Total visitors ngayong linggo (Lunes–Linggo, nagre-reset tuwing Lunes)
+    // WEEKDAY(): 0 = Monday. Simula ng linggo = today − WEEKDAY(today) days.
+    const [[weekly]] = await pool.query(
+      `SELECT COUNT(*) AS n FROM VisitorTransactions
+       WHERE entry_time >= (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY)
+         AND entry_time <  (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY) + INTERVAL 7 DAY`
+    );
+
     const [recent] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.status, t.entry_time, t.exit_time,
               res.full_name AS resident_name, res.unit_address, g.full_name AS guard_name
@@ -322,7 +330,7 @@ async function getAdminSummary(req, res) {
     );
 
     res.json({
-      stats: { activeVisitors: active.n, todayEntries: todayEntries.n, expectedToday: expected.n, activeGates, total: total.n },
+      stats: { activeVisitors: active.n, todayEntries: todayEntries.n, expectedToday: expected.n, activeGates, weeklyVisitors: weekly.n, total: total.n },
       recent: recent.map((r) => ({
         id: r.transaction_id, name: r.visitor_name, resident: r.resident_name, unit: r.unit_address,
         guard: r.guard_name || '—', status: r.status, entry: r.entry_time, exit: r.exit_time,
@@ -504,6 +512,37 @@ async function expireOld(req, res) {
   }
 }
 
+// GET /api/entry/expected-deliveries  (Guard)
+// Mga resident lang na may naka-register na expected delivery NGAYONG LINGGO (Lunes–Linggo).
+// Kasama ang Expected at Expired (para sa dating dumating sa ibang araw) — pero hindi Active/Departed.
+async function getExpectedDeliveries(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT r.registration_id, r.purpose, r.status,
+              DATE_FORMAT(r.expected_date, '%Y-%m-%d') AS expected_date,
+              res.resident_id, res.full_name AS resident_name, res.unit_address
+       FROM VisitorRegistrations r
+       JOIN Residents res ON res.resident_id = r.resident_id
+       WHERE r.registration_type = 'Delivery'
+         AND r.status IN ('Expected', 'Expired')
+         AND r.expected_date >= (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY)
+         AND r.expected_date <  (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY) + INTERVAL 7 DAY
+       ORDER BY r.expected_date DESC, r.registration_id DESC`
+    );
+    res.json(rows.map((r) => ({
+      registrationId: r.registration_id,
+      residentId: r.resident_id,
+      name: r.resident_name,
+      address: r.unit_address,
+      purpose: r.purpose || 'Delivery',
+      expectedDate: r.expected_date,
+      status: r.status,
+    })));
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching expected deliveries.', error: err.message });
+  }
+}
+
 // POST /api/entry/preview-pass  (Guard)
 // I-preview ang mga pass number na i-a-assign kapag na-approve — WALANG insert.
 // Ginagamit ang PAREHONG logic (kindOf + getFreePasses) tulad ng createGroupEntry,
@@ -541,4 +580,5 @@ async function previewPasses(req, res) {
 module.exports = {
   matchVisitor, createGroupEntry, getActiveVisitors, getHistory, getAllLogs, getAdminSummary,
   getResidentsForGuard, getCompanions, getSchedule, recordExit, expireOld, previewPasses,
+  getExpectedDeliveries,
 };

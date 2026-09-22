@@ -133,6 +133,12 @@ export default function GuardSchedule() {
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
 
+  // I-scroll sa harapan ang petsa NGAYON
+  useEffect(() => {
+    const el = document.getElementById('gsched-today-cell');
+    if (el) el.scrollIntoView({ inline: 'start', block: 'nearest' });
+  }, [loading]);
+
   const matchSearch = (name) => (name || '').toLowerCase().includes(search.toLowerCase());
   const sortList = (list) => {
     if (sortBy === 'Name (A–Z)') return [...list].sort((a, b) => a.name.localeCompare(b.name));
@@ -148,7 +154,7 @@ export default function GuardSchedule() {
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
+        <img src="/logo.png" alt="SentriCore" className="w-12 h-12 object-contain" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
@@ -184,10 +190,14 @@ export default function GuardSchedule() {
             <div id="gsched-day-scroll" className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
               {monthDays.map((d) => {
                 const isActive = d.dayNum === selectedDay;
+                const isToday = d.dayNum === today.getDate();
+                const style = isActive ? { backgroundColor: '#0F6E6E' }
+                  : isToday ? { backgroundColor: '#F1D88A' } : {};
                 return (
-                  <button key={d.dayNum} onClick={() => setSelectedDay(d.dayNum)}
-                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[60px] shadow shrink-0 ${isActive ? 'text-white' : 'bg-white text-ink border border-gray-100'}`}
-                          style={isActive ? { backgroundColor: '#0F6E6E' } : {}}>
+                  <button key={d.dayNum} id={isToday ? 'gsched-today-cell' : undefined}
+                          onClick={() => setSelectedDay(d.dayNum)}
+                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[60px] shadow shrink-0 ${isActive ? 'text-white' : 'text-ink'} ${!isActive && !isToday ? 'bg-white border border-gray-100' : ''}`}
+                          style={style}>
                     <span className="text-xs font-semibold">{d.dayLabel}</span>
                     <span className="text-2xl font-extrabold">{d.dayNum}</span>
                   </button>

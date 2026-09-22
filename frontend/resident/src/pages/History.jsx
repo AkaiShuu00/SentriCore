@@ -5,6 +5,9 @@ import { User, Search, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'VISITORS', 'DELIVERIES'];
 
+const fmtTime = (ts) =>
+  ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+
 export default function History() {
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
@@ -31,12 +34,15 @@ export default function History() {
           vlist.forEach((v) => {
             const st = (typeof v === 'string' ? (r.status || '') : (v.status || '')).toUpperCase();
             if (st !== 'DEPARTED' && st !== 'EXPIRED') return;  // history = departed/expired lang
+            const tIn = typeof v === 'string' ? null : v.timeIn;
+            const tOut = typeof v === 'string' ? null : v.timeOut;
+            const timeStr = tIn ? `${fmtTime(tIn)}${tOut ? `\nto\n${fmtTime(tOut)}` : ''}` : '';
             rows.push({
               dateISO,
               date: dateISO
                 ? new Date(dateISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                 : '—',
-              time: '',
+              time: timeStr,
               name: typeof v === 'string' ? v : v.name,
               kind: isDelivery ? 'Delivery' : 'Visitor',
               plate: (typeof v === 'string' ? '' : (v.plate_number || '')),
@@ -170,7 +176,7 @@ export default function History() {
             <span className="text-xs font-bold text-ink">Date & Time</span>
             <span className="text-xs font-bold text-ink">Details</span>
             <span className="text-xs font-bold text-ink">Status</span>
-            <span className="text-xs font-bold text-ink">Entry ID</span>
+            <span className="text-xs font-bold text-ink">Pass Number</span>
           </div>
 
           {/* Rows */}

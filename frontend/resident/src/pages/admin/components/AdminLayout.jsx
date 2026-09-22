@@ -23,7 +23,7 @@ export default function AdminLayout({ children }) {
       <aside className="w-56 shrink-0 flex flex-col py-8 px-4 min-h-screen"
              style={{ backgroundColor: '#0E2A2E' }}>
         <div className="flex flex-col items-center mb-10">
-          <img src="/logo.jpg" alt="SentriCore" className="w-14 h-14 object-contain rounded-full bg-white/10" />
+          <img src="/logo.png" alt="SentriCore" className="w-14 h-14 object-contain" />
           <p className="text-sm font-extrabold tracking-widest mt-2 text-white">SENTRICORE</p>
         </div>
 

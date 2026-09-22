@@ -91,7 +91,7 @@ async function getMyRegistrations(req, res) {
       );
       // Transactions ng registration na ito (para sa PER-VISITOR status)
       const [txs] = await pool.query(
-        `SELECT visitor_name, status, entry_time, exit_time
+        `SELECT visitor_name, status, entry_time, exit_time, pass_number, plate_number
          FROM VisitorTransactions WHERE registration_id = ?`,
         [r.registration_id]
       );
@@ -101,14 +101,16 @@ async function getMyRegistrations(req, res) {
       // Bawat visitor may sariling status base sa transaction
       const visitors = details.map((d) => {
         const t = txByName[(d.visitor_name || '').toUpperCase()];
-        let status = 'Expected', timeIn = null, timeOut = null;
+        let status = 'Expected', timeIn = null, timeOut = null, passNumber = null, plateNumber = null;
         if (t) {
           timeIn = t.entry_time;
           timeOut = t.exit_time;
+          passNumber = t.pass_number || null;
+          plateNumber = t.plate_number || null;
           if (t.status === 'Active') status = 'Active';
           else if (t.status === 'Completed') status = 'Departed';
         }
-        return { name: d.visitor_name, status, timeIn, timeOut };
+        return { name: d.visitor_name, status, timeIn, timeOut, pass_number: passNumber, plate_number: plateNumber };
       });
 
       result.push({

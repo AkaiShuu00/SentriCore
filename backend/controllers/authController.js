@@ -32,7 +32,7 @@ async function login(req, res) {
       const [r] = await pool.query('SELECT resident_id, full_name FROM Residents WHERE user_id = ?', [user.user_id]);
       if (r.length) { profile.residentId = r[0].resident_id; profile.name = r[0].full_name; }
     } else if (user.role_name === 'Guard') {
-      const [g] = await pool.query('SELECT guard_id, gate_id, full_name, shift_start FROM Guards WHERE user_id = ?', [user.user_id]);
+      const [g] = await pool.query('SELECT * FROM Guards WHERE user_id = ?', [user.user_id]);
       if (g.length) {
         profile.guardId = g[0].guard_id; profile.gateId = g[0].gate_id; profile.name = g[0].full_name;
         // ── AUTO TIME-IN sa login (kung walang bukas na shift pa) ──
@@ -45,7 +45,16 @@ async function login(req, res) {
           );
           if (!open.length) {
             let timeIn = new Date();
-            const ss = g[0].shift_start; // TIME 'HH:MM:SS'
+            // Kunin ang shift start: mula shift_start column, o i-parse ang shift_schedule string.
+            let ss = g[0].shift_start || null;
+            if (!ss && g[0].shift_schedule) {
+              const m = String(g[0].shift_schedule).split(/[-–—]/)[0].trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+              if (m) {
+                let hh = parseInt(m[1], 10); const mm = m[2] ? parseInt(m[2], 10) : 0; const ap = (m[3] || '').toUpperCase();
+                if (ap === 'PM' && hh !== 12) hh += 12; if (ap === 'AM' && hh === 12) hh = 0;
+                ss = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
+              }
+            }
             if (ss) {
               const [hh, mm] = String(ss).split(':').map(Number);
               const sched = new Date();

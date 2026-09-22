@@ -41,7 +41,7 @@ export default function SignIn() {
       <div className="bg-cream w-full sm:max-w-md min-h-screen relative overflow-hidden">
         {/* Logo */}
         <div className="flex flex-col items-center pt-10 pb-6">
-          <img src="/logo.jpg" alt="SentriCore" className="w-24 h-24 object-contain" />
+          <img src="/logo.png" alt="SentriCore" className="w-24 h-24 object-contain" />
           <h1 className="text-2xl font-extrabold text-ink tracking-wide"
               style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.15)' }}>
             SENTRICORE

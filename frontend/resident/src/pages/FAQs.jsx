@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronDown } from 'lucide-react';
 
 export default function FAQs() {
   const navigate = useNavigate();
@@ -10,8 +11,7 @@ export default function FAQs() {
     { q: 'How do I delete my account?', a: 'Please contact your HOA administrator to request account deletion.' },
     { q: 'How do I update my profile information?', a: 'Your profile details are managed by your HOA administrator. Contact them for changes.' },
     { q: 'Is my data secure?', a: 'Yes. We follow the Data Privacy Act of 2012. ID images are never stored — only names are used for verification.' },
-    { q: 'How do I report a problem?', a: 'Use the Help Center → Contact Support (SMS or Email).' },
-    { q: 'Can I export my notification history?', a: 'This feature is coming soon. Contact support for assistance.' },
+    { q: 'How do I report a problem?', a: 'Use the Complaints feature (Home → Complaints). Choose one of the four categories — Visitor, Guard, Security, or HOA — to send your concern or problem to the HOA.' },
   ];
 
   return (
@@ -32,12 +32,12 @@ export default function FAQs() {
             {faqs.map((f, i) => (
               <div key={i} className="border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 <button onClick={() => setOpen(open === i ? null : i)}
-                        className="w-full flex items-center justify-between px-5 py-4 text-left">
+                        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left">
                   <span className="font-semibold text-ink">{f.q}</span>
-                  <span className="text-ink">{open === i ? '⌃' : '⌄'}</span>
+                  <ChevronDown size={18} className={`text-ink/50 shrink-0 transition-transform ${open === i ? 'rotate-180' : ''}`} />
                 </button>
                 {open === i && (
-                  <p className="px-5 pb-4 text-sm text-ink/70">{f.a}</p>
+                  <p className="px-5 pb-4 text-sm text-ink/70 leading-relaxed">{f.a}</p>
                 )}
               </div>
             ))}

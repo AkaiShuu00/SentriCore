@@ -42,7 +42,7 @@ export default function AdminSignIn() {
            style={{ backgroundColor: '#F5F2E9' }}>
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/logo.jpg" alt="SentriCore" className="w-14 h-14 object-contain rounded-full" />
+          <img src="/logo.png" alt="SentriCore" className="w-14 h-14 object-contain" />
           <p className="text-sm font-bold text-ink tracking-widest mt-1">SENTRICORE</p>
           <h1 className="text-2xl font-extrabold text-ink mt-3">ADMIN SIGN IN</h1>
         </div>

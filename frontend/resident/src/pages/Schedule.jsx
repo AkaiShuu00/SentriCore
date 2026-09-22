@@ -6,7 +6,7 @@ import { User, Search, Inbox } from 'lucide-react';
 const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED'];
 
 export default function Schedule() {
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const today = new Date();
@@ -72,6 +72,12 @@ export default function Schedule() {
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
 
+  // I-scroll sa harapan ang petsa NGAYON
+  useEffect(() => {
+    const el = document.getElementById('sched-today-cell');
+    if (el) el.scrollIntoView({ inline: 'start', block: 'nearest' });
+  }, [loading]);
+
   // Napiling petsa (YYYY-MM-DD) base sa day strip
   const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
 
@@ -122,10 +128,14 @@ export default function Schedule() {
             <div id="sched-day-scroll" className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
               {monthDays.map((d) => {
                 const isActive = d.dayNum === selectedDay;
+                const isToday = d.dayNum === today.getDate();
+                const style = isActive ? { backgroundColor: '#0F6E6E' }
+                  : isToday ? { backgroundColor: '#F1D88A' } : {};
                 return (
-                  <button key={d.dayNum} onClick={() => setSelectedDay(d.dayNum)}
-                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[60px] shadow shrink-0 ${isActive ? 'text-white' : 'bg-white text-ink border border-gray-100'}`}
-                          style={isActive ? { backgroundColor: '#0F6E6E' } : {}}>
+                  <button key={d.dayNum} id={isToday ? 'sched-today-cell' : undefined}
+                          onClick={() => setSelectedDay(d.dayNum)}
+                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[60px] shadow shrink-0 ${isActive ? 'text-white' : 'text-ink'} ${!isActive && !isToday ? 'bg-white border border-gray-100' : ''}`}
+                          style={style}>
                     <span className="text-xs font-semibold">{d.dayLabel}</span>
                     <span className="text-2xl font-extrabold">{d.dayNum}</span>
                   </button>

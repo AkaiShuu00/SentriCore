@@ -111,7 +111,8 @@ export default function Complaints() {
 
             <label className="block font-bold text-ink mb-2">Date of Incident</label>
             <input type="date" value={dateIncident} onChange={(e) => setDateIncident(e.target.value)}
-                   className="w-full border border-ink/30 rounded-2xl px-5 py-4 mb-5 focus:outline-none focus:ring-2 focus:ring-ink/30" />
+                   className="w-full box-border border border-ink/30 rounded-2xl px-5 py-4 mb-5 focus:outline-none focus:ring-2 focus:ring-ink/30"
+                   style={{ WebkitAppearance: 'none', appearance: 'none', minWidth: 0, maxWidth: '100%' }} />
 
             <label className="block font-bold text-ink mb-2">Type of Complaint</label>
             <div className="flex flex-wrap gap-2 mb-5">

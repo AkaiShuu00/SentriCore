@@ -15,7 +15,7 @@ const STAT_META = [
     gradient: 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)', dark: true },
   { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', Icon: CalendarDays,
     gradient: 'linear-gradient(135deg,#3FA89A 0%,#2E8C7E 100%)', dark: true },
-  { key: 'activeGates', label: 'Active Gates', sub: 'Gates Currently Monitoring', Icon: ShieldCheck,
+  { key: 'weeklyVisitors', label: 'Visitors This Week', sub: 'Mon–Sun (resets Monday)', Icon: Users,
     gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
 ];
 
@@ -162,10 +162,12 @@ export default function AdminDashboard() {
               ))}
               {weekDays.map((d) => {
                 const active = isSameDay(d, selected);
+                const isToday = isSameDay(d, today);
                 return (
                   <button key={'d' + d.toISOString()} onClick={() => setSelected(new Date(d))}
                           className={`aspect-square rounded-full text-sm font-bold flex items-center justify-center
-                            ${active ? 'bg-teal-600 text-white' : 'text-ink hover:bg-cream'}`}>
+                            ${active ? 'text-white' : isToday ? 'text-white' : 'text-ink hover:bg-cream'}`}
+                          style={active ? { backgroundColor: '#0E2A2E' } : isToday ? { backgroundColor: '#3FA89A' } : {}}>
                     {d.getDate()}
                   </button>
                 );
@@ -223,7 +225,7 @@ export default function AdminDashboard() {
               <p className="text-xs text-ink/60">
                 {pendingComplaints > 0
                   ? `${pendingComplaints} new complaint${pendingComplaints > 1 ? 's' : ''} reported by residents`
-                  : 'No new complaints — tap to view all'}
+                  : 'No complaints reported'}
               </p>
             </div>
             <span className="text-ink/40 shrink-0">›</span>
@@ -250,11 +252,13 @@ export default function AdminDashboard() {
               {cells.map((c, i) => {
                 const cellDate = !c.other ? new Date(viewYear, viewMonth, c.day) : null;
                 const active = cellDate && isSameDay(cellDate, selected);
+                const isToday = cellDate && isSameDay(cellDate, today);
                 return (
                   <button key={i} disabled={c.other}
                           onClick={() => cellDate && setSelected(cellDate)}
                           className={`aspect-square rounded-full text-sm font-semibold flex items-center justify-center
-                            ${c.other ? 'text-ink/25' : active ? 'bg-teal-600 text-white' : 'text-ink hover:bg-cream'}`}>
+                            ${c.other ? 'text-ink/25' : active ? 'text-white' : isToday ? 'text-white' : 'text-ink hover:bg-cream'}`}
+                          style={active ? { backgroundColor: '#0E2A2E' } : isToday ? { backgroundColor: '#3FA89A' } : {}}>
                     {c.day}
                   </button>
                 );

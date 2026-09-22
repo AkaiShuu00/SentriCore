@@ -24,7 +24,7 @@ export default function Profile() {
   // Kunin mula profile (DB) na may fallback sa token — robust sa field names
   const name    = profile?.full_name || profile?.name || user.name || 'Resident';
   const address = profile?.unit_address || profile?.address || '—';
-  const contact = profile?.contact_number || profile?.contact || profile?.phone || '—';
+  const contact = profile?.phone_number || profile?.contact_number || profile?.contact || profile?.phone || user.contact || '—';
 
   const personalInfo = [
     { Icon: HomeIcon, bg: 'bg-teal-100', main: address, sub: 'Unit address' },

@@ -91,6 +91,12 @@ export default function Home() {
     if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' });
   };
 
+  // I-scroll sa harapan ang petsa NGAYON
+  useEffect(() => {
+    const el = document.getElementById('home-today-cell');
+    if (el) el.scrollIntoView({ inline: 'start', block: 'nearest' });
+  }, [loading]);
+
   // Listahan = base sa piniling araw (default: today)
   const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
   const daySchedule = allRows.filter((s) => s.expectedDate === selectedISO);
@@ -211,10 +217,14 @@ export default function Home() {
                style={{ scrollbarWidth: 'none' }}>
             {monthDays.map((d) => {
               const isActive = d.dayNum === selectedDay;
+              const isToday = d.dayNum === today.getDate();
+              const style = isActive ? { backgroundColor: '#0F6E6E' }
+                : isToday ? { backgroundColor: '#F1D88A' } : {};
               return (
-                <button key={d.dayNum} onClick={() => setSelectedDay(d.dayNum)}
-                        className={`flex flex-col items-center rounded-2xl px-4 py-3 min-w-[64px] shadow shrink-0 ${isActive ? 'text-white' : 'bg-white text-ink'}`}
-                        style={isActive ? { backgroundColor: '#0F6E6E' } : {}}>
+                <button key={d.dayNum} id={isToday ? 'home-today-cell' : undefined}
+                        onClick={() => setSelectedDay(d.dayNum)}
+                        className={`flex flex-col items-center rounded-2xl px-4 py-3 min-w-[64px] shadow shrink-0 ${isActive ? 'text-white' : 'text-ink'} ${!isActive && !isToday ? 'bg-white' : ''}`}
+                        style={style}>
                   <span className="text-xs font-semibold">{d.dayLabel}</span>
                   <span className="text-2xl font-extrabold">{d.dayNum}</span>
                 </button>
@@ -264,15 +274,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Recent Visit History */}
-        <h3 className="text-xl font-extrabold text-ink mt-8 mb-3">Recent Visit History</h3>
-        <div className="bg-white rounded-3xl p-5 shadow">
-          <div className="text-center py-6">
-            <div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
-            <p className="text-ink/60 font-semibold">No visit history yet</p>
-            <p className="text-ink/40 text-sm mt-1">Completed visits will appear here.</p>
-          </div>
-        </div>
       </div>
 
       <BottomNav active="home" />

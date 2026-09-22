@@ -12,7 +12,7 @@ export default function Splash() {
           onClick={() => navigate('/signin')}
           className="flex flex-col items-center transition-transform active:scale-95 hover:scale-105"
         >
-          <img src="/logo.jpg" alt="SentriCore" className="w-40 h-40 object-contain" />
+          <img src="/logo.png" alt="SentriCore" className="w-40 h-40 object-contain" />
           <h1 className="text-4xl font-extrabold text-ink tracking-wide mt-4"
               style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.15)' }}>
             SENTRICORE

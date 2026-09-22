@@ -1,11 +1,24 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 
-// Helper: generate username + temp password
-function genUsername(fullName) {
-  const base = (fullName || 'resident').toLowerCase().replace(/[^a-z]/g, '').slice(0, 8) || 'resident';
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `${base}${rand}`;
+// Helper: username slug mula sa unang pangalan (letters lang)
+function nameSlug(fullName) {
+  const first = String(fullName || 'resident').trim().split(/\s+/)[0] || 'resident';
+  return first.toLowerCase().replace(/[^a-z]/g, '') || 'resident';
+}
+// Pattern: name.NNNN@sentricore  (NNNN = pang-ilan sila sa mga registered residents)
+async function makeResidentUsername(conn, fullName) {
+  const slug = nameSlug(fullName);
+  const [[c]] = await conn.query('SELECT COUNT(*) AS n FROM Residents');
+  let seq = (c.n || 0) + 1;
+  // Siguraduhing unique — kung nakuha na, i-bump ang sequence
+  for (let i = 0; i < 1000; i++) {
+    const username = `${slug}.${String(seq).padStart(4, '0')}@sentricore`;
+    const [exists] = await conn.query('SELECT user_id FROM Users WHERE username = ?', [username]);
+    if (exists.length === 0) return username;
+    seq++;
+  }
+  return `${slug}.${Date.now()}@sentricore`;
 }
 function genPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -93,17 +106,12 @@ async function addResident(req, res) {
       return res.status(400).json({ message: 'Full name and address are required.' });
     }
 
-    // Generate unique username
-    let username = genUsername(fullName);
-    for (let tries = 0; tries < 5; tries++) {
-      const [exists] = await conn.query(`SELECT user_id FROM Users WHERE username = ?`, [username]);
-      if (exists.length === 0) break;
-      username = genUsername(fullName);
-    }
+    await conn.beginTransaction();
+
+    // Generate username sa pattern na name.NNNN@sentricore
+    const username = await makeResidentUsername(conn, fullName);
     const tempPassword = genPassword();
     const hash = await bcrypt.hash(tempPassword, 10);
-
-    await conn.beginTransaction();
 
     // Get Resident role_id
     const [[role]] = await conn.query(`SELECT role_id FROM Roles WHERE role_name = 'Resident' LIMIT 1`);

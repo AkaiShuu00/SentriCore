@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist } from '../../api';
+import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist, getExpectedDeliveries } from '../../api';
 import { User, Truck, Camera, Search, RefreshCw, ShieldAlert, Phone } from 'lucide-react';
 
 const teal = '#0F6E6E';
-// Relative na base URL — dumadaan sa ngrok/Vite proxy → backend → OCR.
-// Iwas sa mixed-content block kapag HTTPS (ngrok) ang page. Gumagana rin sa localhost.
+// Relative base URL — goes through ngrok/Vite proxy → backend → OCR.
+// Avoids mixed-content block when the page is HTTPS (ngrok). Also works on localhost.
 const API = '/api';
 
 const DEFAULT_SCANNED_NAME = '';
@@ -36,7 +36,7 @@ function IDCardPlaceholder({ name }) {
   );
 }
 
-// Kunin ang unang value mula sa listahan ng posibleng field names (robust sa iba't ibang schema).
+// Get the first value from a list of possible field names (robust across schemas).
 const pick = (obj, keys) => {
   for (const k of keys) if (obj && obj[k] != null && obj[k] !== '') return obj[k];
   return null;
@@ -47,10 +47,10 @@ const nameMatches = (scanned, dbName) => {
   const a = nameTokens(scanned);
   const b = nameTokens(dbName);
   if (a.length === 0 || b.length === 0) return false;
-  // Mahigpit: kung buong pangalan ang scanned (2+ tokens), LAHAT ng db-name tokens dapat tumugma
-  // (para di matugma ang ibang "Dela Cruz")
+  // Strict: if the scanned name is full (2+ tokens), ALL db-name tokens must match
+  // (so a different "Dela Cruz" is not matched)
   if (a.length >= 2) return b.every((w) => a.includes(w)) && a.every((w) => b.includes(w));
-  // Surname lang — partial fallback
+  // Surname only — partial fallback
   return b.some((w) => a.includes(w));
 };
 
@@ -78,6 +78,7 @@ export default function GuardVerify() {
   const [pickupResident, setPickupResident] = useState(null);
   const [activeSearch, setActiveSearch] = useState('');
   const [deliveryResident, setDeliveryResident] = useState(null);
+  const [deliveryRegs, setDeliveryRegs] = useState([]);   // residents na may expected delivery ngayong linggo
   const fileRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -90,35 +91,35 @@ export default function GuardVerify() {
   const [exitNote, setExitNote] = useState('');                 // optional exit note (1 of 4 choices)
   const [exitAdditionalNote, setExitAdditionalNote] = useState(''); // optional free-text
   const [matchData, setMatchData] = useState({});
-  const [candidates, setCandidates] = useState([]);   // lahat ng tumugmang candidate (disambiguation)
+  const [candidates, setCandidates] = useState([]);   // all matching candidates (disambiguation)
   const multiRef = useRef(false);                      // may 2+ candidate ba?
-  const exitMultiRef = useRef(false);                  // exit: kailangan bang pumili sa active list?
+  const exitMultiRef = useRef(false);                  // exit: need to pick from the active list?
 
   // ── Real data mula DB ──
   const [residentsDB, setResidentsDB] = useState([]);
   const [activeDB, setActiveDB] = useState([]);
-  const [entryCompanions, setEntryCompanions] = useState([]);   // para sa ENTRY accompanying
-  const [registeredDB, setRegisteredDB] = useState([]);         // lahat ng registered/expected visitors (manual search)
+  const [entryCompanions, setEntryCompanions] = useState([]);   // for ENTRY accompanying
+  const [registeredDB, setRegisteredDB] = useState([]);         // all registered/expected visitors (manual search)
   const [regSearch, setRegSearch] = useState('');
   const [passMap, setPassMap] = useState({});                   // preview: NAME(UPPER) → pass number (V-001/D-001)
-  const [gatePickups, setGatePickups] = useState([]);           // residents na naghihintay ng pickup (DB, cross-device)
-  const [blockInfo, setBlockInfo] = useState(null);             // { blocked, matches } para sa na-scan na bisita
-  const [blockNote, setBlockNote] = useState('');               // note kapag kinumpirma ni guard na ibang tao
+  const [gatePickups, setGatePickups] = useState([]);           // residents waiting for pickup (DB, cross-device)
+  const [blockInfo, setBlockInfo] = useState(null);             // { blocked, matches } for the scanned visitor
+  const [blockNote, setBlockNote] = useState('');               // note when the guard confirms it is a different person
 
   const token = () => localStorage.getItem('sentricore_token');
-  // Header para hindi ibalik ng ngrok-free ang HTML warning page sa mga API call.
+  // Header so ngrok-free does not return the HTML warning page on API calls.
   const NGROK = { 'ngrok-skip-browser-warning': 'true' };
   const authHeaders = (extra = {}) => ({ Authorization: `Bearer ${token()}`, ...NGROK, ...extra });
 
-  // EXIT matching — kapareho ng backend entry: sapat na na LAHAT ng token ng
-  // pangalan sa DB ay nasa scan (tanggap kahit may dagdag na basura ang OCR).
+  // EXIT matching — same as backend entry: it is enough that ALL tokens of
+  // the DB name are in the scan (accepts extra OCR noise).
   const exitMatches = (scanned, dbName) => {
     const a = nameTokens(scanned), b = nameTokens(dbName);
     if (a.length === 0 || b.length === 0) return false;
     if (a.length >= 2) return b.every((w) => a.includes(w));
     return b.some((w) => a.includes(w));
   };
-  // Bumuo ng exit matchData mula sa isang active-visitor row
+  // Build exit matchData from an active-visitor row
   const fromActive = (v) => ({
     transactionId: v.transactionId, arrivalId: v.arrivalId, registrationId: v.registrationId,
     passId: v.passNumber || ('VST ' + v.transactionId),
@@ -145,7 +146,7 @@ export default function GuardVerify() {
       return list;
     }).catch(() => { setActiveDB([]); return []; });
 
-  // ── Kunin LAHAT ng registered/expected visitors para sa manual search ──
+  // ── Get ALL registered/expected visitors for manual search ──
   // Robust sa iba't ibang field name at kaya ang batch (visitors array) o single row.
   const loadRegistered = () =>
     getSchedule().then((res) => {
@@ -166,7 +167,7 @@ export default function GuardVerify() {
           const nm = pick(v, ['registeredName', 'registered_name', 'visitorName', 'visitor_name', 'name', 'full_name']);
           if (!nm) return;
           const status = String(pick(v, ['status', 'entry_status']) || '').toUpperCase();
-          // Ipakita lang ang HINDI pa pumapasok (walang time-in / hindi active / hindi departed)
+          // Show only those who have NOT entered yet (no time-in / not active / not departed)
           const entered = pick(v, ['timeIn', 'entry_time', 'time_in']);
           if (status === 'ACTIVE' || status === 'DEPARTED' || status === 'EXPIRED' || entered) return;
           flat.push({
@@ -199,8 +200,8 @@ export default function GuardVerify() {
   const isDelivery = entryType === 'DELIVERY';
   const isDriverFlow = isPickup || isDelivery;
 
-  // ── Load companions para sa ENTRY accompanying ──
-  // Batch → same batch members (hindi pa pumapasok); Single → expected singles
+  // ── Load companions for ENTRY accompanying ──
+  // Batch → same batch members (not yet entered); Single → expected singles
   const loadCompanions = async () => {
     try {
       const isBatch = (entryInfo.regType || matchData.regType || '').toLowerCase() === 'batch';
@@ -214,8 +215,8 @@ export default function GuardVerify() {
   };
 
   // ── EXIT accompanying pool: active visitors, prioritized ──
-  // Batch scanned → same batch (registration_id) sa taas
-  // Linked scanned → same arrival (arrival_id) sa taas
+  // Batch scanned → same batch (registration_id) on top
+  // Linked scanned → same arrival (arrival_id) on top
   const prioritizedActive = (() => {
     const scannedArrivalId = entryInfo.arrivalId;
     const scannedRegId = entryInfo.registrationId;
@@ -246,20 +247,20 @@ export default function GuardVerify() {
     return matchQ && matchBlock;
   });
 
-  // Call Resident → buksan ang Phone app gamit ang TOTOONG contact number ng resident
-  // (galing DB: contact_number). Pagkatapos ng tawag, babalik mismo si guard sa SentriCore.
+  // Call Resident → open the Phone app using the resident’s REAL contact number
+  // (from DB: contact_number). After the call, the guard returns to SentriCore.
   const callResident = (r) => {
     setContactedResident(r);
     const number = String(r.contact || r.contact_number || r.phone || '').replace(/[^\d+]/g, '');
     if (!number) {
-      alert('Walang contact number ang resident na ito.');
+      alert('This resident has no contact number.');
     } else {
       window.location.href = `tel:${number}`;
     }
     setShowCallResult(true);
   };
 
-  // ── Bumuo ng visitors payload (ginagamit ng saveArrival AT ng pass preview) ──
+  // ── Build the visitors payload (used by saveArrival AND the pass preview) ──
   const buildEntryVisitors = () => {
     // typeOverride: per-row visitor type (Visitor / Driver / Delivery)
     const mk = (name, resId, regId, typeOverride) => ({
@@ -273,31 +274,35 @@ export default function GuardVerify() {
       status: 'Active',
     });
 
-    // Type ng driver: Delivery kung delivery flow; Driver kung pickup/drop-off;
-    // Visitor kung personal visit (ang bisita mismo ang nag-drive).
+    // Driver type: Delivery if delivery flow; Driver if pickup/drop-off;
+    // Visitor if personal visit (the visitor drove themselves).
     const driverType = entryInfo.visitorType || (entryInfo.category === 'DELIVERY' ? 'Delivery' : 'Driver');
 
     const visitors = [];
-    // 1) DRIVER (kung may sasakyan) — laging itala kung sino ang driver
+    // 1) DRIVER (if there is a vehicle) — always record who the driver is
     if (entryInfo.driver) {
       visitors.push(mk(entryInfo.driver, entryInfo.residentId, entryInfo.registrationId, driverType));
     }
-    // 2) PANGUNAHING BISITA (walk-in, o ang sinundo/ihahatid) — Visitor
+    // 2) MAIN VISITOR (walk-in, or the one picked up/dropped off) — Visitor
     if (entryInfo.visitor && entryInfo.visitor !== entryInfo.driver) {
       visitors.push(mk(entryInfo.visitor, entryInfo.residentId, entryInfo.registrationId, 'Visitor'));
     }
-    // 3) ANGKAS / companions — Visitor
+    // 3) Companions — Visitor
     for (const c of selectedCompanions) {
       visitors.push(mk(c.name, c.residentId || entryInfo.residentId, c.registrationId || entryInfo.registrationId, 'Visitor'));
     }
-    // Fallback: walang driver at walang visitor pero may scanned name
+    // Fallback: no driver and no visitor but there is a scanned name
     if (visitors.length === 0 && entryInfo.visitor) {
       visitors.push(mk(entryInfo.visitor, entryInfo.residentId, entryInfo.registrationId, 'Visitor'));
+    }
+    // Delivery na walang pangalan ng rider — gamitin ang placeholder (optional ang pangalan)
+    if (visitors.length === 0 && entryInfo.category === 'DELIVERY') {
+      visitors.push(mk(entryInfo.driver || 'Delivery Rider', entryInfo.residentId, entryInfo.registrationId, 'Delivery'));
     }
     return visitors;
   };
 
-  // ── Save ENTRY sa DATABASE (bawat companion may sariling resident/registration) ──
+  // ── Save ENTRY to DATABASE (each companion has its own resident/registration) ──
   const saveArrival = async () => {
     const visitors = buildEntryVisitors();
 
@@ -314,7 +319,7 @@ export default function GuardVerify() {
     return data.passes || [];   // auto-generated passes (V-001 / D-001 ...)
   };
 
-  // ── Save EXIT sa DATABASE ──
+  // ── Save EXIT to DATABASE ──
   const saveExit = async () => {
     const exitingIds = [entryInfo.transactionId, ...selectedCompanions.map((c) => c.transactionId)].filter(Boolean);
     if (exitingIds.length === 0) {
@@ -344,7 +349,7 @@ export default function GuardVerify() {
     );
   };
 
-  // Buuin ang matchData mula sa isang candidate
+  // Build matchData from a candidate
   const candidateToMatch = (c, fallbackName) => {
     const dateStr = c.expectedDate ? new Date(c.expectedDate).toLocaleDateString('en-US') : '';
     return {
@@ -361,7 +366,7 @@ export default function GuardVerify() {
     };
   };
 
-  // Piliin ang isang candidate mula sa SELECT VISITOR list
+  // Pick a candidate from the SELECT VISITOR list
   const pickCandidate = (c) => {
     setMatchData(candidateToMatch(c, scannedName));
     setScannedName(c.registeredName || scannedName);
@@ -369,7 +374,7 @@ export default function GuardVerify() {
     setStep('matched');
   };
 
-  // ── Resize image client-side (max 1000px) para bumilis ang OCR at umiwas sa timeout ──
+  // ── Resize image client-side (max 1000px) to speed up OCR and avoid timeouts ──
   const fileToResized = (file, maxDim = 1000, quality = 0.85) =>
     new Promise((resolve) => {
       const url = URL.createObjectURL(file);
@@ -390,7 +395,7 @@ export default function GuardVerify() {
       img.src = url;
     });
 
-  // ── Live camera (getUserMedia) — kailangan ng HTTPS (ngrok) o localhost ──
+  // ── Live camera (getUserMedia) — needs HTTPS (ngrok) or localhost ──
   const startCamera = async () => {
     setCameraError('');
     try {
@@ -403,7 +408,7 @@ export default function GuardVerify() {
         await videoRef.current.play().catch(() => {});
       }
     } catch (e) {
-      setCameraError('Hindi ma-access ang camera. Siguraduhing HTTPS (ngrok) ang URL at pinayagan ang camera. Gamitin ang "TAKE PHOTO OF ID" bilang alternatibo.');
+      setCameraError('Cannot access the camera. Make sure the URL is HTTPS (ngrok) and the camera is allowed. Use "TAKE PHOTO OF ID" as an alternative.');
     }
   };
 
@@ -413,7 +418,7 @@ export default function GuardVerify() {
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
-  // Simulan/patayin ang camera base sa 'scan' step; patayin din pag-alis ng page
+  // Start/stop the camera based on the 'scan' step; also stop when leaving the page
   useEffect(() => {
     if (step === 'scan') startCamera();
     else stopCamera();
@@ -421,10 +426,10 @@ export default function GuardVerify() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // Kunan ng frame mula sa live video → i-process gaya ng litrato
+  // Capture a frame from the live video → process it like a photo
   const captureFromCamera = async () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) { setCameraError('Hindi pa handa ang camera, sandali lang.'); return; }
+    if (!video || !video.videoWidth) { setCameraError('The camera is not ready yet, please wait.'); return; }
     const maxDim = 1000;
     const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
     const w = Math.round(video.videoWidth * scale), h = Math.round(video.videoHeight * scale);
@@ -432,13 +437,13 @@ export default function GuardVerify() {
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(video, 0, 0, w, h);
     canvas.toBlob(async (blob) => {
-      if (!blob) { setCameraError('Capture failed, subukan ulit.'); return; }
+      if (!blob) { setCameraError('Capture failed, please try again.'); return; }
       stopCamera();
       await processImageFile(new File([blob], 'id-capture.jpg', { type: 'image/jpeg' }), true);
     }, 'image/jpeg', 0.85);
   };
 
-  // ── Core: i-scan ang image file (mula file-input O live camera) ──
+  // ── Core: scan the image file (from file-input OR live camera) ──
   const processImageFile = async (rawFile, alreadyResized = false) => {
     const file = alreadyResized ? rawFile : await fileToResized(rawFile).catch(() => rawFile);
     multiRef.current = false;
@@ -461,7 +466,7 @@ export default function GuardVerify() {
       if (data.success && data.suggestedName) {
         const scanned = data.suggestedName;
 
-        // ── EXIT: match sa ACTIVE visitors (tolerant, kapareho ng entry) ──
+        // ── EXIT: match against ACTIVE visitors (tolerant, same as entry) ──
         if (isExit) {
           setScannedName(scanned);
           const list = await loadActive();
@@ -471,13 +476,13 @@ export default function GuardVerify() {
             setScannedName(matches[0].name);
             exitMultiRef.current = false;
           } else {
-            // 0 o 2+ na tugma → ipakita ang listahan ng active visitors para pumili
+            // 0 or 2+ matches → show the active visitors list to choose from
             exitMultiRef.current = true;
             setMatchData({});
             if (matches.length === 0) {
-              setOcrError('Walang eksaktong tugma sa scan. Piliin ang bisita sa listahan ng active visitors.');
+              setOcrError('No exact match from the scan. Select the visitor from the active visitors list.');
             } else {
-              setOcrError('Maraming active na tugma. Piliin ang tamang bisita sa listahan.');
+              setOcrError('Multiple active matches. Select the correct visitor from the list.');
             }
           }
         }
@@ -485,7 +490,7 @@ export default function GuardVerify() {
         else if (isDriverFlow) {
           setDriverName(scanned);
         }
-        // ── ENTRY: visitor → match sa EXPECTED registrations ──
+        // ── ENTRY: visitor → match against EXPECTED registrations ──
         else {
           setScannedName(scanned);
           try {
@@ -496,13 +501,13 @@ export default function GuardVerify() {
             const matchJson = await matchRes.json();
             console.log('🟣 match result:', matchJson);
             if (matchJson.matched && matchJson.candidates.length === 1) {
-              // Isa lang → auto-select
+              // Only one → auto-select
               const c = matchJson.candidates[0];
               setMatchData(candidateToMatch(c, scanned));
               setScannedName(c.registeredName || scanned);
               multiRef.current = false;
             } else if (matchJson.matched && matchJson.candidates.length > 1) {
-              // Marami → SELECT VISITOR (piliin ng guard)
+              // Multiple → SELECT VISITOR (guard chooses)
               setCandidates(matchJson.candidates);
               multiRef.current = true;
             } else {
@@ -538,7 +543,7 @@ export default function GuardVerify() {
     return 'matched';
   };
 
-  // I-match ulit gamit ang na-edit na scanned name (entry visitor lang)
+  // Re-match using the edited scanned name (entry visitor only)
   const reRunMatch = async () => {
     const name = (scannedName || '').trim();
     if (!name) { setOcrError('Please type the name first.'); return; }
@@ -553,8 +558,8 @@ export default function GuardVerify() {
         } else {
           setMatchData({});
           setOcrError(matches.length === 0
-            ? 'Walang tugma. Piliin sa listahan ng active visitors.'
-            : 'Maraming tugma. Piliin sa listahan ng active visitors.');
+            ? 'No match. Select from the active visitors list.'
+            : 'Multiple matches. Select from the active visitors list.');
           setStep('exitSelect');
         }
       } else {
@@ -586,13 +591,19 @@ export default function GuardVerify() {
     }
   }, [step, photoFile]);
 
-  // ── Pagpasok sa PICKUP RESIDENT step → kunin ang naghihintay na pickups mula DB ──
+  // ── On entering the PICKUP RESIDENT step → fetch waiting pickups from DB ──
   useEffect(() => {
     if (step !== 'pickupResidents') return;
     getGatePickups().then((res) => setGatePickups(res.data || [])).catch(() => setGatePickups([]));
   }, [step]);
 
-  // ── Pagpasok sa MATCHED (entry visitor) → i-check kung tumutugma sa blocklist ──
+  // ── On entering the DELIVERY RESIDENTS step → fetch this week's expected deliveries ──
+  useEffect(() => {
+    if (step !== 'deliveryResidents') return;
+    getExpectedDeliveries().then((res) => setDeliveryRegs(res.data || [])).catch(() => setDeliveryRegs([]));
+  }, [step]);
+
+  // ── On entering MATCHED (entry visitor) → check if it matches the blocklist ──
   useEffect(() => {
     if (step !== 'matched' || isExit || isDriverFlow) { return; }
     const nm = (matchData.visitor || scannedName || '').trim();
@@ -603,8 +614,8 @@ export default function GuardVerify() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, matchData.visitor, scannedName]);
 
-  // ── Pagpasok sa CONFIRM step (entry) → i-preview ang mga totoong pass number ──
-  // Ginagamit ang parehong payload at backend logic para tugma sa aktwal na maiimbak.
+  // ── On entering the CONFIRM step (entry) → preview the real pass numbers ──
+  // Uses the same payload and backend logic so it matches what will actually be stored.
   useEffect(() => {
     if (step !== 'confirmed' || isExit) return;
     const visitors = buildEntryVisitors();
@@ -657,11 +668,11 @@ export default function GuardVerify() {
     const info = { ...matchData, visitor: matchData.visitor || scannedName, transactionId: matchData.transactionId || null };
     setEntryInfo(info);
     setSelectedCompanions([]);
-    // Parehong entry at exit ay nagtatanong ng accompanying
+    // Both entry and exit ask about accompanying visitors
     setShowAccompany(true);
   };
 
-  // Confirmed cards: main + companions (bawat isa may sariling resident/address/purpose)
+  // Confirmed cards: main + companions (each has its own resident/address/purpose)
   const confirmedList = [
     { name: entryInfo.visitor, resident: entryInfo.resident, address: entryInfo.address, purpose: entryInfo.purpose, pass: entryInfo.passId },
     ...selectedCompanions.map((c) => ({
@@ -669,7 +680,7 @@ export default function GuardVerify() {
       resident: c.resident || entryInfo.resident,
       address: c.address || entryInfo.address,
       purpose: c.purpose || entryInfo.purpose,
-      // bawat active companion ay may sariling pass_number galing DB (para sa EXIT)
+      // each active companion has its own pass_number from the DB (for EXIT)
       pass: c.passNumber || c.passId || '',
     })),
   ].filter((x, i) => i === 0 || x.name);
@@ -830,7 +841,7 @@ export default function GuardVerify() {
                 <Camera size={16} /> CAPTURE ID
               </button>
 
-              {/* Fallback: native camera app / file (gumagana kahit walang camera permission) */}
+              {/* Fallback: native camera app / file (works even without camera permission) */}
               <input ref={fileRef} type="file" accept="image/*" capture="environment"
                      onChange={handlePhoto} style={{ display: 'none' }} />
               <button onClick={() => fileRef.current?.click()}
@@ -875,7 +886,7 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* SELECT VISITOR — kapag maraming tumugmang pangalan (magkaibang resident) */}
+        {/* SELECT VISITOR — when multiple names match (different residents) */}
         {step === 'selectVisitor' && (
           <div>
             <h2 className="text-xl font-extrabold text-ink text-center mb-1">SELECT VISITOR</h2>
@@ -913,12 +924,12 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* SEARCH REGISTERED VISITOR — manual (type-to-search) sa halip na scan */}
+        {/* SEARCH REGISTERED VISITOR — manual (type-to-search) instead of scan */}
         {step === 'visitorSearch' && (
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-1">SEARCH REGISTERED VISITOR</h2>
             <p className="text-center text-xs text-ink/60 mb-4">
-              I-type ang pangalan para hanapin sa listahan ng mga registered visitor. Pindutin ang tama para magpatuloy.
+              Type the name to search the list of registered visitors. Tap the correct one to continue.
             </p>
 
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
@@ -931,7 +942,7 @@ export default function GuardVerify() {
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <div className="max-h-[52vh] overflow-y-auto space-y-2">
                 {registeredDB.length === 0 ? (
-                  <p className="text-center text-ink/50 py-8 text-sm">Walang registered visitor na nakalista.</p>
+                  <p className="text-center text-ink/50 py-8 text-sm">No registered visitors listed.</p>
                 ) : (() => {
                   const q = regSearch.toLowerCase();
                   const results = registeredDB.filter((c) =>
@@ -940,7 +951,7 @@ export default function GuardVerify() {
                     (c.residentAddress || '').toLowerCase().includes(q)
                   );
                   if (results.length === 0) {
-                    return <p className="text-center text-ink/50 py-8 text-sm">Walang tumugmang bisita.</p>;
+                    return <p className="text-center text-ink/50 py-8 text-sm">No matching visitor.</p>;
                   }
                   return results.map((c, i) => (
                     <button key={(c.registrationId || i) + '-' + c.registeredName} onClick={() => pickCandidate(c)}
@@ -980,7 +991,7 @@ export default function GuardVerify() {
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-1">SELECT ACTIVE VISITOR</h2>
             <p className="text-center text-xs text-ink/60 mb-4">
-              Piliin ang bisita na lalabas. Ito ang mga kasalukuyang ACTIVE sa loob.
+              Select the visitor who is exiting. These are the ones currently ACTIVE inside.
             </p>
 
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
@@ -993,7 +1004,7 @@ export default function GuardVerify() {
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <div className="max-h-[52vh] overflow-y-auto space-y-2">
                 {activeDB.length === 0 ? (
-                  <p className="text-center text-ink/50 py-8 text-sm">Walang active na bisita sa ngayon.</p>
+                  <p className="text-center text-ink/50 py-8 text-sm">No active visitors right now.</p>
                 ) : activeDB
                     .filter((v) => v.name.toLowerCase().includes(activeSearch.toLowerCase()))
                     .map((v) => (
@@ -1035,13 +1046,26 @@ export default function GuardVerify() {
           isDriverFlow ? (
             <div>
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">DRIVER INFORMATION</h2>
+
+              {/* Editable driver/rider name — para sa manual entry o pag-ayos ng OCR */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-3">
+                <label className="block text-[10px] font-bold text-ink/60 mb-1">
+                  {isDelivery ? 'DELIVERY RIDER NAME (editable)' : "DRIVER NAME (editable)"}
+                </label>
+                <input value={driverName} onChange={(e) => setDriverName(e.target.value)}
+                       placeholder="Type the name"
+                       className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600" />
+              </div>
+
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
                 {(isDelivery
                   ? [
-                      ['Registration Type', 'Single'],
+                      ['Registration Type', 'Delivery'],
                       ['Resident Name', deliveryResident?.name || ''],
                       ['Address', deliveryResident?.address || ''],
-                      ['Purpose', 'Delivery'],
+                      ['Rider Name', driverName || '—'],
+                      ['Purpose', deliveryResident?.purpose || 'Delivery'],
+                      ['Expected Date', deliveryResident?.expectedDate || '—'],
                     ]
                   : [
                       ['Registration Type', 'Single'],
@@ -1068,11 +1092,13 @@ export default function GuardVerify() {
                   <button onClick={() => {
                             setEntryInfo(isDelivery
                               ? {
-                                  passId: 'DRV-1001', category: 'DELIVERY', regType: 'Single',
+                                  passId: 'DRV-1001', category: 'DELIVERY', regType: 'Delivery',
                                   resident: deliveryResident?.name || '', address: deliveryResident?.address || '',
-                                  residentId: deliveryResident?.residentId || null, driver: driverName,
-                                  visitor: '', purpose: 'Delivery', visitorType: 'Delivery',
-                                  expectedDate: '', title: 'DRIVER ENTRY CONFIRMED',
+                                  residentId: deliveryResident?.residentId || null,
+                                  registrationId: deliveryResident?.registrationId || null,
+                                  driver: driverName,
+                                  visitor: '', purpose: deliveryResident?.purpose || 'Delivery', visitorType: 'Delivery',
+                                  expectedDate: deliveryResident?.expectedDate || '', title: 'DELIVERY ENTRY CONFIRMED',
                                 }
                               : {
                                   passId: 'DRV-1001', category: 'VISITOR', regType: 'Single',
@@ -1084,7 +1110,7 @@ export default function GuardVerify() {
                                   purpose: drivePurpose === 'PICKUP'
                                     ? (pickupTarget === 'RESIDENT' ? 'Pickup resident' : 'Pickup visitor')
                                     : (drivePurpose === 'DROP-OFF' ? 'Drop-off' : 'Personal visit'),
-                                  // Personal visit = ang bisita mismo (Visitor); pickup/drop-off = Driver
+                                  // Personal visit = the visitor themselves (Visitor); pickup/drop-off = Driver
                                   visitorType: drivePurpose === 'PERSONAL VISIT' ? 'Visitor' : 'Driver',
                                   expectedDate: '', title: 'DRIVER ENTRY CONFIRMED',
                                 });
@@ -1107,7 +1133,7 @@ export default function GuardVerify() {
                 {isExit ? 'ACTIVE VISITOR' : 'VISITOR MATCHED'}
               </h2>
 
-              {/* Editable scanned name — kung mali/kulang ang OCR */}
+              {/* Editable scanned name — if the OCR is wrong/incomplete */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-3">
                 <label className="block text-[10px] font-bold text-ink/60 mb-1">SCANNED NAME (editable)</label>
                 <div className="flex gap-2">
@@ -1148,7 +1174,7 @@ export default function GuardVerify() {
                 </div>
               )}
 
-              {/* BLOCKLIST FLAG — kapag ang pangalan ay tumugma sa isang blocked person */}
+              {/* BLOCKLIST FLAG — when the name matches a blocked person */}
               {!isExit && blockInfo?.blocked && (
                 <div className="rounded-2xl p-4 mb-4 border-2" style={{ backgroundColor: '#FDECEC', borderColor: '#9b2c2c' }}>
                   <div className="flex items-center gap-2 mb-1">
@@ -1256,9 +1282,9 @@ export default function GuardVerify() {
           </div>
         )}
 
-        {/* PICKUP RESIDENT — Notify Gate residents nasa taas */}
+        {/* PICKUP RESIDENT — Notify Gate residents on top */}
         {step === 'pickupResidents' && (() => {
-          // Naghihintay na pickups mula DB (cross-device) — pinned sa itaas
+          // Waiting pickups from DB (cross-device) — pinned on top
           const fmtWhen = (ts) => ts
             ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
             : '';
@@ -1345,23 +1371,33 @@ export default function GuardVerify() {
                      className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
             </div>
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
-              <p className="text-sm font-semibold text-ink/70 mb-3">All residents expecting a delivery today</p>
+              <p className="text-sm font-semibold text-ink/70 mb-3">Residents expecting a delivery this week</p>
               <div className="max-h-[45vh] overflow-y-auto space-y-2">
-                {residentsDB.filter((r) => r.name.toLowerCase().includes(residentSearch.toLowerCase())).map((r) => {
-                  const selected = deliveryResident?.name === r.name;
-                  return (
-                    <button key={r.residentId} onClick={() => setDeliveryResident(r)}
-                            className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
-                            style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
-                      <div>
-                        <p className="font-bold text-ink text-sm">{r.name}</p>
-                        <p className="text-xs text-ink/60">Address: {r.address}</p>
-                      </div>
-                      <span className="w-4 h-4 rounded-full shrink-0"
-                            style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
-                    </button>
-                  );
-                })}
+                {(() => {
+                  const list = deliveryRegs.filter((r) => (r.name || '').toLowerCase().includes(residentSearch.toLowerCase()));
+                  if (deliveryRegs.length === 0) {
+                    return <p className="text-center text-ink/50 py-8 text-sm">No expected deliveries registered this week.</p>;
+                  }
+                  if (list.length === 0) {
+                    return <p className="text-center text-ink/50 py-8 text-sm">No matching resident.</p>;
+                  }
+                  return list.map((r) => {
+                    const selected = deliveryResident?.registrationId === r.registrationId;
+                    return (
+                      <button key={r.registrationId} onClick={() => setDeliveryResident(r)}
+                              className="w-full text-left rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
+                              style={{ borderColor: selected ? '#2f6b34' : '#eee' }}>
+                        <div className="min-w-0">
+                          <p className="font-bold text-ink text-sm truncate">{r.name}</p>
+                          <p className="text-xs text-ink/60 truncate">Address: {r.address}</p>
+                          <p className="text-xs text-ink/60">Expected: {r.expectedDate || '—'}{r.purpose ? ` · ${r.purpose}` : ''}</p>
+                        </div>
+                        <span className="w-4 h-4 rounded-full shrink-0"
+                              style={{ backgroundColor: selected ? '#2f6b34' : '#d1d5db' }} />
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             </div>
             <div className="flex gap-3 justify-center mb-6">
@@ -1438,7 +1474,7 @@ export default function GuardVerify() {
               </p>
             </div>
 
-            {/* Mga tugmang blocklist entries + tawag sa nag-report */}
+            {/* Matching blocklist entries + call the reporter */}
             <div className="space-y-3 mb-4">
               {(blockInfo?.matches || []).map((m, i) => {
                 const num = String(m.reported_by_contact || '').replace(/[^\d+]/g, '');
@@ -1448,7 +1484,7 @@ export default function GuardVerify() {
                     {m.reason && <p className="text-xs text-ink/70 mt-1"><span className="font-bold">Reason:</span> {m.reason}</p>}
                     <p className="text-xs text-ink/60 mt-1"><span className="font-bold">Reported by:</span> {m.reported_by || '—'}{m.unit_address ? ` · ${m.unit_address}` : ''}</p>
                     <button onClick={() => {
-                              if (!num) { alert('Walang contact number ang nag-report na resident.'); return; }
+                              if (!num) { alert('The reporting resident has no contact number.'); return; }
                               window.location.href = `tel:${num}`;
                             }}
                             className="mt-3 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-bold text-white"
@@ -1460,15 +1496,15 @@ export default function GuardVerify() {
               })}
             </div>
 
-            {/* Verification note (kailangan kapag papapasukin bilang ibang tao) */}
+            {/* Verification note (required when admitting as a different person) */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-4">
               <label className="block text-[11px] font-bold text-ink/60 mb-1">VERIFICATION NOTE</label>
               <p className="text-[11px] text-ink/50 mb-2">
-                Kumpirmahin ang buong pangalan sa pisikal na ID at, kung kaya, sa pamamagitan ng tawag sa nag-report.
-                Ilagay ang resulta ng verification bago magpatuloy.
+                Confirm the full name on the physical ID and, if possible, by calling the reporter.
+                Enter the verification result before continuing.
               </p>
               <textarea value={blockNote} onChange={(e) => setBlockNote(e.target.value)} rows={2}
-                        placeholder="Hal. Kausap ang resident — ibang tao, magkapangalan lang. ID name exact match."
+                        placeholder="e.g. Talked to the resident — different person, just a namesake. ID name exact match."
                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none" />
             </div>
 
@@ -1595,7 +1631,7 @@ export default function GuardVerify() {
             <div className="space-y-4 max-h-[55vh] overflow-y-auto mb-4">
               {confirmedList.map((c, i) => {
                 const cPass = isExit
-                  ? (c.pass || '')  // per-visitor pass galing DB (hindi na iisang pass sa lahat)
+                  ? (c.pass || '')  // per-visitor pass from DB (no longer a single pass for all)
                   : (passMap[(c.name || '').toUpperCase()] || '');
                 const driverPass = passMap[(entryInfo.driver || '').toUpperCase()] || '';
                 return (
@@ -1672,7 +1708,7 @@ export default function GuardVerify() {
         )}
       </div>
 
-      {/* Accompanying modal (entry at exit) */}
+      {/* Accompanying modal (entry and exit) */}
       {showAccompany && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm">

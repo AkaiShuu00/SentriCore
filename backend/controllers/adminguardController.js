@@ -12,12 +12,17 @@ function genPassword() {
   return p;
 }
 
-// GET /api/admin/guards  (Admin) - list guards
+// Kunin ang mga column na aktwal na meron ang Guards table (defensive)
+async function guardColumns(conn) {
+  const [cols] = await (conn || pool).query('SHOW COLUMNS FROM Guards');
+  return cols.map((c) => c.Field);
+}
+
+// GET /api/admin/guards  (Admin) - list guards (kasama contact/email/photo kung meron)
 async function listGuards(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT g.guard_id, g.full_name, g.gate_id, g.shift_schedule, g.status,
-              u.username, u.status AS account_status
+      `SELECT g.*, u.username, u.status AS account_status
        FROM Guards g
        LEFT JOIN Users u ON u.user_id = g.user_id
        ORDER BY g.full_name ASC`
@@ -30,6 +35,10 @@ async function listGuards(req, res) {
       shift: g.shift_schedule || '—',
       status: g.status || 'Off Duty',
       username: g.username,
+      contact: g.phone_number || '',
+      email: g.email || '',
+      employeeId: g.employee_id || '',
+      photo: g.photo || null,
     })));
   } catch (err) {
     res.status(500).json({ message: 'Error fetching guards.', error: err.message });
@@ -49,7 +58,6 @@ async function guardActivity(req, res) {
        LEFT JOIN Guards gx ON gx.guard_id = t.exit_guard_id
        ORDER BY t.transaction_id DESC LIMIT 50`
     );
-    // Bumuo ng activity rows: entry (at exit kung meron)
     const acts = [];
     for (const t of rows) {
       acts.push({
@@ -74,7 +82,7 @@ async function guardActivity(req, res) {
 async function addGuard(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { fullName, gateId, shift, contact, email } = req.body;
+    const { fullName, gateId, shift, contact, email, photo } = req.body;
     if (!fullName) return res.status(400).json({ message: 'Full name is required.' });
 
     let username = genUsername(fullName);
@@ -88,17 +96,24 @@ async function addGuard(req, res) {
 
     await conn.beginTransaction();
     const [[role]] = await conn.query(`SELECT role_id FROM Roles WHERE role_name = 'Guard' LIMIT 1`);
-    if (!role) throw new Error("Guard role not found in Roles table.");
+    if (!role) throw new Error('Guard role not found in Roles table.');
 
     const [u] = await conn.query(
       `INSERT INTO Users (username, password_hash, role_id, status) VALUES (?, ?, ?, 'Active')`,
       [username, hash, role.role_id]
     );
 
+    // Defensive insert — ilalagay lang ang mga column na aktwal na meron
+    const names = await guardColumns(conn);
+    const fields = { user_id: u.insertId, full_name: fullName.trim(), gate_id: gateId || null, status: 'Off Duty' };
+    if (names.includes('shift_schedule')) fields.shift_schedule = shift || null;
+    if (names.includes('phone_number')) fields.phone_number = contact || null;
+    if (names.includes('email')) fields.email = email || null;
+    if (names.includes('photo')) fields.photo = photo || null;
+    const keys = Object.keys(fields);
     await conn.query(
-      `INSERT INTO Guards (user_id, full_name, gate_id, shift_schedule, status)
-       VALUES (?, ?, ?, ?, 'Off Duty')`,
-      [u.insertId, fullName.trim(), gateId || null, shift || null]
+      `INSERT INTO Guards (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`,
+      keys.map((k) => fields[k])
     );
 
     await conn.commit();
@@ -111,15 +126,26 @@ async function addGuard(req, res) {
   }
 }
 
-// PUT /api/admin/guards/:id  (Admin) - update guard (incl. gate reassignment)
+// PUT /api/admin/guards/:id  (Admin) - update guard (defensive sa columns)
 async function updateGuard(req, res) {
   try {
     const { id } = req.params;
-    const { fullName, gateId, shift, status } = req.body;
+    const { fullName, gateId, shift, status, contact, email, photo } = req.body;
+    const names = await guardColumns();
+
+    const set = {};
+    if (fullName !== undefined) set.full_name = fullName;
+    set.gate_id = gateId || null;
+    if (names.includes('shift_schedule')) set.shift_schedule = shift || null;
+    set.status = status || 'Off Duty';
+    if (names.includes('phone_number') && contact !== undefined) set.phone_number = contact || null;
+    if (names.includes('email') && email !== undefined) set.email = email || null;
+    if (names.includes('photo') && photo !== undefined) set.photo = photo || null;
+
+    const keys = Object.keys(set);
     const [result] = await pool.query(
-      `UPDATE Guards SET full_name = ?, gate_id = ?, shift_schedule = ?, status = ?
-       WHERE guard_id = ?`,
-      [fullName, gateId || null, shift || null, status || 'Off Duty', id]
+      `UPDATE Guards SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE guard_id = ?`,
+      [...keys.map((k) => set[k]), id]
     );
     if (result.affectedRows === 0) return res.status(404).json({ message: 'Guard not found.' });
     res.json({ message: 'Guard updated.' });
@@ -128,7 +154,7 @@ async function updateGuard(req, res) {
   }
 }
 
-// POST /api/admin/guards/:id/assign  (Admin) - reassign gate (reflects on guard side)
+// POST /api/admin/guards/:id/assign  (Admin) - reassign gate
 async function assignGate(req, res) {
   try {
     const { id } = req.params;

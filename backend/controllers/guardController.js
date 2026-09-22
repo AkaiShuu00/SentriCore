@@ -1,13 +1,28 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 
+// I-parse ang shift_schedule string ("6:00 AM - 6:00 PM") → { start:'06:00:00', end:'18:00:00' }
+function parseShiftSchedule(s) {
+  if (!s) return { start: null, end: null };
+  const parts = String(s).split(/[-–—]/);
+  const to24 = (t) => {
+    const m = String(t).trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = m[2] ? parseInt(m[2], 10) : 0;
+    const ap = (m[3] || '').toUpperCase();
+    if (ap === 'PM' && h !== 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+  };
+  return { start: parts[0] ? to24(parts[0]) : null, end: parts[1] ? to24(parts[1]) : null };
+}
+
 // GET /api/guards  (Admin) - list all guards
 async function getGuards(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT g.guard_id, g.full_name, g.employee_id, g.phone_number, g.email,
-              g.shift_start, g.shift_end, g.date_hired, g.status,
-              gt.gate_name, u.username, u.user_id
+      `SELECT g.*, gt.gate_name, u.username, u.user_id
        FROM Guards g
        JOIN Users u ON u.user_id = g.user_id
        LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
@@ -85,8 +100,7 @@ async function updateGuard(req, res) {
 async function getMyProfile(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT g.guard_id, g.full_name, g.employee_id, g.phone_number, g.email,
-              g.shift_start, g.shift_end, g.date_hired, g.status, gt.gate_name, u.username
+      `SELECT g.*, gt.gate_name, u.username
        FROM Guards g
        JOIN Users u ON u.user_id = g.user_id
        LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
@@ -122,19 +136,24 @@ async function getOnDutyGuards(req, res) {
 async function getGuardDirectory(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT g.guard_id, g.full_name, g.phone_number, g.email, g.status,
-              g.shift_start, g.shift_end, gt.gate_name
+      `SELECT g.*, gt.gate_name
        FROM Guards g
        LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
        ORDER BY g.guard_id`
     );
+    const dutyLabel = (s) => {
+      const v = String(s || '').toLowerCase();
+      if (v.includes('break')) return 'ON BREAK';
+      if (v.includes('on')) return 'ON DUTY';
+      return 'OFF DUTY';
+    };
     const guards = rows.map((r) => ({
       guardId: r.guard_id,
       name: r.full_name || 'Guard',
       phone: r.phone_number || '',
       email: r.email || '',
-      gate: r.gate_name || '-',
-      status: String(r.status || '').toLowerCase() === 'active' ? 'ON DUTY' : 'OFF DUTY',
+      gate: r.gate_name || (r.gate_id != null ? `Gate ${r.gate_id}` : '-'),
+      status: dutyLabel(r.status),
     }));
     res.json(guards);
   } catch (err) {
@@ -146,14 +165,20 @@ async function getGuardDirectory(req, res) {
 async function getMyShift(req, res) {
   try {
     const guardId = req.user.guardId;
-    const [[g]] = await pool.query('SELECT shift_start, shift_end FROM Guards WHERE guard_id = ?', [guardId]);
+    const [[g]] = await pool.query('SELECT * FROM Guards WHERE guard_id = ?', [guardId]);
+    let shiftStart = g && g.shift_start ? g.shift_start : null;
+    let shiftEnd = g && g.shift_end ? g.shift_end : null;
+    if ((!shiftStart || !shiftEnd) && g && g.shift_schedule) {
+      const p = parseShiftSchedule(g.shift_schedule);
+      shiftStart = shiftStart || p.start;
+      shiftEnd = shiftEnd || p.end;
+    }
     const [open] = await pool.query(
       `SELECT shift_id, time_in FROM GuardShifts WHERE guard_id = ? AND time_out IS NULL ORDER BY shift_id DESC LIMIT 1`,
       [guardId]
     );
     res.json({
-      shiftStart: g ? g.shift_start : null,
-      shiftEnd: g ? g.shift_end : null,
+      shiftStart, shiftEnd,
       timeIn: open.length ? open[0].time_in : null,
       shiftId: open.length ? open[0].shift_id : null,
     });

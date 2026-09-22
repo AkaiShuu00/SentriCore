@@ -117,5 +117,6 @@ export const recordExit = (id, data) => api.post(`/entry/${id}/exit`, data);
 export const getResidentsForGuard = () => api.get('/entry/residents');
 export const getCompanions = (params) => api.get('/entry/companions', { params });
 export const getSchedule = () => api.get('/entry/schedule');
+export const getExpectedDeliveries = () => api.get('/entry/expected-deliveries');
 
 export default api;

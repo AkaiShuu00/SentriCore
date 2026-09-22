@@ -1,13 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import AnnouncementsModal from '../../components/AnnouncementsModal';
-import { Shield, Building2, CalendarDays, DoorOpen, CalendarRange, Megaphone, RefreshCw, ClipboardList } from 'lucide-react';
+import { getMyShift } from '../../api';
+import { Shield, Building2, CalendarDays, DoorOpen, CalendarRange } from 'lucide-react';
+
+// TIME 'HH:MM:SS' → "6:00 AM"
+const fmt12 = (t) => {
+  if (!t) return null;
+  const [h, m] = String(t).split(':').map(Number);
+  const ap = h >= 12 ? 'PM' : 'AM';
+  const hh = (h % 12) || 12;
+  return `${hh}:${String(m || 0).padStart(2, '0')} ${ap}`;
+};
 
 export default function GuardProfile() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
-  const [showAnnouncements, setShowAnnouncements] = useState(false);
+
+  // ── Assigned shift (mula DB — kung ano ang naka-set ni admin) ──
+  const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null });
+  useEffect(() => {
+    getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
+  }, []);
+  const shiftLabel = (shift.shiftStart && shift.shiftEnd)
+    ? `${fmt12(shift.shiftStart)} - ${fmt12(shift.shiftEnd)}`
+    : 'No shift set';
 
   // ── Guard details (mula sa naka-login na account / token) ──
   const guard = {
@@ -36,7 +53,7 @@ export default function GuardProfile() {
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       {/* Header */}
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <img src="/logo.jpg" alt="SentriCore" className="w-12 h-12 object-contain rounded-full bg-white/10" />
+        <img src="/logo.png" alt="SentriCore" className="w-12 h-12 object-contain" />
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
@@ -83,9 +100,9 @@ export default function GuardProfile() {
             <p className="text-xs font-bold text-ink mb-2">Current Shift</p>
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center"><CalendarDays size={20} className="text-ink" /></div>
-              <div>
-                <p className="font-bold text-ink text-sm">On duty</p>
-                <p className="text-xs text-ink/60">—</p>
+              <div className="min-w-0">
+                <p className="font-bold text-ink text-sm break-words">{shiftLabel}</p>
+                <p className="text-xs text-ink/60">Assigned shift</p>
               </div>
             </div>
           </div>
@@ -110,35 +127,31 @@ export default function GuardProfile() {
           </button>
         </div>
 
-        {/* Today's shift schedule — iko-connect sa backend after (empty muna) */}
-        <div className="bg-white rounded-3xl p-5 shadow mt-4">
+        {/* Today's shift schedule — base sa naka-assign na shift ni admin */}
+        <div className="bg-white rounded-3xl p-5 shadow mt-4 mb-4">
           <h3 className="text-xl font-extrabold text-ink mb-4">TODAY'S SCHEDULE</h3>
-          <div className="text-center py-6">
-            <div className="flex justify-center mb-2"><CalendarRange size={36} className="text-ink/40" /></div>
-            <p className="text-ink/60 font-semibold">No shift schedule yet</p>
-            <p className="text-ink/40 text-sm mt-1">Your assigned shift breakdown will appear here.</p>
-          </div>
-        </div>
-
-        {/* Quick actions */}
-        <h3 className="text-xl font-extrabold text-ink mt-6 mb-3">QUICK ACTIONS</h3>
-        <div className="bg-white rounded-3xl p-5 shadow mb-4">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {[
-              { Icon: Megaphone, label: 'Announcements', bg: 'bg-teal-100', action: () => setShowAnnouncements(true) },
-              { Icon: RefreshCw, label: 'Request Turnover', bg: 'bg-blue-100', action: () => alert('Request Turnover') },
-              { Icon: ClipboardList, label: 'Post Orders', bg: 'bg-purple-100', action: () => alert('Post Orders') },
-            ].map((q) => (
-              <button key={q.label} onClick={q.action} className="flex flex-col items-center">
-                <div className={`w-16 h-16 rounded-2xl ${q.bg} flex items-center justify-center mb-1`}><q.Icon size={26} className="text-ink" /></div>
-                <span className="text-xs font-medium text-ink leading-tight">{q.label}</span>
-              </button>
-            ))}
-          </div>
+          {(shift.shiftStart && shift.shiftEnd) ? (
+            <div className="border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-teal-100 flex items-center justify-center shrink-0">
+                <CalendarRange size={22} className="text-ink" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-ink">{shiftLabel}</p>
+                <p className="text-sm text-ink/60">{assignment.gate}</p>
+              </div>
+              <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={{ backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>
+                {assignment.shiftStatus}
+              </span>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <div className="flex justify-center mb-2"><CalendarRange size={36} className="text-ink/40" /></div>
+              <p className="text-ink/60 font-semibold">No shift assigned yet</p>
+              <p className="text-ink/40 text-sm mt-1">Your admin-assigned shift will appear here.</p>
+            </div>
+          )}
         </div>
       </div>
-
-      {showAnnouncements && <AnnouncementsModal onClose={() => setShowAnnouncements(false)} />}
 
       <GuardBottomNav active="profile" />
     </div>
