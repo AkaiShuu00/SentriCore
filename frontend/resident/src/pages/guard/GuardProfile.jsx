@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { getMyShift } from '../../api';
-import { Shield, Building2, CalendarDays, DoorOpen, CalendarRange } from 'lucide-react';
+import { getMyShift, getMyGuardProfile } from '../../api';
+import { Shield, Building2, CalendarDays, DoorOpen, CalendarRange, Phone, Mail } from 'lucide-react';
+
+// DB status → duty label (ON DUTY / ON BREAK / OFF DUTY)
+const dutyLabel = (s) => {
+  const v = String(s || '').toLowerCase();
+  if (v.includes('break')) return 'ON BREAK';
+  if (v.includes('on') || v === 'active') return 'ON DUTY';
+  return 'OFF DUTY';
+};
+const dutyColor = (label) =>
+  label === 'ON DUTY' ? '#1e8e3e' : label === 'ON BREAK' ? '#b8901f' : '#8a2b2b';
 
 // TIME 'HH:MM:SS' → "6:00 AM"
 const fmt12 = (t) => {
@@ -17,29 +27,37 @@ export default function GuardProfile() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
 
-  // ── Assigned shift (mula DB — kung ano ang naka-set ni admin) ──
+  // ── Assigned shift + FULL profile (mula DB) ──
   const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null });
+  const [profile, setProfile] = useState(null);
   useEffect(() => {
     getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
+    getMyGuardProfile().then((res) => setProfile(res.data || null)).catch(() => setProfile(null));
   }, []);
   const shiftLabel = (shift.shiftStart && shift.shiftEnd)
     ? `${fmt12(shift.shiftStart)} - ${fmt12(shift.shiftEnd)}`
     : 'No shift set';
 
-  // ── Guard details (mula sa naka-login na account / token) ──
+  const p = profile || {};
+  const duty = dutyLabel(p.status);
+
+  // ── Guard details (mula DB; fallback sa token habang naglo-load) ──
   const guard = {
-    name: user.name || 'Guard',
+    name: p.full_name || user.name || 'Guard',
     role: 'Security Guard',
-    employeeId: user.guardId ? `GD-${String(user.guardId).padStart(4, '0')}` : (user.username || '—'),
-    username: user.username || '—',
-    status: 'Active',
-    duty: 'ON DUTY',
+    employeeId: p.employee_id || (user.guardId ? `GD-${String(user.guardId).padStart(4, '0')}` : (user.username || '—')),
+    username: p.username || user.username || '—',
+    phone: p.phone_number || '—',
+    email: p.email || '—',
+    status: p.status || 'Active',
+    duty,
+    photo: p.photo || null,
   };
 
   const assignment = {
-    gate: user.gateId ? `Gate ${user.gateId}` : 'Assigned Gate',
-    gateSub: user.gateId ? `Gate ${user.gateId}` : '—',
-    shiftStatus: 'ON DUTY',
+    gate: p.gate_name || (p.gate_id != null ? `Gate ${p.gate_id}` : (user.gateId ? `Gate ${user.gateId}` : 'Assigned Gate')),
+    gateSub: p.gate_id != null ? `Gate ${p.gate_id}` : (user.gateId ? `Gate ${user.gateId}` : '—'),
+    shiftStatus: duty,
   };
 
   const endShift = () => {
@@ -70,15 +88,20 @@ export default function GuardProfile() {
              style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
           <div className="flex gap-4">
             <div className="flex flex-col items-center shrink-0">
-              <div className="w-20 h-20 rounded-full bg-yellow-200 flex items-center justify-center border-2 border-white/40"><Shield size={38} className="text-ink" /></div>
+              <div className="w-20 h-20 rounded-full bg-yellow-200 flex items-center justify-center border-2 border-white/40 overflow-hidden">
+                {guard.photo
+                  ? <img src={guard.photo} alt={guard.name} className="w-full h-full object-cover" />
+                  : <Shield size={38} className="text-ink" />}
+              </div>
               <span className="mt-2 text-[11px] font-bold px-3 py-1 rounded-full bg-teal-300 text-ink">{guard.duty}</span>
             </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-extrabold">{guard.name.toUpperCase()}</h2>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-extrabold break-words">{guard.name.toUpperCase()}</h2>
               <p className="text-white/80 text-sm mb-2">{guard.role}</p>
               <p className="text-sm"><span className="font-bold">Employee ID:</span> {guard.employeeId}</p>
               <p className="text-sm"><span className="font-bold">Username:</span> {guard.username}</p>
-              <p className="text-sm"><span className="font-bold">Status:</span> {guard.status}</p>
+              <p className="text-sm flex items-center gap-1"><Phone size={12} className="shrink-0" /><span className="break-all">{guard.phone}</span></p>
+              <p className="text-sm flex items-center gap-1"><Mail size={12} className="shrink-0" /><span className="break-all">{guard.email}</span></p>
             </div>
           </div>
         </div>
@@ -109,7 +132,7 @@ export default function GuardProfile() {
           <div className="border-l border-gray-200" />
           <div className="flex-1 pl-2">
             <p className="text-xs font-bold text-ink mb-2">Shift Status</p>
-            <p className="font-extrabold text-sm" style={{ color: '#1e8e3e' }}>{assignment.shiftStatus}</p>
+            <p className="font-extrabold text-sm" style={{ color: dutyColor(assignment.shiftStatus) }}>{assignment.shiftStatus}</p>
             <p className="text-xs text-ink/60 mt-1">—</p>
           </div>
         </div>
@@ -139,7 +162,7 @@ export default function GuardProfile() {
                 <p className="font-bold text-ink">{shiftLabel}</p>
                 <p className="text-sm text-ink/60">{assignment.gate}</p>
               </div>
-              <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={{ backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>
+              <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={{ backgroundColor: '#B4E4BE', color: dutyColor(assignment.shiftStatus) }}>
                 {assignment.shiftStatus}
               </span>
             </div>

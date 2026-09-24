@@ -46,6 +46,9 @@ export const getMyProfile = () => api.get('/residents/me');
 // ── Guards (Contact Guard, resident side) ──
 export const getGuards = () => api.get('/guards/directory');
 
+// ── Guard's own profile (full DB row: photo, employee_id, phone, email, gate, status) ──
+export const getMyGuardProfile = () => api.get('/guards/me');
+
 // ── Guard shift (time-in/out) ──
 export const getMyShift = () => api.get('/guards/my-shift');
 export const endGuardShift = () => api.post('/guards/end-shift');

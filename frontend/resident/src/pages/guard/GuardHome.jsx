@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
-import { getAnnouncements, getActiveVisitors, getSchedule, getMyShift, endGuardShift } from '../../api';
+import { getAnnouncements, getActiveVisitors, getSchedule, getMyShift, endGuardShift, getResidentsForGuard } from '../../api';
 import {
   Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone, Shield, Clock,
-  CalendarDays, FileText, Search, Inbox,
+  CalendarDays, FileText, Search, Inbox, Phone, X,
 } from 'lucide-react';
 
 const AnnIcon = ({ a, ...p }) => {
@@ -21,6 +21,15 @@ const AnnIcon = ({ a, ...p }) => {
 
 const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
+
+// Assigned shift 'HH:MM:SS' → "6:00 AM"
+const fmt12 = (t) => {
+  if (!t) return null;
+  const [h, m] = String(t).split(':').map(Number);
+  const ap = h >= 12 ? 'PM' : 'AM';
+  const hh = (h % 12) || 12;
+  return `${hh}:${String(m || 0).padStart(2, '0')} ${ap}`;
+};
 
 // Kunin ang unang value mula sa listahan ng posibleng field names (robust sa iba't ibang schema).
 const pick = (obj, keys) => {
@@ -52,6 +61,25 @@ export default function GuardHome() {
   const [showEnd, setShowEnd] = useState(false);
   const [ending, setEnding] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
+  const [showContact, setShowContact] = useState(false);
+  const [residents, setResidents] = useState([]);
+  const [residentSearch, setResidentSearch] = useState('');
+
+  const openContact = () => {
+    setResidentSearch('');
+    setShowContact(true);
+    getResidentsForGuard()
+      .then((res) => setResidents((res.data || []).map((r) => ({
+        residentId: r.resident_id, name: r.full_name,
+        address: r.unit_address, contact: r.contact_number || r.phone_number || '',
+      }))))
+      .catch(() => setResidents([]));
+  };
+  const callResident = (r) => {
+    const num = String(r.contact || '').replace(/[^\d+]/g, '');
+    if (!num) { alert('This resident has no contact number.'); return; }
+    window.location.href = `tel:${num}`;
+  };
 
   // ── Announcements (mula DB — naka-filter na para sa Guards + active window) ──
   const [announcements, setAnnouncements] = useState([]);
@@ -82,6 +110,11 @@ export default function GuardHome() {
     if (end <= anchor) end.setDate(end.getDate() + 1); // tumawid ng hatinggabi
     return end;
   })();
+  // Admin-assigned shift window (hal. "6:00 AM - 6:00 PM")
+  const assignedShiftLabel = (shift.shiftStart && shift.shiftEnd)
+    ? `${fmt12(shift.shiftStart)} - ${fmt12(shift.shiftEnd)}`
+    : null;
+
   const nowMs = nowTick;
   const isShiftOver = shiftEndDate ? nowMs >= shiftEndDate.getTime() : false;
   const remainingLabel = (() => {
@@ -178,21 +211,35 @@ export default function GuardHome() {
 
       <div className="px-5">
         {/* Shift banner */}
-        <div className="bg-white rounded-full shadow px-5 py-4 mt-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Clock size={22} className="text-ink" />
-            <span className="text-ink">
-              {isShiftOver ? <span className="font-extrabold">Shift is over</span>
-                : <>Shift ends in <span className="font-extrabold">{remainingLabel}</span></>}
-            </span>
+        <div className="bg-white rounded-3xl shadow px-5 py-4 mt-5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <Clock size={22} className="text-ink shrink-0" />
+            <div className="min-w-0">
+              <span className="block text-ink text-sm truncate">
+                {isShiftOver ? <span className="font-extrabold">Shift is over</span>
+                  : <>Shift ends in <span className="font-extrabold">{remainingLabel}</span></>}
+              </span>
+              <span className="block text-[11px] text-ink/60 truncate">
+                {assignedShiftLabel ? `Assigned: ${assignedShiftLabel}` : 'No shift assigned yet'}
+              </span>
+            </div>
           </div>
-          <button
-            onClick={() => setShowEnd(true)}
-            className="text-white text-xs font-bold px-4 py-2 rounded-full"
-            style={{ backgroundColor: isShiftOver ? '#0F6E6E' : '#8FA99B' }}
-          >
-            END SHIFT
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={openContact}
+              className="text-white text-xs font-bold px-3 py-2 rounded-full inline-flex items-center gap-1"
+              style={{ backgroundColor: '#1a5fa8' }}
+            >
+              <Phone size={14} /> Contact
+            </button>
+            <button
+              onClick={() => setShowEnd(true)}
+              className="text-white text-xs font-bold px-4 py-2 rounded-full"
+              style={{ backgroundColor: isShiftOver ? '#0F6E6E' : '#8FA99B' }}
+            >
+              END SHIFT
+            </button>
+          </div>
         </div>
 
         {/* Announcements */}
@@ -306,6 +353,43 @@ export default function GuardHome() {
       <GuardBottomNav active="home" />
 
       {showAnnouncements && <AnnouncementsModal onClose={() => setShowAnnouncements(false)} />}
+
+      {/* Contact Resident modal */}
+      {showContact && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-5" onClick={() => setShowContact(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-5 relative max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowContact(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
+            <h3 className="text-lg font-extrabold text-ink mb-1">Contact Resident</h3>
+            <p className="text-ink/60 text-xs mb-3">Tap Call to reach a resident.</p>
+            <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-3" style={{ backgroundColor: '#F5F2E9' }}>
+              <Search size={16} className="text-ink/40" />
+              <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
+                     placeholder="Search resident name"
+                     className="flex-1 outline-none text-sm bg-transparent text-ink placeholder-ink/40" />
+            </div>
+            <div className="overflow-y-auto space-y-2">
+              {residents.filter((r) => (r.name || '').toLowerCase().includes(residentSearch.toLowerCase())).length === 0 ? (
+                <p className="text-center text-ink/50 py-6 text-sm">No residents found.</p>
+              ) : residents
+                  .filter((r) => (r.name || '').toLowerCase().includes(residentSearch.toLowerCase()))
+                  .map((r) => (
+                    <div key={r.residentId} className="border border-gray-200 rounded-2xl p-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-bold text-ink text-sm truncate">{r.name}</p>
+                        <p className="text-xs text-ink/60 truncate">{r.address}</p>
+                        <p className="text-xs text-ink/60">{r.contact || '—'}</p>
+                      </div>
+                      <button onClick={() => callResident(r)}
+                              className="text-white text-[11px] font-bold px-4 py-2 rounded-full inline-flex items-center gap-1 shrink-0"
+                              style={{ backgroundColor: '#1a5fa8' }}>
+                        <Phone size={14} /> Call
+                      </button>
+                    </div>
+                  ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* END SHIFT modal — iba ang mensahe kung tapos na o hindi pa ang shift */}
       {showEnd && (

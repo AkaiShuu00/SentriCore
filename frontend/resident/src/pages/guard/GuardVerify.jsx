@@ -848,7 +848,14 @@ export default function GuardVerify() {
                       className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
                 TAKE PHOTO OF ID
               </button>
-              {(!isExit && !isDriverFlow) ? (
+              {isExit ? (
+                // EXIT manual fallback (kapag down ang OCR): piliin mula sa listahan ng
+                // active visitors at deliveries na nasa loob pa ng subdivision.
+                <button onClick={() => { stopCamera(); loadActive(); setActiveSearch(''); setStep('exitSelect'); }}
+                        className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
+                  SELECT FROM INSIDE LIST
+                </button>
+              ) : (!isDriverFlow) ? (
                 <button onClick={() => { stopCamera(); loadRegistered(); setRegSearch(''); setStep('visitorSearch'); }}
                         className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
                   SEARCH REGISTERED VISITOR
@@ -989,9 +996,10 @@ export default function GuardVerify() {
         {/* EXIT — SELECT ACTIVE VISITOR (fallback / disambiguation) */}
         {step === 'exitSelect' && (
           <div>
-            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">SELECT ACTIVE VISITOR</h2>
+            <h2 className="text-2xl font-extrabold text-ink text-center mb-1">SELECT WHO IS EXITING</h2>
             <p className="text-center text-xs text-ink/60 mb-4">
-              Select the visitor who is exiting. These are the ones currently ACTIVE inside.
+              All visitors and deliveries currently ACTIVE inside the subdivision.
+              Tap the one who is exiting (fallback kapag hindi mabasa ng OCR).
             </p>
 
             <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-4">
