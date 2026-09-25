@@ -216,8 +216,9 @@ export default function GuardHome() {
             <Clock size={22} className="text-ink shrink-0" />
             <div className="min-w-0">
               <span className="block text-ink text-sm truncate">
-                {isShiftOver ? <span className="font-extrabold">Shift is over</span>
-                  : <>Shift ends in <span className="font-extrabold">{remainingLabel}</span></>}
+                {isShiftOver
+                  ? <span className="font-extrabold">Shift is over</span>
+                  : <><span className="font-extrabold">Shift is ongoing</span> · ends in {remainingLabel}</>}
               </span>
               <span className="block text-[11px] text-ink/60 truncate">
                 {assignedShiftLabel ? `Assigned: ${assignedShiftLabel}` : 'No shift assigned yet'}
