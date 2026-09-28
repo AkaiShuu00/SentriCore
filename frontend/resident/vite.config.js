@@ -7,8 +7,12 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
 
+    // Payagan ang kasalukuyang ngrok URL + kahit anong .ngrok-free.dev / .app
+    // (para hindi na kailangang i-edit tuwing magbabago ang tunnel URL)
     allowedHosts: [
       'mutation-conjuror-employee.ngrok-free.dev',
+      '.ngrok-free.dev',
+      '.ngrok-free.app',
     ],
 
     proxy: {

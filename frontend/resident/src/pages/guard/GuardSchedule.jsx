@@ -38,10 +38,26 @@ export default function GuardSchedule() {
 
   const countByStatus = (visitors, s) => visitors.filter((v) => v.status === s).length;
 
-  // ── SINGLE: type Single → isang row bawat visitor (walang DEPARTED) ──
+  // ── Arrival grouping: single visitors na sabay dumating (2+ na may iisang arrival_id) ──
+  // Kasama ang departed para MANATILING buo ang Linked group (hindi maging single ang naiwan).
+  const singleArrivalMap = {};
+  schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
+    r.visitors.forEach((v) => {
+      if (!v.arrivalId) return;
+      (singleArrivalMap[v.arrivalId] = singleArrivalMap[v.arrivalId] || [])
+        .push({ ...v, resident: r.resident, address: r.address, purpose: r.purpose });
+    });
+  });
+  const linkedArrivalIds = new Set(
+    Object.entries(singleArrivalMap).filter(([, vis]) => vis.length >= 2).map(([k]) => String(k))
+  );
+  const inLinkedArrival = (v) => v.arrivalId && linkedArrivalIds.has(String(v.arrivalId));
+
+  // ── SINGLE: type Single → isang row bawat visitor (walang DEPARTED, at HINDI kasama
+  //    ang mga nasa Linked arrival — para hindi sila magmukhang single) ──
   const singleRows = [];
   schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
-    r.visitors.filter((v) => v.status !== 'DEPARTED').forEach((v) => {
+    r.visitors.filter((v) => v.status !== 'DEPARTED' && !inLinkedArrival(v)).forEach((v) => {
       singleRows.push({
         name: v.name,
         resident: r.resident,
@@ -73,26 +89,19 @@ export default function GuardSchedule() {
     })
     .filter((g) => g.visitors.length > 0);   // itago ang batch na lahat departed na
 
-  // ── LINKED: single visitors na sabay dumating (same arrival_id, 2+), ACTIVE lang ──
-  // (Walang DEPARTED sa Today's Schedule — active + expected view lang ito)
-  const linkableSingles = [];
-  schedule.filter((r) => r.registrationType === 'Single').forEach((r) => {
-    r.visitors.filter((v) => v.arrivalId && v.status === 'ACTIVE').forEach((v) => {
-      linkableSingles.push({ ...v, resident: r.resident, address: r.address, purpose: r.purpose });
-    });
-  });
-  const linkedMap = {};
-  linkableSingles.forEach((v) => { (linkedMap[v.arrivalId] = linkedMap[v.arrivalId] || []).push(v); });
-  const linkedGroups = Object.entries(linkedMap)
+  // ── LINKED: single visitors na sabay dumating (same arrival_id, 2+) ──
+  // MANANATILI ang grupo kahit umalis na ang iba — active + departed na miyembro.
+  const linkedGroups = Object.entries(singleArrivalMap)
     .filter(([, vis]) => vis.length >= 2)
     .map(([key, vis]) => ({
       kind: 'linked',
       id: `LNK-${String(key).padStart(5, '0')}`,
       resident: vis.length ? vis[0].resident : '',
       address: vis.length ? vis[0].address : '',
-      active: vis.length,
+      purpose: vis.length ? vis[0].purpose : '',
+      active: vis.filter((v) => v.status === 'ACTIVE').length,
       expected: 0,
-      departed: 0,
+      departed: vis.filter((v) => v.status === 'DEPARTED').length,
       visitors: vis.map((v) => ({ name: v.name, status: v.status, timeIn: v.timeIn, timeOut: v.timeOut, purpose: v.purpose, arrivalId: v.arrivalId })),
     }));
 
@@ -154,7 +163,9 @@ export default function GuardSchedule() {
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <img src="/logo.png" alt="SentriCore" className="w-12 h-12 object-contain" />
+        <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center p-1">
+          <img src="/logo.png" alt="SentriCore" className="w-full h-full object-contain" />
+        </div>
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>

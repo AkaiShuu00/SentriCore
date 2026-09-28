@@ -14,7 +14,8 @@ const {
   getSchedule,
   expireOld,
   previewPasses,
-  getExpectedDeliveries
+  getExpectedDeliveries,
+  getArrivals
 } = require('../controllers/entryController');
 
 // ── Guard routes ──
@@ -27,6 +28,7 @@ router.get('/schedule', verifyToken, requireRole('Guard'), getSchedule);
 router.post('/group', verifyToken, requireRole('Guard'), createGroupEntry);
 router.post('/preview-pass', verifyToken, requireRole('Guard'), previewPasses);
 router.get('/expected-deliveries', verifyToken, requireRole('Guard'), getExpectedDeliveries);
+router.get('/arrivals', verifyToken, requireRole('Guard'), getArrivals);
 
 // ── Admin routes ──
 router.get('/all-logs', verifyToken, requireRole('Admin', 'Guard'), getAllLogs);

@@ -252,6 +252,44 @@ async function getHistory(req, res) {
   }
 }
 
+// GET /api/entry/arrivals  (Guard) - LAHAT ng transaction na may arrival_id (2+ sabay pumasok),
+// kasama ang ACTIVE at DEPARTED, para MANATILING buo ang Linked Entry kahit umalis na ang iba.
+// Ang frontend ang magbibilang ng active at magpapakita ng per-member status.
+async function getArrivals(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
+              t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status,
+              t.arrival_id, t.registration_id,
+              res.full_name AS resident_name, res.unit_address, vr.registration_type
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
+       WHERE t.arrival_id IS NOT NULL
+       ORDER BY t.arrival_id DESC, t.transaction_id ASC`
+    );
+    res.json(rows.map((t) => ({
+      transaction_id: t.transaction_id,
+      visitor_name: t.visitor_name,
+      visitor_type: t.visitor_type,
+      purpose: t.purpose,
+      plate_number: t.plate_number,
+      pass_number: t.pass_number,
+      entry_time: t.entry_time,
+      exit_time: t.exit_time,
+      // Active → nasa loob pa; Completed → departed na
+      status: t.status === 'Completed' ? 'Departed' : (t.status || 'Active'),
+      arrival_id: t.arrival_id,
+      registration_id: t.registration_id,
+      resident_name: t.resident_name,
+      unit_address: t.unit_address,
+      registration_type: t.registration_type,
+    })));
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching arrivals.', error: err.message });
+  }
+}
+
 // GET /api/entry/all-logs  (Admin/Guard) - LAHAT ng transactions
 async function getAllLogs(req, res) {
   try {
@@ -580,5 +618,5 @@ async function previewPasses(req, res) {
 module.exports = {
   matchVisitor, createGroupEntry, getActiveVisitors, getHistory, getAllLogs, getAdminSummary,
   getResidentsForGuard, getCompanions, getSchedule, recordExit, expireOld, previewPasses,
-  getExpectedDeliveries,
+  getExpectedDeliveries, getArrivals,
 };

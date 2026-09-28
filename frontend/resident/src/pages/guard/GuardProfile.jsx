@@ -71,7 +71,9 @@ export default function GuardProfile() {
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       {/* Header */}
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <img src="/logo.png" alt="SentriCore" className="w-12 h-12 object-contain" />
+        <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center p-1">
+          <img src="/logo.png" alt="SentriCore" className="w-full h-full object-contain" />
+        </div>
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>

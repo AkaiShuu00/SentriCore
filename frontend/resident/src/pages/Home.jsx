@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import AnnouncementsModal from '../components/AnnouncementsModal';
 import { getMyRegistrations, getAnnouncements, getNotifications, notifyGatePickup } from '../api';
+import { useT, LangToggle } from '../i18n';
 import {
   Bell, User, Users, Megaphone, UserPlus, CalendarClock, Phone,
   MessageSquareWarning, DoorOpen, CalendarDays, FileText, Search, Inbox, Archive,
@@ -10,6 +11,7 @@ import {
 
 export default function Home() {
   const navigate = useNavigate();
+  const { t } = useT();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
   const [unread, setUnread] = useState(0);
   const [search, setSearch] = useState('');
@@ -112,16 +114,20 @@ export default function Home() {
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><User size={20} className="text-ink" /></div>
           <span className="font-bold text-ink">{user.name || 'Resident'}</span>
         </div>
-        {/* Notifications bell */}
-        <button onClick={() => navigate('/notifications')}
-                className="relative w-11 h-11 rounded-full bg-cream flex items-center justify-center shadow shrink-0">
-          <Bell size={20} className="text-ink" />
-          {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-              {unread > 9 ? '9+' : unread}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Language toggle (EN / TL) */}
+          <LangToggle />
+          {/* Notifications bell */}
+          <button onClick={() => navigate('/notifications')}
+                  className="relative w-11 h-11 rounded-full bg-cream flex items-center justify-center shadow shrink-0">
+            <Bell size={20} className="text-ink" />
+            {unread > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
       <div className="px-5">
@@ -131,8 +137,10 @@ export default function Home() {
           <div className="rounded-3xl p-6 shadow text-white text-center"
                style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
             <div className="flex justify-center mb-2"><Megaphone size={30} className="text-white" /></div>
-            <p className="font-semibold text-sm">No announcements yet</p>
-            <p className="text-white/70 text-xs mt-1">New community announcements will appear here.</p>
+            <p className="font-semibold text-sm">{t('No announcements yet', 'Wala pang anunsyo')}</p>
+            <p className="text-white/70 text-xs mt-1">
+              {t('New community announcements will appear here.', 'Dito lalabas ang mga bagong anunsyo ng komunidad.')}
+            </p>
           </div>
         ) : (
           <button onClick={() => setShowAnnouncements(true)}
@@ -147,7 +155,7 @@ export default function Home() {
                 {i < Math.min(announcements.length, 4) - 1 && <div className="border-b border-white/20" />}
               </div>
             ))}
-            <p className="text-center font-semibold mt-3">--- More ---</p>
+            <p className="text-center font-semibold mt-3">{t('--- More ---', '--- Higit pa ---')}</p>
           </button>
         )}
 
@@ -178,7 +186,9 @@ export default function Home() {
           <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0"><DoorOpen size={24} className="text-white" /></div>
           <div className="text-left">
             <p className="text-white font-extrabold text-lg leading-tight">Notify Gate</p>
-            <p className="text-white/80 text-xs">Tell the guard you're waiting for a pick-up</p>
+            <p className="text-white/80 text-xs">
+              {t("Tell the guard you're waiting for a pick-up", 'Ipaalam sa guard na naghihintay ka ng sundo')}
+            </p>
           </div>
         </button>
 
@@ -238,21 +248,23 @@ export default function Home() {
         <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow mt-4">
           <Search size={18} className="text-ink/40" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-                 placeholder="Search name"
+                 placeholder={t('Search name', 'Maghanap ng pangalan')}
                  className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
         </div>
 
         {/* Schedule list */}
         <div className="bg-white rounded-3xl p-4 shadow mt-4 max-h-96 overflow-y-auto">
           {loading ? (
-            <div className="text-center py-8 text-ink/50">Loading your visitors…</div>
+            <div className="text-center py-8 text-ink/50">{t('Loading your visitors…', 'Naglo-load ng iyong mga bisita…')}</div>
           ) : error ? (
             <div className="text-center py-8 text-red-600 text-sm">{error}</div>
           ) : filteredSchedule.length === 0 ? (
             <div className="text-center py-8">
               <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
-              <p className="text-ink/60 font-semibold">No visitors on this day</p>
-              <p className="text-ink/40 text-sm mt-1">Pre-register a visitor to see them here.</p>
+              <p className="text-ink/60 font-semibold">{t('No visitors on this day', 'Walang bisita sa araw na ito')}</p>
+              <p className="text-ink/40 text-sm mt-1">
+                {t('Pre-register a visitor to see them here.', 'Mag-pre-register ng bisita para makita sila rito.')}
+              </p>
             </div>
           ) : (
             <>
@@ -269,7 +281,7 @@ export default function Home() {
                   </span>
                 </div>
               ))}
-              <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
+              <p className="text-center text-ink/50 text-sm py-2">{t('--- Nothing follows ---', '--- Wala nang sumusunod ---')}</p>
             </>
           )}
         </div>
@@ -285,46 +297,50 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center">
             <div className="flex justify-center mb-3"><DoorOpen size={44} className="text-ink" /></div>
-            <h3 className="text-xl font-extrabold text-ink mb-2">Are you waiting for a pick-up?</h3>
+            <h3 className="text-xl font-extrabold text-ink mb-2">
+              {t('Are you waiting for a pick-up?', 'Naghihintay ka ba ng sundo?')}
+            </h3>
             <p className="text-ink/60 text-sm mb-5">
-              This will notify the guard that you're waiting at the gate.
+              {t("This will notify the guard that you're waiting at the gate.", 'Ipapaalam nito sa guard na naghihintay ka sa gate.')}
             </p>
 
-            <p className="text-sm font-bold text-ink mb-2">Is this a ride-hailing pickup?</p>
+            <p className="text-sm font-bold text-ink mb-2">
+              {t('Is this a ride-hailing pickup?', 'Ride-hailing ba ang sundo? (hal. Grab)')}
+            </p>
             <div className="flex gap-2 justify-center mb-6">
               <button onClick={() => setRideHailing(true)}
                       className={`px-6 py-2 rounded-full text-sm font-bold border ${rideHailing === true ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
                       style={rideHailing === true ? { backgroundColor: '#CDE7DE' } : {}}>
-                YES
+                {t('YES', 'OO')}
               </button>
               <button onClick={() => setRideHailing(false)}
                       className={`px-6 py-2 rounded-full text-sm font-bold border ${rideHailing === false ? 'text-ink border-transparent' : 'text-ink border-gray-300'}`}
                       style={rideHailing === false ? { backgroundColor: '#CDE7DE' } : {}}>
-                NO
+                {t('NO', 'HINDI')}
               </button>
             </div>
 
             <div className="flex gap-3">
               <button onClick={() => setShowNotifyGate(false)}
                       className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
-                CANCEL
+                {t('CANCEL', 'KANSELAHIN')}
               </button>
               <button disabled={notifying} onClick={async () => {
-                        if (rideHailing === null) { alert('Please select if this is a ride-hailing pickup.'); return; }
+                        if (rideHailing === null) { alert(t('Please select if this is a ride-hailing pickup.', 'Pakipili kung ride-hailing ang sundo.')); return; }
                         setNotifying(true);
                         try {
                           // I-save sa DATABASE para makita ng guard sa kahit anong device
                           await notifyGatePickup({ rideHailing });
                           setShowNotifyGate(false);
-                          alert('Gate notified! The guard has been informed that you are waiting for a pick-up.');
+                          alert(t('Gate notified! The guard has been informed that you are waiting for a pick-up.', 'Naipaalam na sa gate! Alam na ng guard na naghihintay ka ng sundo.'));
                         } catch (err) {
-                          alert(err.response?.data?.message || 'Failed to notify the gate. Please try again.');
+                          alert(err.response?.data?.message || t('Failed to notify the gate. Please try again.', 'Hindi naipaalam sa gate. Pakisubukan ulit.'));
                         } finally {
                           setNotifying(false);
                         }
                       }}
                       className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: '#112D31' }}>
-                {notifying ? 'NOTIFYING…' : 'NOTIFY GATE'}
+                {notifying ? t('NOTIFYING…', 'IPINAPAALAM…') : t('NOTIFY GATE', 'IPAALAM SA GATE')}
               </button>
             </div>
           </div>

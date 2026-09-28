@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { getHistory } from '../../api';
+import { getHistory, getArrivals } from '../../api';
 import { Shield, ClipboardList, LogOut, Ban, Search, Download, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
 
 const statusBg = {
+  ACTIVE:   { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
   DEPARTED: { backgroundColor: '#F3C9C9', color: '#8a2b2b' },
   EXPIRED:  { backgroundColor: '#D9D9D9', color: '#555' },
 };
@@ -45,7 +46,28 @@ export default function GuardLogs() {
 
   // ── History mula DB ──
   const [records, setRecords] = useState([]);
+  const [arrivals, setArrivals] = useState([]);   // arrival-grouped (active + departed) para sa Linked Entry
   const [loading, setLoading] = useState(true);
+
+  // Linked Entry data — buo (active + departed) para hindi maging single ang naiwan
+  useEffect(() => {
+    getArrivals()
+      .then((res) => setArrivals((res.data || []).map((t) => ({
+        name: t.visitor_name,
+        kind: t.visitor_type || 'Visitor',
+        resident: t.resident_name || '',
+        address: t.unit_address || '',
+        status: (t.status || 'Active').toUpperCase(),   // ACTIVE / DEPARTED
+        entryId: t.pass_number || `VST ${t.transaction_id || '—'}`,
+        arrivalId: t.arrival_id || null,
+        entryTime: t.entry_time || null,
+        exitTime: t.exit_time || null,
+        time: `${fmtTime(t.entry_time)} to ${t.exit_time ? fmtTime(t.exit_time) : '-----'}`,
+        dateISO: toLocalISO(t.entry_time),
+        transactionId: t.transaction_id,
+      }))))
+      .catch(() => setArrivals([]));
+  }, []);
 
   useEffect(() => {
     getHistory()
@@ -120,22 +142,50 @@ export default function GuardLogs() {
   // EXIT  = magkasabay na lumabas (parehong petsa+oras ng exit, hanggang minuto)
   const buildLinkedGroups = () => {
     const map = new Map();
+
     if (linkMode === 'ENTRY') {
-      filtered.forEach((r) => {
+      // Mula sa ARRIVALS (active + departed) → MANATILING buo ang Linked Entry
+      // kahit umalis na ang iba. Ang grupo ay nananatili basta 2+ ang ORIHINAL
+      // na sabay pumasok; ipinapakita ang status kada miyembro (ACTIVE/DEPARTED).
+      arrivals.forEach((r) => {
         if (!r.arrivalId) return;
         const k = 'A' + r.arrivalId;
         if (!map.has(k)) map.set(k, { key: k, when: r.entryTime, members: [] });
         map.get(k).members.push(r);
       });
-    } else {
-      filtered.forEach((r) => {
-        if (r.status !== 'DEPARTED' || !r.exitTime) return;
-        const k = localMinuteKey(r.exitTime);
-        if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] });
-        map.get(k).members.push(r);
+      let groups = Array.from(map.values()).filter((g) => g.members.length >= 2);
+      // Search + date filter (ipakita ang grupo kung may miyembrong tumugma)
+      const q = search.toLowerCase();
+      groups = groups.filter((g) => g.members.some((r) => {
+        const okQ = !q || r.name.toLowerCase().includes(q) || (r.entryId || '').toLowerCase().includes(q);
+        let okD = true;
+        if (fromDate || toDate) {
+          const rd = new Date((r.dateISO || '') + 'T00:00:00');
+          if (fromDate && rd < new Date(fromDate + 'T00:00:00')) okD = false;
+          if (toDate && rd > new Date(toDate + 'T23:59:59')) okD = false;
+        }
+        return okQ && okD;
+      }));
+      groups.forEach((g) => {
+        g.activeCount = g.members.filter((m) => m.status === 'ACTIVE').length;
+        // ACTIVE muna, tapos DEPARTED
+        g.members.sort((a, b) => (a.status === b.status ? 0 : a.status === 'ACTIVE' ? -1 : 1));
       });
+      groups.sort((a, b) => (sortBy === 'Oldest first'
+        ? new Date(a.when) - new Date(b.when)
+        : new Date(b.when) - new Date(a.when)));
+      return groups;
     }
-    let groups = Array.from(map.values()).filter((g) => g.members.length >= 2); // 2+ = tunay na linked
+
+    // EXIT — mga sabay na LUMABAS (mula history, departed grouped by exit minute)
+    filtered.forEach((r) => {
+      if (r.status !== 'DEPARTED' || !r.exitTime) return;
+      const k = localMinuteKey(r.exitTime);
+      if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] });
+      map.get(k).members.push(r);
+    });
+    let groups = Array.from(map.values()).filter((g) => g.members.length >= 2);
+    groups.forEach((g) => { g.activeCount = 0; });
     groups.sort((a, b) => (sortBy === 'Oldest first'
       ? new Date(a.when) - new Date(b.when)
       : new Date(b.when) - new Date(a.when)));
@@ -167,7 +217,9 @@ export default function GuardLogs() {
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       {/* Header */}
       <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <img src="/logo.png" alt="SentriCore" className="w-12 h-12 object-contain" />
+        <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center p-1">
+          <img src="/logo.png" alt="SentriCore" className="w-full h-full object-contain" />
+        </div>
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
           <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
@@ -304,7 +356,9 @@ export default function GuardLogs() {
                       <span className="text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ backgroundColor: '#0F6E6E' }}>
                         LINKED {linkMode}
                       </span>
-                      <span className="text-xs font-bold text-ink">{g.members.length} people</span>
+                      <span className="text-xs font-bold text-ink">
+                        {g.members.length} people{linkMode === 'ENTRY' ? ` · ${g.activeCount} active` : ''}
+                      </span>
                     </div>
                     <span className="text-[11px] text-ink/60">
                       {new Date(g.when).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
