@@ -1,16 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { getMyShift, getMyGuardProfile } from '../../api';
-import { Shield, Building2, CalendarDays, DoorOpen, CalendarRange, Phone, Mail } from 'lucide-react';
+import { getMyShift, getMyGuardProfile, endGuardShift } from '../../api';
+import { Shield, Building2, CalendarDays, DoorOpen, LogOut, Phone } from 'lucide-react';
 
-// DB status → duty label (ON DUTY / ON BREAK / OFF DUTY)
-const dutyLabel = (s) => {
-  const v = String(s || '').toLowerCase();
-  if (v.includes('break')) return 'ON BREAK';
-  if (v.includes('on') || v === 'active') return 'ON DUTY';
-  return 'OFF DUTY';
-};
 const dutyColor = (label) =>
   label === 'ON DUTY' ? '#1e8e3e' : label === 'ON BREAK' ? '#b8901f' : '#8a2b2b';
 
@@ -28,28 +21,63 @@ export default function GuardProfile() {
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
 
   // ── Assigned shift + FULL profile (mula DB) ──
-  const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null });
+  const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null, timeIn: null, shiftId: null });
   const [profile, setProfile] = useState(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+  const [ending, setEnding] = useState(false);
+  const loadShift = () => getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
   useEffect(() => {
-    getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
+    loadShift();
     getMyGuardProfile().then((res) => setProfile(res.data || null)).catch(() => setProfile(null));
   }, []);
+  // Real-time: i-update ang oras kada segundo (para sa duty + countdown) at
+  // i-refetch ang shift kada 20s para agad sumunod kapag binago ni admin.
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    const s = setInterval(loadShift, 20000);
+    return () => { clearInterval(t); clearInterval(s); };
+  }, []);
+
   const shiftLabel = (shift.shiftStart && shift.shiftEnd)
     ? `${fmt12(shift.shiftStart)} - ${fmt12(shift.shiftEnd)}`
     : 'No shift set';
 
   const p = profile || {};
-  const duty = dutyLabel(p.status);
 
-  // ── Guard details (mula DB; fallback sa token habang naglo-load) ──
+  // ── Duty = base LANG sa oras ngayon vs shift window (On Duty kung sakop; kaya ang cross-midnight) ──
+  const toMin = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+  const now = new Date(nowTick);
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  const hasShift = !!(shift.shiftStart && shift.shiftEnd);
+  const sMin = toMin(shift.shiftStart), eMin = toMin(shift.shiftEnd);
+  const onDuty = hasShift && (sMin === eMin ? false : (sMin < eMin ? (curMin >= sMin && curMin < eMin) : (curMin >= sMin || curMin < eMin)));
+  const duty = onDuty ? 'ON DUTY' : 'OFF DUTY';
+
+  // End datetime ng kasalukuyang duty (para sa countdown + para malaman kung "tapos na")
+  const shiftEndDate = (() => {
+    if (!onDuty) return null;
+    const [eh, em] = String(shift.shiftEnd).split(':').map(Number);
+    const end = new Date(now); end.setHours(eh || 0, em || 0, 0, 0);
+    if (end <= now) end.setDate(end.getDate() + 1); // cross-midnight (gabi papuntang umaga)
+    return end;
+  })();
+  const remainingLabel = (() => {
+    if (!shiftEndDate) return '—';
+    const diff = shiftEndDate.getTime() - nowTick;
+    if (diff <= 0) return 'Shift is over';
+    const hrs = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    return `${hrs}h ${mins}m`;
+  })();
+  // End Shift ay puwede kapag OFF DUTY na (tapos na ang oras ng shift)
+  const isShiftOver = hasShift && !onDuty;
+
   const guard = {
     name: p.full_name || user.name || 'Guard',
     role: 'Security Guard',
     employeeId: p.employee_id || (user.guardId ? `GD-${String(user.guardId).padStart(4, '0')}` : (user.username || '—')),
     username: p.username || user.username || '—',
     phone: p.phone_number || '—',
-    email: p.email || '—',
-    status: p.status || 'Active',
     duty,
     photo: p.photo || null,
   };
@@ -60,11 +88,28 @@ export default function GuardProfile() {
     shiftStatus: duty,
   };
 
-  const endShift = () => {
-    if (!window.confirm('End your shift and log out?')) return;
+  const goSignin = () => {
     localStorage.removeItem('sentricore_token');
     localStorage.removeItem('sentricore_user');
     navigate('/signin');
+  };
+
+  // END SHIFT — records time-out (only when the shift hours are over)
+  const endShift = async () => {
+    if (!isShiftOver) {
+      alert('Your shift is not over yet. You can end your shift once your scheduled time is done.');
+      return;
+    }
+    if (!window.confirm('End your shift now? This will record your time-out and sign you out.')) return;
+    setEnding(true);
+    try { await endGuardShift(); } catch { /* ituloy pa rin */ }
+    goSignin();
+  };
+
+  // LOG OUT — signs out only; NOT a time-out (guard stays On Duty)
+  const logout = () => {
+    if (!window.confirm('Log out of the dashboard? You will stay On Duty — this does not record your time-out.')) return;
+    goSignin();
   };
 
   return (
@@ -76,7 +121,11 @@ export default function GuardProfile() {
         </div>
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center overflow-hidden">
+            {guard.photo
+              ? <img src={guard.photo} alt={guard.name} className="w-full h-full object-cover" />
+              : <Shield size={20} className="text-ink" />}
+          </div>
         </div>
       </header>
 
@@ -103,7 +152,6 @@ export default function GuardProfile() {
               <p className="text-sm"><span className="font-bold">Employee ID:</span> {guard.employeeId}</p>
               <p className="text-sm"><span className="font-bold">Username:</span> {guard.username}</p>
               <p className="text-sm flex items-center gap-1"><Phone size={12} className="shrink-0" /><span className="break-all">{guard.phone}</span></p>
-              <p className="text-sm flex items-center gap-1"><Mail size={12} className="shrink-0" /><span className="break-all">{guard.email}</span></p>
             </div>
           </div>
         </div>
@@ -135,47 +183,37 @@ export default function GuardProfile() {
           <div className="flex-1 pl-2">
             <p className="text-xs font-bold text-ink mb-2">Shift Status</p>
             <p className="font-extrabold text-sm" style={{ color: dutyColor(assignment.shiftStatus) }}>{assignment.shiftStatus}</p>
-            <p className="text-xs text-ink/60 mt-1">—</p>
+            <p className="text-xs text-ink/60 mt-1">{onDuty ? `Ends in ${remainingLabel}` : (hasShift ? 'Not on duty now' : '—')}</p>
           </div>
         </div>
 
-        {/* End shift banner */}
+        {/* End shift banner — clickable LANG kapag tapos na ang oras ng shift */}
         <div className="rounded-2xl p-4 mt-4 flex items-center gap-3" style={{ backgroundColor: '#FBE0E0' }}>
           <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0"><DoorOpen size={20} className="text-ink" /></div>
           <div className="flex-1">
-            <p className="font-bold text-ink text-sm">End your shift when your turnover is complete.</p>
-            <p className="text-xs text-ink/60">This will log your time-out and update your status</p>
+            <p className="font-bold text-ink text-sm">End your shift when your scheduled time is done.</p>
+            <p className="text-xs text-ink/60">
+              {isShiftOver
+                ? 'Your shift time is over. Tap End Shift to record your time-out.'
+                : 'This will be available once your shift ends. It records your time-out.'}
+            </p>
           </div>
-          <button onClick={endShift}
-                  className="text-white font-bold text-xs px-4 py-2 rounded-full shrink-0" style={{ backgroundColor: '#C0392B' }}>
-            END SHIFT
+          <button onClick={endShift} disabled={!isShiftOver || ending}
+                  className="text-white font-bold text-xs px-4 py-2 rounded-full shrink-0 disabled:opacity-50"
+                  style={{ backgroundColor: '#C0392B' }}>
+            {ending ? 'ENDING…' : 'END SHIFT'}
           </button>
         </div>
 
-        {/* Today's shift schedule — base sa naka-assign na shift ni admin */}
-        <div className="bg-white rounded-3xl p-5 shadow mt-4 mb-4">
-          <h3 className="text-xl font-extrabold text-ink mb-4">TODAY'S SCHEDULE</h3>
-          {(shift.shiftStart && shift.shiftEnd) ? (
-            <div className="border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-teal-100 flex items-center justify-center shrink-0">
-                <CalendarRange size={22} className="text-ink" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-ink">{shiftLabel}</p>
-                <p className="text-sm text-ink/60">{assignment.gate}</p>
-              </div>
-              <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={{ backgroundColor: '#B4E4BE', color: dutyColor(assignment.shiftStatus) }}>
-                {assignment.shiftStatus}
-              </span>
-            </div>
-          ) : (
-            <div className="text-center py-6">
-              <div className="flex justify-center mb-2"><CalendarRange size={36} className="text-ink/40" /></div>
-              <p className="text-ink/60 font-semibold">No shift assigned yet</p>
-              <p className="text-ink/40 text-sm mt-1">Your admin-assigned shift will appear here.</p>
-            </div>
-          )}
-        </div>
+        {/* Log out — sign out lang, HINDI time-out (nananatiling On Duty) */}
+        <button onClick={logout}
+                className="w-full mt-4 mb-4 rounded-2xl p-4 flex items-center gap-3 bg-white shadow active:scale-[0.99] transition">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><LogOut size={20} className="text-ink" /></div>
+          <div className="flex-1 text-left">
+            <p className="font-bold text-ink text-sm">Log Out</p>
+            <p className="text-xs text-ink/60">Sign out of the dashboard. This does not end your shift — you stay On Duty.</p>
+          </div>
+        </button>
       </div>
 
       <GuardBottomNav active="profile" />

@@ -1,9 +1,27 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 
-function genUsername(fullName) {
-  const base = (fullName || 'guard').toLowerCase().replace(/[^a-z]/g, '').slice(0, 8) || 'guard';
-  return `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+// Username pattern (kapareho ng resident): name.0001@sentricore
+function genUsername(fullName, seq) {
+  const base = (fullName || 'guard').toLowerCase().split(/\s+/)[0].replace(/[^a-z]/g, '') || 'guard';
+  return `${base}.${String(seq).padStart(4, '0')}@sentricore`;
+}
+// Duty = base LANG sa oras ngayon vs shift window (walang login dependency).
+function hmTo24(str) {
+  const m = String(str || '').trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+  if (!m) return null;
+  let hh = parseInt(m[1], 10); const mm = m[2] ? parseInt(m[2], 10) : 0; const ap = (m[3] || '').toUpperCase();
+  if (ap === 'PM' && hh !== 12) hh += 12; if (ap === 'AM' && hh === 12) hh = 0;
+  return hh * 60 + mm;
+}
+function computeDuty(shiftSchedule) {
+  if (!shiftSchedule) return 'Off Duty';
+  const parts = String(shiftSchedule).split(/[-–—]/);
+  const s = hmTo24(parts[0]); const e = hmTo24(parts[1]);
+  if (s == null || e == null || s === e) return 'Off Duty';
+  const now = new Date(); const cur = now.getHours() * 60 + now.getMinutes();
+  const on = s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
+  return on ? 'On Duty' : 'Off Duty';
 }
 function genPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -18,6 +36,29 @@ async function guardColumns(conn) {
   return cols.map((c) => c.Field);
 }
 
+// "6:00 AM" → "06:00:00"
+function to24h(str) {
+  const min = hmTo24(str);
+  if (min == null) return null;
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}:00`;
+}
+// "6:00 AM - 6:00 PM" → { start:'06:00:00', end:'18:00:00' }
+function parseRange(shift) {
+  if (!shift) return { start: null, end: null };
+  const parts = String(shift).split(/[-–—]/);
+  return { start: parts[0] ? to24h(parts[0]) : null, end: parts[1] ? to24h(parts[1]) : null };
+}
+// Isulat ang shift sa KAHIT ANONG column na meron ang table (schema-agnostic)
+function setShiftFields(target, names, shift) {
+  if (names.includes('shift_schedule')) target.shift_schedule = shift || null;
+  else if (names.includes('schedule')) target.schedule = shift || null;
+  if (names.includes('shift_start') || names.includes('shift_end')) {
+    const { start, end } = parseRange(shift);
+    if (names.includes('shift_start')) target.shift_start = start;
+    if (names.includes('shift_end')) target.shift_end = end;
+  }
+}
+
 // GET /api/admin/guards  (Admin) - list guards (kasama contact/email/photo kung meron)
 async function listGuards(req, res) {
   try {
@@ -27,19 +68,23 @@ async function listGuards(req, res) {
        LEFT JOIN Users u ON u.user_id = g.user_id
        ORDER BY g.full_name ASC`
     );
-    res.json(rows.map((g) => ({
-      guardId: g.guard_id,
-      fullName: g.full_name,
-      gate: g.gate_id ? `Gate ${g.gate_id}` : '—',
-      gateId: g.gate_id,
-      shift: g.shift_schedule || '—',
-      status: g.status || 'Off Duty',
-      username: g.username,
-      contact: g.phone_number || '',
-      email: g.email || '',
-      employeeId: g.employee_id || '',
-      photo: g.photo || null,
-    })));
+    res.json(rows.map((g) => {
+      const shiftStr = g.shift_schedule || g.schedule
+        || ((g.shift_start && g.shift_end) ? `${String(g.shift_start).slice(0, 5)} - ${String(g.shift_end).slice(0, 5)}` : '');
+      return {
+        guardId: g.guard_id,
+        fullName: g.full_name,
+        gate: g.gate_id ? `Gate ${g.gate_id}` : '—',
+        gateId: g.gate_id,
+        shift: shiftStr || '—',
+        // AUTOMATIC — base sa oras ngayon vs shift window (kung kailangan man ipakita)
+        status: computeDuty(shiftStr),
+        username: g.username,
+        contact: g.phone_number || '',
+        employeeId: g.employee_id || '',
+        photo: g.photo || null,
+      };
+    }));
   } catch (err) {
     res.status(500).json({ message: 'Error fetching guards.', error: err.message });
   }
@@ -82,14 +127,17 @@ async function guardActivity(req, res) {
 async function addGuard(req, res) {
   const conn = await pool.getConnection();
   try {
-    const { fullName, gateId, shift, contact, email, photo } = req.body;
+    const { fullName, gateId, shift, contact, photo } = req.body;
     if (!fullName) return res.status(400).json({ message: 'Full name is required.' });
 
-    let username = genUsername(fullName);
-    for (let i = 0; i < 5; i++) {
+    // Username: name.NNNN@sentricore (NNNN = order ng guard, unique-checked)
+    const [[cnt]] = await conn.query(`SELECT COUNT(*) AS n FROM Guards`);
+    let seq = (cnt.n || 0) + 1;
+    let username = genUsername(fullName, seq);
+    for (let i = 0; i < 30; i++) {
       const [exists] = await conn.query(`SELECT user_id FROM Users WHERE username = ?`, [username]);
       if (exists.length === 0) break;
-      username = genUsername(fullName);
+      seq++; username = genUsername(fullName, seq);
     }
     const tempPassword = genPassword();
     const hash = await bcrypt.hash(tempPassword, 10);
@@ -106,9 +154,8 @@ async function addGuard(req, res) {
     // Defensive insert — ilalagay lang ang mga column na aktwal na meron
     const names = await guardColumns(conn);
     const fields = { user_id: u.insertId, full_name: fullName.trim(), gate_id: gateId || null, status: 'Off Duty' };
-    if (names.includes('shift_schedule')) fields.shift_schedule = shift || null;
+    setShiftFields(fields, names, shift);
     if (names.includes('phone_number')) fields.phone_number = contact || null;
-    if (names.includes('email')) fields.email = email || null;
     if (names.includes('photo')) fields.photo = photo || null;
     const keys = Object.keys(fields);
     await conn.query(
@@ -130,16 +177,14 @@ async function addGuard(req, res) {
 async function updateGuard(req, res) {
   try {
     const { id } = req.params;
-    const { fullName, gateId, shift, status, contact, email, photo } = req.body;
+    const { fullName, gateId, shift, contact, photo } = req.body;
     const names = await guardColumns();
 
     const set = {};
     if (fullName !== undefined) set.full_name = fullName;
     set.gate_id = gateId || null;
-    if (names.includes('shift_schedule')) set.shift_schedule = shift || null;
-    set.status = status || 'Off Duty';
+    if (shift !== undefined) setShiftFields(set, names, shift);
     if (names.includes('phone_number') && contact !== undefined) set.phone_number = contact || null;
-    if (names.includes('email') && email !== undefined) set.email = email || null;
     if (names.includes('photo') && photo !== undefined) set.photo = photo || null;
 
     const keys = Object.keys(set);

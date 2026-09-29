@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyBlocklist } from '../api';
+import { useT, LangToggle } from '../i18n';
 import { Ban } from 'lucide-react';
 
 const ink = '#112D31';
@@ -8,6 +9,7 @@ const fmt = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short',
 
 export default function Blocklist() {
   const navigate = useNavigate();
+  const { t } = useT();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,25 +24,29 @@ export default function Blocklist() {
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
       <header className="px-5 py-6 flex items-center gap-4" style={{ backgroundColor: ink }}>
         <button onClick={() => navigate('/profile')} className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl shrink-0" style={{ color: ink }}>‹</button>
-        <div>
-          <h1 className="text-2xl font-extrabold text-white">Blocklisted</h1>
-          <p className="text-white/70 text-sm">People you reported and the admin approved</p>
+        <div className="flex-1">
+          <h1 className="text-2xl font-extrabold text-white">{t('Blocklisted', 'Blocklist')}</h1>
+          <p className="text-white/70 text-sm">{t('People you reported and the admin approved', 'Mga taong inireport mo at inaprubahan ng admin')}</p>
         </div>
+        <LangToggle />
       </header>
 
       <div className="px-4 py-5">
         {/* Reminder: blocklisting is done through complaints */}
         <div className="rounded-2xl px-4 py-3 mb-4 text-sm" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
-          To blocklist a visitor, file a <span className="font-bold">Visitor Complaint</span> and turn on the blocklist option. The admin will review it before it is added here.
+          {t('To blocklist a visitor, file a ', 'Para i-blocklist ang isang bisita, magsumite ng ')}
+          <span className="font-bold">{t('Visitor Complaint', 'Visitor Complaint')}</span>
+          {t(' and turn on the blocklist option. The admin will review it before it is added here.',
+             ' at buksan ang blocklist option. Susuriin muna ito ng admin bago idagdag dito.')}
         </div>
 
         {loading ? (
-          <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
+          <p className="text-center text-ink/50 py-10 text-sm">{t('Loading…', 'Naglo-load…')}</p>
         ) : list.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 shadow-sm text-center">
             <div className="flex justify-center mb-2"><Ban size={30} className="text-ink/40" /></div>
-            <p className="font-semibold text-ink text-sm">No one is on the blocklist</p>
-            <p className="text-ink/60 text-xs mt-1">Your approved blocklist requests will appear here.</p>
+            <p className="font-semibold text-ink text-sm">{t('No one is on the blocklist', 'Walang nasa blocklist')}</p>
+            <p className="text-ink/60 text-xs mt-1">{t('Your approved blocklist requests will appear here.', 'Dito lalabas ang mga inaprubahang blocklist request mo.')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -50,7 +56,7 @@ export default function Blocklist() {
                 <div className="flex-1">
                   <p className="font-bold text-ink text-sm">{b.person_name}</p>
                   {b.reason && <p className="text-xs text-ink/60">{b.reason}</p>}
-                  {b.added_at && <p className="text-[10px] text-ink/40 mt-0.5">Added {fmt(b.added_at)}</p>}
+                  {b.added_at && <p className="text-[10px] text-ink/40 mt-0.5">{t('Added', 'Idinagdag')} {fmt(b.added_at)}</p>}
                 </div>
               </div>
             ))}

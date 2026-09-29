@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
 import AnnouncementsModal from '../../components/AnnouncementsModal';
-import { getAnnouncements, getActiveVisitors, getSchedule, getMyShift, endGuardShift, getResidentsForGuard } from '../../api';
+import { getAnnouncements, getActiveVisitors, getSchedule, getMyShift, getResidentsForGuard, getMyGuardProfile } from '../../api';
 import {
   Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone, Shield, Clock,
   CalendarDays, FileText, Search, Inbox, Phone, X,
@@ -58,8 +58,6 @@ export default function GuardHome() {
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null, timeIn: null });
-  const [showEnd, setShowEnd] = useState(false);
-  const [ending, setEnding] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
   const [showContact, setShowContact] = useState(false);
   const [residents, setResidents] = useState([]);
@@ -83,15 +81,18 @@ export default function GuardHome() {
 
   // ── Announcements (mula DB — naka-filter na para sa Guards + active window) ──
   const [announcements, setAnnouncements] = useState([]);
+  const [guardPhoto, setGuardPhoto] = useState(null);
   useEffect(() => {
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => setAnnouncements([]));
     getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
+    getMyGuardProfile().then((res) => setGuardPhoto(res.data?.photo || null)).catch(() => {});
   }, []);
 
-  // Bawat minuto i-update ang "shift ends in" countdown
+  // Real-time: oras kada segundo (duty + countdown) + refetch shift kada 20s (sunod agad kay admin)
   useEffect(() => {
-    const t = setInterval(() => setNowTick(Date.now()), 60000);
-    return () => clearInterval(t);
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    const s = setInterval(() => { getMyShift().then((res) => setShift(res.data || {})).catch(() => {}); }, 20000);
+    return () => { clearInterval(t); clearInterval(s); };
   }, []);
 
   // I-scroll sa harapan ang petsa NGAYON sa day strip
@@ -100,42 +101,33 @@ export default function GuardHome() {
     if (el) el.scrollIntoView({ inline: 'start', block: 'nearest' });
   }, []);
 
-  // ── Shift end computation (kaya ang cross-midnight, hal. 6PM–6AM) ──
-  const parseHM = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return { h: h || 0, m: m || 0 }; };
+  // ── Duty = base LANG sa oras ngayon vs shift window (kaya ang cross-midnight, hal. 6PM–6AM) ──
+  const toMin = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+  const nowDate = new Date(nowTick);
+  const curMin = nowDate.getHours() * 60 + nowDate.getMinutes();
+  const hasShift = !!(shift.shiftStart && shift.shiftEnd);
+  const sMin = toMin(shift.shiftStart), eMin = toMin(shift.shiftEnd);
+  const onDuty = hasShift && (sMin === eMin ? false : (sMin < eMin ? (curMin >= sMin && curMin < eMin) : (curMin >= sMin || curMin < eMin)));
+  const isShiftOver = hasShift && !onDuty;
+
+  // Admin-assigned shift window (hal. "6:00 AM - 6:00 PM")
+  const assignedShiftLabel = hasShift ? `${fmt12(shift.shiftStart)} - ${fmt12(shift.shiftEnd)}` : null;
+
   const shiftEndDate = (() => {
-    if (!shift.shiftEnd) return null;
-    const anchor = shift.timeIn ? new Date(shift.timeIn) : new Date();
-    const { h, m } = parseHM(shift.shiftEnd);
-    const end = new Date(anchor); end.setHours(h, m, 0, 0);
-    if (end <= anchor) end.setDate(end.getDate() + 1); // tumawid ng hatinggabi
+    if (!onDuty) return null;
+    const [eh, em] = String(shift.shiftEnd).split(':').map(Number);
+    const end = new Date(nowDate); end.setHours(eh || 0, em || 0, 0, 0);
+    if (end <= nowDate) end.setDate(end.getDate() + 1);
     return end;
   })();
-  // Admin-assigned shift window (hal. "6:00 AM - 6:00 PM")
-  const assignedShiftLabel = (shift.shiftStart && shift.shiftEnd)
-    ? `${fmt12(shift.shiftStart)} - ${fmt12(shift.shiftEnd)}`
-    : null;
-
-  const nowMs = nowTick;
-  const isShiftOver = shiftEndDate ? nowMs >= shiftEndDate.getTime() : false;
   const remainingLabel = (() => {
     if (!shiftEndDate) return '—';
-    const diff = shiftEndDate.getTime() - nowMs;
+    const diff = shiftEndDate.getTime() - nowTick;
     if (diff <= 0) return 'Shift is over';
     const hrs = Math.floor(diff / 3600000);
     const mins = Math.floor((diff % 3600000) / 60000);
     return `${hrs}h ${mins}m`;
   })();
-
-  const doEndShift = async () => {
-    if (ending) return;
-    setEnding(true);
-    try {
-      await endGuardShift();
-    } catch { /* ituloy pa rin ang logout kahit pumalya ang tala */ }
-    localStorage.removeItem('sentricore_token');
-    localStorage.removeItem('sentricore_user');
-    navigate('/signin');
-  };
 
   // ── Live data mula DB: active visitors + today's schedule ──
   const [activeList, setActiveList] = useState([]);
@@ -211,10 +203,16 @@ export default function GuardHome() {
                   className="w-10 h-10 rounded-full bg-white shadow flex items-center justify-center active:scale-95 transition">
             <Phone size={18} className="text-ink" />
           </button>
-          <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
+          {/* Profile chip — photo + name, makikita sa lahat ng tab, click → profile */}
+          <button onClick={() => navigate('/guard-profile')}
+                  className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
             <span className="font-bold text-ink">{user.name || 'Guard One'}</span>
-            <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
-          </div>
+            <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center overflow-hidden">
+              {guardPhoto
+                ? <img src={guardPhoto} alt={user.name || 'Guard'} className="w-full h-full object-cover" />
+                : <Shield size={20} className="text-ink" />}
+            </div>
+          </button>
         </div>
       </header>
 
@@ -225,23 +223,14 @@ export default function GuardHome() {
             <Clock size={22} className="text-ink shrink-0" />
             <div className="min-w-0">
               <span className="block text-ink text-sm truncate">
-                {isShiftOver
-                  ? <span className="font-extrabold">Shift is over</span>
-                  : <><span className="font-extrabold">Shift is ongoing</span> · ends in {remainingLabel}</>}
+                {onDuty
+                  ? <><span className="font-extrabold">On duty</span> · ends in {remainingLabel}</>
+                  : <span className="font-extrabold">Off duty</span>}
               </span>
               <span className="block text-[11px] text-ink/60 truncate">
                 {assignedShiftLabel ? `Assigned: ${assignedShiftLabel}` : 'No shift assigned yet'}
               </span>
             </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setShowEnd(true)}
-              className="text-white text-xs font-bold px-4 py-2 rounded-full"
-              style={{ backgroundColor: isShiftOver ? '#0F6E6E' : '#8FA99B' }}
-            >
-              END SHIFT
-            </button>
           </div>
         </div>
 
@@ -389,48 +378,6 @@ export default function GuardHome() {
                       </button>
                     </div>
                   ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* END SHIFT modal — iba ang mensahe kung tapos na o hindi pa ang shift */}
-      {showEnd && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center">
-            <div className="flex justify-center mb-3">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center"
-                   style={{ backgroundColor: isShiftOver ? '#DCF3E4' : '#F1D88A' }}>
-                <Clock size={28} style={{ color: isShiftOver ? '#1e6b2e' : '#8a6d12' }} />
-              </div>
-            </div>
-            {isShiftOver ? (
-              <>
-                <h3 className="text-xl font-extrabold text-ink mb-2">Thank you for your work today!</h3>
-                <p className="text-ink/60 text-sm mb-5">
-                  Your shift is complete. Ending your shift will log your time-out and sign you out.
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-xl font-extrabold text-ink mb-2">Your shift isn't over yet</h3>
-                <p className="text-ink/60 text-sm mb-5">
-                  {shiftEndDate
-                    ? <>You still have <span className="font-bold">{remainingLabel}</span> left. Do you still want to leave and end your shift?</>
-                    : 'Do you still want to leave and end your shift?'}
-                </p>
-              </>
-            )}
-            <div className="flex gap-3">
-              <button onClick={() => setShowEnd(false)} disabled={ending}
-                      className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
-                {isShiftOver ? 'NOT YET' : 'STAY'}
-              </button>
-              <button onClick={doEndShift} disabled={ending}
-                      className="flex-1 py-3 rounded-full text-sm font-bold text-white disabled:opacity-60"
-                      style={{ backgroundColor: isShiftOver ? '#0F6E6E' : '#9b2c2c' }}>
-                {ending ? 'ENDING…' : (isShiftOver ? 'END SHIFT' : 'LEAVE & END')}
-              </button>
             </div>
           </div>
         </div>

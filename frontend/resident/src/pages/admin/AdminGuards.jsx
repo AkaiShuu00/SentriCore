@@ -73,14 +73,6 @@ export default function AdminGuards() {
   gateIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
   const hasUnassigned = guards.some((g) => g.gateId == null);
 
-  const toggleDuty = async (g) => {
-    const next = (g.status || '').toLowerCase().includes('on') ? 'Off Duty' : 'On Duty';
-    try {
-      await adminUpdateGuard(g.guardId, { fullName: g.fullName, gateId: g.gateId, shift: g.shift === '—' ? '' : g.shift, status: next });
-      load();
-    } catch (err) { alert(err.response?.data?.message || 'Failed to update duty.'); }
-  };
-
   const GateCard = ({ gateId }) => {
     const list = guards.filter((g) => String(g.gateId ?? '') === String(gateId ?? '') && match(g));
     return (
@@ -103,13 +95,10 @@ export default function AdminGuards() {
                   <div className="min-w-0">
                     <p className="font-bold text-ink truncate">{g.fullName}</p>
                     <p className="text-xs text-ink/60">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
+                    <p className="text-[11px] text-ink/50 truncate">{g.username}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => toggleDuty(g)} title="Toggle duty"
-                          className="text-[10px] font-bold px-4 py-1.5 rounded-full" style={dutyBg(g.status)}>
-                    {(g.status || 'Off Duty').replace(' ', '-')}
-                  </button>
                   <button onClick={() => setEditModal({ ...g })} title="Edit"
                           className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink"><Settings size={16} /></button>
                 </div>
@@ -235,9 +224,7 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
     fullName: initial?.fullName || '',
     gateId: initial?.gateId ?? '',
     shift: initial?.shift && initial.shift !== '—' ? initial.shift : '',
-    status: initial?.status || 'Off Duty',
     contact: initial?.contact || '',
-    email: initial?.email || '',
     photo: initial?.photo || null,
   });
 
@@ -280,17 +267,10 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
             <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                    placeholder="Carlos Aquino" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">Contact Number</label>
-              <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                     placeholder="0917 123 4567" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">Email</label>
-              <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                     placeholder="guard@sentricore.com" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-ink mb-1">Contact Number</label>
+            <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })}
+                   placeholder="0917 123 4567" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -312,17 +292,8 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
             </div>
           </div>
           {initial && (
-            <div>
-              <label className="block text-xs font-bold text-ink mb-1">Duty Status</label>
-              <div className="flex gap-2">
-                {['On Duty', 'Off Duty'].map((s) => (
-                  <button key={s} type="button" onClick={() => setForm({ ...form, status: s })}
-                          className="flex-1 py-2 rounded-full text-xs font-bold border-2"
-                          style={form.status === s ? { ...dutyBg(s), borderColor: 'transparent' } : { borderColor: '#e5e7eb', color: '#112D31' }}>
-                    {s}
-                  </button>
-                ))}
-              </div>
+            <div className="rounded-xl px-4 py-3 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
+              Duty status is <span className="font-bold">automatic</span> — On Duty while the guard is logged in within their shift, Off Duty once the shift time ends.
             </div>
           )}
         </div>

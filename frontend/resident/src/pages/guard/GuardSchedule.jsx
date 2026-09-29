@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { getSchedule } from '../../api';
+import { getSchedule, getMyGuardProfile } from '../../api';
 import { Shield, Search, Users, Pencil, Inbox } from 'lucide-react';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -16,7 +17,10 @@ const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
 
 export default function GuardSchedule() {
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const [guardPhoto, setGuardPhoto] = useState(null);
+  useEffect(() => { getMyGuardProfile().then((res) => setGuardPhoto(res.data?.photo || null)).catch(() => {}); }, []);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('SINGLE');
   const [sortOpen, setSortOpen] = useState(false);
@@ -166,10 +170,13 @@ export default function GuardSchedule() {
         <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center p-1">
           <img src="/logo.png" alt="SentriCore" className="w-full h-full object-contain" />
         </div>
-        <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
+        <button onClick={() => navigate('/guard-profile')}
+                className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
           <span className="font-bold text-ink">{user.name || 'Guard'}</span>
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><Shield size={20} className="text-ink" /></div>
-        </div>
+          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center overflow-hidden">
+            {guardPhoto ? <img src={guardPhoto} alt={user.name || 'Guard'} className="w-full h-full object-cover" /> : <Shield size={20} className="text-ink" />}
+          </div>
+        </button>
       </header>
 
       <div className="px-4">

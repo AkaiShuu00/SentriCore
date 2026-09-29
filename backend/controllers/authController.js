@@ -47,8 +47,9 @@ async function login(req, res) {
             let timeIn = new Date();
             // Kunin ang shift start: mula shift_start column, o i-parse ang shift_schedule string.
             let ss = g[0].shift_start || null;
-            if (!ss && g[0].shift_schedule) {
-              const m = String(g[0].shift_schedule).split(/[-–—]/)[0].trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+            const schedStr = g[0].shift_schedule || g[0].schedule;
+            if (!ss && schedStr) {
+              const m = String(schedStr).split(/[-–—]/)[0].trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
               if (m) {
                 let hh = parseInt(m[1], 10); const mm = m[2] ? parseInt(m[2], 10) : 0; const ap = (m[3] || '').toUpperCase();
                 if (ap === 'PM' && hh !== 12) hh += 12; if (ap === 'AM' && hh === 12) hh = 0;
@@ -63,6 +64,8 @@ async function login(req, res) {
             }
             await pool.query(`INSERT INTO GuardShifts (guard_id, time_in) VALUES (?, ?)`, [g[0].guard_id, timeIn]);
           }
+          // Markahan bilang On Duty pagkalogin — para mag-reflect agad sa admin.
+          try { await pool.query(`UPDATE Guards SET status = 'On Duty' WHERE guard_id = ?`, [g[0].guard_id]); } catch (e) { /* ignore */ }
         } catch (shiftErr) { console.warn('Time-in skipped:', shiftErr.message); }
       }
     } else if (user.role_name === 'Admin') {

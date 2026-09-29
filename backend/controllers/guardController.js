@@ -168,8 +168,9 @@ async function getMyShift(req, res) {
     const [[g]] = await pool.query('SELECT * FROM Guards WHERE guard_id = ?', [guardId]);
     let shiftStart = g && g.shift_start ? g.shift_start : null;
     let shiftEnd = g && g.shift_end ? g.shift_end : null;
-    if ((!shiftStart || !shiftEnd) && g && g.shift_schedule) {
-      const p = parseShiftSchedule(g.shift_schedule);
+    const schedStr = g && (g.shift_schedule || g.schedule);
+    if ((!shiftStart || !shiftEnd) && schedStr) {
+      const p = parseShiftSchedule(schedStr);
       shiftStart = shiftStart || p.start;
       shiftEnd = shiftEnd || p.end;
     }
@@ -197,22 +198,26 @@ async function endShift(req, res) {
        ORDER BY shift_id DESC LIMIT 1`,
       [guardId]
     );
+    // I-set na Off Duty ang guard pag-end shift — mag-reflect agad sa admin.
+    try { await pool.query(`UPDATE Guards SET status = 'Off Duty' WHERE guard_id = ?`, [guardId]); } catch (e) { /* ignore */ }
     res.json({ message: 'Shift ended.', ended: r.affectedRows > 0 });
   } catch (err) {
     res.status(500).json({ message: 'Error ending shift.', error: err.message });
   }
 }
 
-// GET /api/guards/shifts  (Admin) - mga time-in/time-out records ng lahat ng guard
+// GET /api/guards/shifts  (Admin) - mga END SHIFT records lang (kailan nag-end shift ang guard).
+// Hindi na kasama ang time-in; ang time-out (end shift) lang ang itinatala/ipinapakita.
 async function getGuardShifts(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT gs.shift_id, gs.guard_id, gs.time_in, gs.time_out,
+      `SELECT gs.shift_id, gs.guard_id, gs.time_out AS ended_at,
               g.full_name, gt.gate_name
        FROM GuardShifts gs
        JOIN Guards g ON g.guard_id = gs.guard_id
        LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
-       ORDER BY gs.shift_id DESC
+       WHERE gs.time_out IS NOT NULL
+       ORDER BY gs.time_out DESC
        LIMIT 200`
     );
     res.json(rows);
