@@ -25,6 +25,7 @@ export default function GuardProfile() {
   const [profile, setProfile] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [ending, setEnding] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
   const loadShift = () => getMyShift().then((res) => setShift(res.data || {})).catch(() => {});
   useEffect(() => {
     loadShift();
@@ -107,10 +108,6 @@ export default function GuardProfile() {
   };
 
   // LOG OUT — signs out only; NOT a time-out (guard stays On Duty)
-  const logout = () => {
-    if (!window.confirm('Log out of the dashboard? You will stay On Duty — this does not record your time-out.')) return;
-    goSignin();
-  };
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
@@ -206,7 +203,7 @@ export default function GuardProfile() {
         </div>
 
         {/* Log out — sign out lang, HINDI time-out (nananatiling On Duty) */}
-        <button onClick={logout}
+        <button onClick={() => setShowLogout(true)}
                 className="w-full mt-4 mb-4 rounded-2xl p-4 flex items-center gap-3 bg-white shadow active:scale-[0.99] transition">
           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><LogOut size={20} className="text-ink" /></div>
           <div className="flex-1 text-left">
@@ -215,6 +212,23 @@ export default function GuardProfile() {
           </div>
         </button>
       </div>
+
+      {/* Log out confirmation */}
+      {showLogout && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => setShowLogout(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3"><LogOut size={26} className="text-red-600" /></div>
+            <h3 className="text-xl font-extrabold text-ink mb-1">Log out?</h3>
+            <p className="text-ink/60 text-sm mb-5">Sign out of the dashboard? This does not end your shift — you stay On Duty.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogout(false)}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">Cancel</button>
+              <button onClick={goSignin}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#C0392B' }}>Log Out</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <GuardBottomNav active="profile" />
     </div>

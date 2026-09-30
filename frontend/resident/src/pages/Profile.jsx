@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { getMyProfile } from '../api';
 import { useT, LangToggle } from '../i18n';
-import { Home as HomeIcon, Phone, ShieldCheck, Ban, HelpCircle, MessageSquare, FileText, User, Pencil, X } from 'lucide-react';
+import { Home as HomeIcon, Phone, ShieldCheck, Ban, HelpCircle, MessageSquare, FileText, User, Pencil, X, LogOut } from 'lucide-react';
 
 // Optional profile avatar — naka-save sa localStorage (cosmetic lang).
 // Ang mga larawan ay nasa public/avatars/  → /avatars/male.png at /avatars/female.png
@@ -19,6 +19,7 @@ export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [avatar, setAvatar] = useState('default');
   const [showAvatar, setShowAvatar] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
 
   useEffect(() => {
     getMyProfile()
@@ -135,12 +136,29 @@ export default function Profile() {
         </div>
 
         {/* Log out */}
-        <button onClick={handleLogout}
+        <button onClick={() => setShowLogout(true)}
                 className="w-full text-white font-extrabold text-xl py-4 rounded-full mt-6 shadow-lg active:scale-95 transition"
                 style={{ backgroundColor: '#0F6E6E' }}>
           {t('LOG OUT', 'MAG-LOG OUT')}
         </button>
       </div>
+
+      {/* Log out confirmation */}
+      {showLogout && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => setShowLogout(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3"><LogOut size={26} className="text-red-600" /></div>
+            <h3 className="text-xl font-extrabold text-ink mb-1">{t('Log out?', 'Mag-log out?')}</h3>
+            <p className="text-ink/60 text-sm mb-5">{t('Are you sure you want to log out of your account?', 'Sigurado ka bang gusto mong mag-log out sa iyong account?')}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogout(false)}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">{t('Cancel', 'Kanselahin')}</button>
+              <button onClick={handleLogout}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#C0392B' }}>{t('Log Out', 'Mag-log Out')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Avatar picker modal (optional) */}
       {showAvatar && (
