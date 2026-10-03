@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // ── Shared ──
 import Splash from './pages/Splash';
@@ -39,9 +40,20 @@ import AdminGuards from './pages/admin/AdminGuards';
 import AdminResidents from './pages/admin/AdminResidents';
 import AdminReports from './pages/admin/AdminReports';
 
+// Dynamic browser-tab title: "SentriCore-Admin" sa admin pages, "SentriCore" sa iba.
+function TitleManager() {
+  const location = useLocation();
+  useEffect(() => {
+    const isAdmin = location.pathname.startsWith('/admin');
+    document.title = isAdmin ? 'SentriCore-Admin' : 'SentriCore';
+  }, [location]);
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <TitleManager />
       <Routes>
         {/* Shared entry */}
         <Route path="/" element={<Splash />} />
