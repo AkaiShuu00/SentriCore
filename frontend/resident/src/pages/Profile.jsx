@@ -15,7 +15,7 @@ const AVATARS = {
 export default function Profile() {
   const navigate = useNavigate();
   const { t } = useT();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [profile, setProfile] = useState(null);
   const [avatar, setAvatar] = useState('default');
   const [showAvatar, setShowAvatar] = useState(false);
@@ -26,20 +26,20 @@ export default function Profile() {
       .then((res) => setProfile(res.data || null))
       .catch(() => setProfile(null));
     try {
-      const saved = localStorage.getItem('sentricore_avatar');
+      const saved = sessionStorage.getItem('sentricore_avatar');
       if (saved) setAvatar(saved);
     } catch { /* ignore */ }
   }, []);
 
   const chooseAvatar = (choice) => {
     setAvatar(choice);
-    try { localStorage.setItem('sentricore_avatar', choice); } catch { /* ignore */ }
+    try { sessionStorage.setItem('sentricore_avatar', choice); } catch { /* ignore */ }
     setShowAvatar(false);
   };
 
   function handleLogout() {
-    localStorage.removeItem('sentricore_token');
-    localStorage.removeItem('sentricore_user');
+    sessionStorage.removeItem('sentricore_token');
+    sessionStorage.removeItem('sentricore_user');
     navigate('/signin');
   }
 

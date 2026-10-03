@@ -18,7 +18,7 @@ const fmt12 = (t) => {
 
 export default function GuardProfile() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
 
   // ── Assigned shift + FULL profile (mula DB) ──
   const [shift, setShift] = useState({ shiftStart: null, shiftEnd: null, timeIn: null, shiftId: null });
@@ -90,8 +90,8 @@ export default function GuardProfile() {
   };
 
   const goSignin = () => {
-    localStorage.removeItem('sentricore_token');
-    localStorage.removeItem('sentricore_user');
+    sessionStorage.removeItem('sentricore_token');
+    sessionStorage.removeItem('sentricore_user');
     navigate('/signin');
   };
 

@@ -52,7 +52,7 @@ const toLocalISO = (val) => {
 
 export default function GuardHome() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [search, setSearch] = useState('');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());

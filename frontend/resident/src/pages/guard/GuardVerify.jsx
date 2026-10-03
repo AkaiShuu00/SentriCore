@@ -106,8 +106,7 @@ export default function GuardVerify() {
   const [blockInfo, setBlockInfo] = useState(null);             // { blocked, matches } for the scanned visitor
   const [blockNote, setBlockNote] = useState('');               // note when the guard confirms it is a different person
 
-  const token = () => localStorage.getItem('sentricore_token');
-  // Header so ngrok-free does not return the HTML warning page on API calls.
+  const token = () => sessionStorage.getItem('sentricore_token');  // Header so ngrok-free does not return the HTML warning page on API calls.
   const NGROK = { 'ngrok-skip-browser-warning': 'true' };
   const authHeaders = (extra = {}) => ({ Authorization: `Bearer ${token()}`, ...NGROK, ...extra });
 

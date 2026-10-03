@@ -24,9 +24,8 @@ export default function SignIn() {
 
       const user = res.data.user;
       // localStorage (pare-pareho sa buong app)
-      localStorage.setItem('sentricore_token', res.data.token);
-      localStorage.setItem('sentricore_user', JSON.stringify(user));
-
+      sessionStorage.setItem('sentricore_token', res.data.token);
+      sessionStorage.setItem('sentricore_user', JSON.stringify(user));
       const role = (user.role || '').toLowerCase();
       if (role === 'guard') navigate('/guard-home');
       else navigate('/home');

@@ -1,30 +1,27 @@
-// src/authStorage.js
-// Per-tab session storage — para HINDI mag-overwrite ang magkaibang account
-// (resident/guard/admin) na naka-login sa magkaibang tab ng parehong browser.
-//
-// Gumagamit ng localStorage (hiwalay bawat tab). Kung gusto mong tumagal
-// kahit sarado ang tab, palitan ang localStorage → localStorage — pero
-// mawawala ulit ang multi-account separation.
+// Per-tab authentication session storage.
+// Gumagamit ng sessionStorage (hiwalay bawat browser tab) sa halip na localStorage
+// (na shared sa lahat ng tab), para hindi mag-overwrite ang Admin/Guard/Resident
+// tokens kapag magkakasabay na naka-login sa magkakaibang tab.
 
 const TOKEN_KEY = 'sentricore_token';
 const USER_KEY = 'sentricore_user';
 
 export const saveSession = (token, user) => {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  sessionStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const getToken = () => sessionStorage.getItem(TOKEN_KEY);
 
 export const getUser = () => {
   try {
-    return JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+    return JSON.parse(sessionStorage.getItem(USER_KEY) || '{}');
   } catch {
     return {};
   }
 };
 
 export const clearSession = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
 };

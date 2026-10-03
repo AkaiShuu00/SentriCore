@@ -12,7 +12,7 @@ import {
 export default function Home() {
   const navigate = useNavigate();
   const { t } = useT();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [unread, setUnread] = useState(0);
   const [search, setSearch] = useState('');
   const today = new Date();

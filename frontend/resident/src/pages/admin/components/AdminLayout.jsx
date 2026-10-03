@@ -6,12 +6,12 @@ import { LayoutDashboard, ClipboardList, User, Shield, BarChart3, Search, Chevro
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [showLogout, setShowLogout] = useState(false);
 
   const doLogout = () => {
-    localStorage.removeItem('sentricore_token');
-    localStorage.removeItem('sentricore_user');
+    sessionStorage.removeItem('sentricore_token');
+    sessionStorage.removeItem('sentricore_user');
     navigate('/admin-signin');
   };
 

@@ -36,7 +36,7 @@ const localMinuteKey = (ts) => {
 
 export default function GuardLogs() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('sentricore_user') || '{}');
+  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   const [guardPhoto, setGuardPhoto] = useState(null);
   useEffect(() => { getMyGuardProfile().then((res) => setGuardPhoto(res.data?.photo || null)).catch(() => {}); }, []);
   const [search, setSearch] = useState('');

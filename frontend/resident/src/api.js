@@ -15,8 +15,8 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  // localStorage (hindi sessionStorage) — pare-pareho sa buong app
-  const token = localStorage.getItem('sentricore_token');
+  // sessionStorage (hindi localStorage) — pare-pareho sa buong app
+  const token = sessionStorage.getItem('sentricore_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -27,7 +27,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401 || err.response?.status === 403) {
       // Optional: auto-logout kapag expired
-      // localStorage.removeItem('sentricore_token');
+      // sessionStorage.removeItem('sentricore_token');
       // window.location.href = '/signin';
     }
     return Promise.reject(err);

@@ -394,7 +394,7 @@ export default function PreRegister() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('sentricore_token');
+      const token = sessionStorage.getItem('sentricore_token');
       console.log('🔵 token:', token ? 'yes' : 'NO TOKEN');
 
       // Build the payload that the backend expects
