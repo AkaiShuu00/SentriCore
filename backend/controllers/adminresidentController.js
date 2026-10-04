@@ -1,17 +1,18 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
+// ⬇️ CHANGE: i-import ang field-level encryption (ilagay ang crypto.js sa config/ — katabi ng db.js/mailer.js)
+const { encrypt, decrypt } = require('../config/crypto');
 
 // Helper: username slug mula sa unang pangalan (letters lang)
 function nameSlug(fullName) {
   const first = String(fullName || 'resident').trim().split(/\s+/)[0] || 'resident';
   return first.toLowerCase().replace(/[^a-z]/g, '') || 'resident';
 }
-// Pattern: name.NNNN@sentricore  (NNNN = pang-ilan sila sa mga registered residents)
+// Pattern: name.NNNN@sentricore
 async function makeResidentUsername(conn, fullName) {
   const slug = nameSlug(fullName);
   const [[c]] = await conn.query('SELECT COUNT(*) AS n FROM Residents');
   let seq = (c.n || 0) + 1;
-  // Siguraduhing unique — kung nakuha na, i-bump ang sequence
   for (let i = 0; i < 1000; i++) {
     const username = `${slug}.${String(seq).padStart(4, '0')}@sentricore`;
     const [exists] = await conn.query('SELECT user_id FROM Users WHERE username = ?', [username]);
@@ -38,7 +39,6 @@ async function listResidents(req, res) {
        ORDER BY r.full_name ASC`
     );
 
-    // Active visitors + this-month total per resident
     const result = [];
     for (const r of rows) {
       const [[active]] = await pool.query(
@@ -56,8 +56,9 @@ async function listResidents(req, res) {
         residentId: r.resident_id,
         fullName: r.full_name,
         address: r.unit_address,
-        contact: r.phone_number,
-        email: r.email,
+        // ⬇️ CHANGE: i-decrypt bago ibalik sa frontend (plaintext rows ay babasahin pa rin)
+        contact: decrypt(r.phone_number),
+        email: decrypt(r.email),
         username: r.username,
         status: r.status,
         activeVisitors: active.n,
@@ -108,31 +109,27 @@ async function addResident(req, res) {
 
     await conn.beginTransaction();
 
-    // Generate username sa pattern na name.NNNN@sentricore
     const username = await makeResidentUsername(conn, fullName);
     const tempPassword = genPassword();
     const hash = await bcrypt.hash(tempPassword, 10);
 
-    // Get Resident role_id
     const [[role]] = await conn.query(`SELECT role_id FROM Roles WHERE role_name = 'Resident' LIMIT 1`);
     if (!role) throw new Error("Resident role not found in Roles table.");
 
-    // Create user
     const [u] = await conn.query(
       `INSERT INTO Users (username, password_hash, role_id, status) VALUES (?, ?, ?, 'Active')`,
       [username, hash, role.role_id]
     );
     const userId = u.insertId;
 
-    // Create resident
+    // ⬇️ CHANGE: i-encrypt ang phone_number + email bago isave
     await conn.query(
       `INSERT INTO Residents (user_id, full_name, unit_address, phone_number, email)
        VALUES (?, ?, ?, ?, ?)`,
-      [userId, fullName.trim(), address.trim(), contact || null, email || null]
+      [userId, fullName.trim(), address.trim(), encrypt(contact || null), encrypt(email || null)]
     );
 
     await conn.commit();
-    // Ibalik ang generated credentials (isang beses lang makikita)
     res.status(201).json({
       message: 'Resident added.',
       credentials: { username, password: tempPassword },
@@ -150,10 +147,11 @@ async function updateResident(req, res) {
   try {
     const { id } = req.params;
     const { fullName, address, contact, email } = req.body;
+    // ⬇️ CHANGE: i-encrypt ang phone_number + email bago i-update
     const [result] = await pool.query(
       `UPDATE Residents SET full_name = ?, unit_address = ?, phone_number = ?, email = ?
        WHERE resident_id = ?`,
-      [fullName, address, contact || null, email || null, id]
+      [fullName, address, encrypt(contact || null), encrypt(email || null), id]
     );
     if (result.affectedRows === 0) return res.status(404).json({ message: 'Resident not found.' });
     res.json({ message: 'Resident updated.' });

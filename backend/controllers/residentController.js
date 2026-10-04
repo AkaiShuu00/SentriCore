@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
+// ⬇️ CHANGE: field-level encryption (crypto.js nasa config/ — katabi ng db.js/mailer.js)
+const { encrypt, decrypt } = require('../config/crypto');
 
 // GET /api/residents  (Admin) - list all residents
 async function getResidents(req, res) {
@@ -11,7 +13,13 @@ async function getResidents(req, res) {
        JOIN Users u ON u.user_id = r.user_id
        ORDER BY r.resident_id`
     );
-    res.json(rows);
+    // ⬇️ CHANGE: i-decrypt ang phone_number + email bago ibalik (plaintext rows ay babasahin pa rin)
+    const out = rows.map((r) => ({
+      ...r,
+      phone_number: decrypt(r.phone_number),
+      email: decrypt(r.email),
+    }));
+    res.json(out);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching residents.', error: err.message });
   }
@@ -27,7 +35,6 @@ async function createResident(req, res) {
       return res.status(400).json({ message: 'Username, password, and full name are required.' });
     }
 
-    // Check if username already exists
     const [existing] = await conn.query('SELECT user_id FROM Users WHERE username = ?', [username]);
     if (existing.length > 0) {
       return res.status(409).json({ message: 'Username already taken.' });
@@ -40,10 +47,11 @@ async function createResident(req, res) {
       `INSERT INTO Users (role_id, username, password_hash) VALUES (3, ?, ?)`,
       [username, hash]
     );
+    // ⬇️ CHANGE: i-encrypt ang phone_number + email bago isave
     await conn.query(
       `INSERT INTO Residents (user_id, full_name, unit_address, phone_number, email)
        VALUES (?, ?, ?, ?, ?)`,
-      [u.insertId, fullName, address || null, phone || null, email || null]
+      [u.insertId, fullName, address || null, encrypt(phone || null), encrypt(email || null)]
     );
 
     await conn.commit();
@@ -62,10 +70,11 @@ async function updateResident(req, res) {
     const { id } = req.params;
     const { fullName, address, phone, email } = req.body;
 
+    // ⬇️ CHANGE: i-encrypt ang phone_number + email bago i-update
     const [result] = await pool.query(
       `UPDATE Residents SET full_name = ?, unit_address = ?, phone_number = ?, email = ?
        WHERE resident_id = ?`,
-      [fullName, address || null, phone || null, email || null, id]
+      [fullName, address || null, encrypt(phone || null), encrypt(email || null), id]
     );
 
     if (result.affectedRows === 0) {
@@ -102,7 +111,9 @@ async function getMyProfile(req, res) {
       [req.user.residentId]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Profile not found.' });
-    res.json(rows[0]);
+    // ⬇️ CHANGE: i-decrypt bago ibalik sa resident
+    const me = { ...rows[0], phone_number: decrypt(rows[0].phone_number), email: decrypt(rows[0].email) };
+    res.json(me);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching profile.', error: err.message });
   }

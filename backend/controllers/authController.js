@@ -3,7 +3,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const { logAction } = require('../config/audit');
-const { sendMail } = require('../config/mailer');
+// ⬇️ CHANGE: idagdag ang sendOtpEmail + OTP_EXP_MINUTES (nananatili pa rin ang sendMail kung kailangan)
+const { sendMail, sendOtpEmail, OTP_EXP_MINUTES } = require('../config/mailer');
 
 // POST /api/auth/login
 async function login(req, res) {
@@ -36,8 +37,6 @@ async function login(req, res) {
       if (g.length) {
         profile.guardId = g[0].guard_id; profile.gateId = g[0].gate_id; profile.name = g[0].full_name;
         // ── AUTO TIME-IN sa login (kung walang bukas na shift pa) ──
-        // Kung nag-login nang mas maaga sa naka-schedule na shift start, ang time-in ay
-        // itatakda sa shift start (hindi binibilang ang maagang login). Kung after na, ngayon.
         try {
           const [open] = await pool.query(
             `SELECT shift_id FROM GuardShifts WHERE guard_id = ? AND time_out IS NULL ORDER BY shift_id DESC LIMIT 1`,
@@ -45,7 +44,6 @@ async function login(req, res) {
           );
           if (!open.length) {
             let timeIn = new Date();
-            // Kunin ang shift start: mula shift_start column, o i-parse ang shift_schedule string.
             let ss = g[0].shift_start || null;
             const schedStr = g[0].shift_schedule || g[0].schedule;
             if (!ss && schedStr) {
@@ -60,11 +58,10 @@ async function login(req, res) {
               const [hh, mm] = String(ss).split(':').map(Number);
               const sched = new Date();
               sched.setHours(hh || 0, mm || 0, 0, 0);
-              if (timeIn < sched) timeIn = sched; // maagang login → time-in = shift start
+              if (timeIn < sched) timeIn = sched;
             }
             await pool.query(`INSERT INTO GuardShifts (guard_id, time_in) VALUES (?, ?)`, [g[0].guard_id, timeIn]);
           }
-          // Markahan bilang On Duty pagkalogin — para mag-reflect agad sa admin.
           try { await pool.query(`UPDATE Guards SET status = 'On Duty' WHERE guard_id = ?`, [g[0].guard_id]); } catch (e) { /* ignore */ }
         } catch (shiftErr) { console.warn('Time-in skipped:', shiftErr.message); }
       }
@@ -72,7 +69,6 @@ async function login(req, res) {
       profile.name = user.username;
     }
 
-    // WALANG expiry — hindi mag-eexpire ang token (ligtas para sa live demo/defense).
     const token = jwt.sign(profile, process.env.JWT_SECRET);
     await logAction(user.user_id, 'Login', `${user.role_name} "${user.username}" logged in.`);
     res.json({ message: 'Login successful.', token, user: profile });
@@ -88,8 +84,9 @@ async function forgotPassword(req, res) {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required.' });
 
+    // ⬇️ CHANGE: isama ang r.full_name para personalized ang email ("Hi <name>")
     const [rows] = await pool.query(
-      `SELECT u.user_id, u.username
+      `SELECT u.user_id, u.username, r.full_name
        FROM Users u JOIN Residents r ON r.user_id = u.user_id
        WHERE r.email = ? LIMIT 1`,
       [email.trim()]
@@ -100,21 +97,29 @@ async function forgotPassword(req, res) {
       const user = rows[0];
       const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
       const codeHash = await bcrypt.hash(code, 10);
-      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+      // ⬇️ CHANGE: expiry galing sa .env (OTP_EXP_MINUTES), hindi na naka-hardcode
+      const expires = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+
+      // (Opsyonal, rekomendado) i-expire muna ang mga lumang code — single-use
+      try {
+        await pool.query(
+          `UPDATE PasswordResets SET used = 1 WHERE user_id = ? AND used = 0`,
+          [user.user_id]
+        );
+      } catch (e) { /* ignore */ }
+
       await pool.query(
         `INSERT INTO PasswordResets (user_id, code_hash, expires_at) VALUES (?, ?, ?)`,
         [user.user_id, codeHash, expires]
       );
-      // DEV/DEMO: laging ipakita ang code sa backend terminal para makapag-test kahit
-      // hindi pa gumagana ang email. (Alisin/i-comment kapag production na.)
+
+      // DEV/DEMO: ipakita ang code sa backend terminal (alisin/i-comment kapag production na)
       console.log(`\n[FORGOT] Verification code for ${email.trim()}: ${code}\n`);
+
+      // ⬇️ CHANGE: palitan ang sendMail(...) ng branded, automated, no-reply na sendOtpEmail(...)
       try {
-        const sent = await sendMail(
-          email.trim(),
-          'SentriCore Verification Code',
-          `Your SentriCore verification code is:\n\n${code}\n\nThis code expires in 10 minutes. If you did not request this, please ignore.`
-        );
-        console.log('[FORGOT] Email sent?', sent);
+        const sent = await sendOtpEmail(email.trim(), code, user.full_name);
+        console.log('[FORGOT] OTP email sent?', sent);
       } catch (mailErr) {
         console.error('[FORGOT] Email send FAILED:', mailErr.message);
       }
@@ -139,6 +144,7 @@ async function resetPassword(req, res) {
       return res.status(400).json({ message: 'Password must be at least 6 characters.' });
     }
 
+    // Expiry = AUTOMATIC: kapag lampas na sa expires_at, walang match → "Invalid or expired code."
     const [rows] = await pool.query(
       `SELECT pr.id, pr.code_hash, pr.user_id
        FROM PasswordResets pr
