@@ -2,6 +2,8 @@ const pool = require('../config/db');
 const bcrypt = require('bcrypt');
 // ⬇️ CHANGE: field-level encryption (crypto.js nasa config/ — katabi ng db.js/mailer.js)
 const { encrypt, decrypt } = require('../config/crypto');
+// ⬇️ CHANGE: account welcome email (username + password)
+const { sendAccountEmail } = require('../config/mailer');
 
 // GET /api/residents  (Admin) - list all residents
 async function getResidents(req, res) {
@@ -55,6 +57,19 @@ async function createResident(req, res) {
     );
 
     await conn.commit();
+
+    // ⬇️ CHANGE: email ang account details sa resident (kung may email).
+    // Ginagamit ang plaintext `password` na galing sa request (bago ma-hash) —
+    // hindi galing DB. Naka-try/catch para hindi masira ang create kung mag-fail email.
+    if (email) {
+      try {
+        await sendAccountEmail(String(email).trim(), username, password, fullName);
+        console.log('[ACCOUNT] Welcome email sent to', String(email).trim());
+      } catch (mailErr) {
+        console.error('[ACCOUNT] Welcome email FAILED:', mailErr.message);
+      }
+    }
+
     res.status(201).json({ message: 'Resident account created.' });
   } catch (err) {
     await conn.rollback();
