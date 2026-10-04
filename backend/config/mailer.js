@@ -6,6 +6,8 @@
 //   - sendAccountEmail(to, username, password, name) → account welcome (white, malinis)
 // Lahat ng creds ay galing sa .env (SMTP_USER, SMTP_PASS). Walang hardcoded.
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const OTP_EXP_MINUTES = parseInt(process.env.OTP_EXP_MINUTES || '10', 10);
@@ -14,9 +16,9 @@ const SMTP_USER = process.env.SMTP_USER;
 // Alisin ang spaces sa Gmail App Password para sigurado (iwas typo).
 const SMTP_PASS = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
-// From: malinis na display name. ReplyTo: TOTOONG address (iwas spam — dating
-// no-reply@sentricore ay invalid domain at nagpapadala sa spam).
-const FROM = `"SentriCore" <${SMTP_USER}>`;
+// From: gamitin ang SMTP_FROM kung naka-set (gaya ng ginawa ng kaibigan mo),
+// kung wala, "SentriCore <gmail>". ReplyTo: TOTOONG address (iwas spam).
+const FROM = process.env.SMTP_FROM || `"SentriCore" <${SMTP_USER}>`;
 const REPLY_TO = SMTP_USER;
 
 const transporter = nodemailer.createTransport({
@@ -24,16 +26,34 @@ const transporter = nodemailer.createTransport({
   auth: { user: SMTP_USER, pass: SMTP_PASS },
 });
 
+// ── Logo: i-EMBED sa email (cid) para laging lumabas kahit walang public HTTPS. ──
+// Hinahanap ang logo.png sa ilang karaniwang lokasyon; pwede ring itakda via LOGO_PATH sa .env.
+const LOGO_CID = 'sentricore-logo';
+const LOGO_CANDIDATES = [
+  process.env.LOGO_PATH,
+  path.join(__dirname, 'logo.png'),            // backend/config/logo.png
+  path.join(__dirname, '..', 'assets', 'logo.png'),
+  path.join(__dirname, '..', 'public', 'logo.png'),
+  path.join(__dirname, '..', 'logo.png'),
+].filter(Boolean);
+const LOGO_FILE = LOGO_CANDIDATES.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+// Kung may file → gagamit ng cid embed; kung wala → babalik sa URL (APP_BASE_URL/logo.png).
+const LOGO_SRC = LOGO_FILE ? `cid:${LOGO_CID}` : `${APP_BASE_URL}/logo.png`;
+const LOGO_ATTACH = LOGO_FILE ? [{ filename: 'logo.png', path: LOGO_FILE, cid: LOGO_CID }] : [];
+if (!LOGO_FILE) console.warn('[MAILER] logo.png not found — set LOGO_PATH sa .env o ilagay sa config/logo.png. Gagamit muna ng URL.');
+
 // ───────────────────────── Shared layout (white, malinis) ─────────────────────────
-const LOGO = `${APP_BASE_URL}/logo.png`;
+const LOGO = LOGO_SRC;
 function wrap(innerHtml) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
   <body style="margin:0;background:#ffffff;padding:24px 0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111827;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
       <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="max-width:92%;background:#ffffff;border:1px solid #e9ebee;border-radius:16px;box-shadow:0 1px 3px rgba(16,24,40,.06);overflow:hidden;">
         <tr><td style="padding:26px 32px 6px;" align="center">
-          <img src="${LOGO}" alt="SentriCore" height="38" style="display:block;border:0;outline:none;margin-bottom:6px;"/>
-          <div style="font-size:15px;font-weight:800;letter-spacing:.06em;color:#0f766e;text-transform:uppercase;">SentriCore</div>
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#0f3b3a;border-radius:16px;padding:12px;" align="center">
+            <img src="${LOGO}" alt="SentriCore" width="44" height="44" style="display:block;border:0;outline:none;"/>
+          </td></tr></table>
+          <div style="font-size:15px;font-weight:800;letter-spacing:.06em;color:#0f766e;text-transform:uppercase;margin-top:8px;">SentriCore</div>
         </td></tr>
         ${innerHtml}
         <tr><td style="padding:18px 32px 26px;border-top:1px solid #f0f1f3;">
@@ -82,9 +102,10 @@ async function sendOtpEmail(to, code, name) {
     from: FROM,
     replyTo: REPLY_TO,
     to,
-    subject: `Your SentriCore verification code: ${code}`,
+    subject: 'Your SentriCore verification code',
     text: `Hi${name ? ' ' + name : ''},\n\nYour SentriCore verification code is: ${code}\n\nThis code expires in ${OTP_EXP_MINUTES} minutes. If you did not request this, please ignore this email.`,
     html: otpHtml(code, name),
+    attachments: LOGO_ATTACH,
   });
   return info && info.messageId ? true : false;
 }
@@ -131,6 +152,7 @@ async function sendAccountEmail(to, username, password, name) {
     subject: 'Your SentriCore account details',
     text: `Welcome to SentriCore!\n\nUsername: ${username}\nTemporary Password: ${password}\n\nSign in at ${APP_BASE_URL} and please change your password after your first login.`,
     html: accountHtml(username, password, name),
+    attachments: LOGO_ATTACH,
   });
   return info && info.messageId ? true : false;
 }
