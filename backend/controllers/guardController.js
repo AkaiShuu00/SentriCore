@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const bcrypt = require('bcrypt');
+// ⬇️ decrypt guard phone bago ipakita (safe passthrough kung plaintext)
+const { decrypt } = require('../config/crypto');
 
 // I-parse ang shift_schedule string ("6:00 AM - 6:00 PM") → { start:'06:00:00', end:'18:00:00' }
 function parseShiftSchedule(s) {
@@ -28,7 +30,7 @@ async function getGuards(req, res) {
        LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
        ORDER BY g.guard_id`
     );
-    res.json(rows);
+    res.json(rows.map((r) => ({ ...r, phone_number: decrypt(r.phone_number) })));
   } catch (err) {
     res.status(500).json({ message: 'Error fetching guards.', error: err.message });
   }
@@ -108,7 +110,7 @@ async function getMyProfile(req, res) {
       [req.user.guardId]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Profile not found.' });
-    res.json(rows[0]);
+    res.json({ ...rows[0], phone_number: decrypt(rows[0].phone_number) });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching profile.', error: err.message });
   }
@@ -124,7 +126,7 @@ async function getOnDutyGuards(req, res) {
        WHERE g.status = 'Active'
        ORDER BY g.guard_id`
     );
-    res.json(rows);
+    res.json(rows.map((r) => ({ ...r, phone_number: decrypt(r.phone_number) })));
   } catch (err) {
     res.status(500).json({ message: 'Error fetching guards.', error: err.message });
   }
@@ -150,7 +152,7 @@ async function getGuardDirectory(req, res) {
     const guards = rows.map((r) => ({
       guardId: r.guard_id,
       name: r.full_name || 'Guard',
-      phone: r.phone_number || '',
+      phone: decrypt(r.phone_number) || '',
       email: r.email || '',
       gate: r.gate_name || (r.gate_id != null ? `Gate ${r.gate_id}` : '-'),
       status: dutyLabel(r.status),

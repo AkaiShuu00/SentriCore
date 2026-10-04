@@ -1,4 +1,6 @@
 const pool = require('../config/db');
+// ⬇️ decrypt resident phone bago ipakita sa guard (para matawagan)
+const { decrypt } = require('../config/crypto');
 
 function tokenize(s) {
   return (s || '').toUpperCase().split(/[\s,.\-]+/).filter(t => t.length >= 2);
@@ -389,7 +391,8 @@ async function getResidentsForGuard(req, res) {
       `SELECT resident_id, full_name, unit_address, phone_number AS contact_number, email
        FROM Residents ORDER BY full_name ASC`
     );
-    res.json(rows);
+    // ⬇️ decrypt phone para madial ng guard (plaintext rows ay babalik as-is)
+    res.json(rows.map((r) => ({ ...r, contact_number: decrypt(r.contact_number) })));
   } catch (err) {
     res.status(500).json({ message: 'Error fetching residents.', error: err.message });
   }
