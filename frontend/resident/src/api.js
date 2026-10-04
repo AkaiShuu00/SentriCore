@@ -77,6 +77,11 @@ export const adminUpdateResident = (id, data) => api.put(`/admin/residents/${id}
 export const adminResetResidentPassword = (id) => api.post(`/admin/residents/${id}/reset-password`);
 export const adminDeleteResident = (id) => api.delete(`/admin/residents/${id}`);
 
+// ── Admin: own profile (name/phone/email/password) + public contact for guard ──
+export const getMyAdminProfile = () => api.get('/admin/me');
+export const updateMyAdminProfile = (data) => api.put('/admin/me', data);
+export const getAdminContact = () => api.get('/admin/contact');
+
 // ── Admin: Guards ──
 export const adminListGuards = () => api.get('/admin/guards');
 export const adminGuardActivity = () => api.get('/admin/guards/activity');

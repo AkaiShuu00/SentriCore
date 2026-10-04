@@ -66,7 +66,11 @@ async function login(req, res) {
         } catch (shiftErr) { console.warn('Time-in skipped:', shiftErr.message); }
       }
     } else if (user.role_name === 'Admin') {
-      profile.name = user.username;
+      // Gamitin ang display_name mula Admins kung meron; kung wala, username.
+      try {
+        const [[a]] = await pool.query('SELECT display_name FROM Admins WHERE user_id = ?', [user.user_id]);
+        profile.name = (a && a.display_name) ? a.display_name : user.username;
+      } catch (e) { profile.name = user.username; }
     }
 
     const token = jwt.sign(profile, process.env.JWT_SECRET);

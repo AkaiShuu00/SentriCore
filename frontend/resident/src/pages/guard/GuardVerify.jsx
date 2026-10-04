@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist, getExpectedDeliveries } from '../../api';
+import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist, getExpectedDeliveries, getAdminContact } from '../../api';
 import { User, Truck, Camera, Search, RefreshCw, ShieldAlert, Phone } from 'lucide-react';
 
 const teal = '#0F6E6E';
@@ -90,6 +90,8 @@ export default function GuardVerify() {
   const [submitting, setSubmitting] = useState(false);
   const [exitNote, setExitNote] = useState('');                 // optional exit note (1 of 4 choices)
   const [exitAdditionalNote, setExitAdditionalNote] = useState(''); // optional free-text
+  const [showBackConfirm, setShowBackConfirm] = useState(false);    // #6: confirm back kapag may na-scan na
+  const [adminContact, setAdminContact] = useState({ name: 'HOA Administrator', phone: '' }); // #3: HOA call number
   const [matchData, setMatchData] = useState({});
   const [candidates, setCandidates] = useState([]);   // all matching candidates (disambiguation)
   const multiRef = useRef(false);                      // may 2+ candidate ba?
@@ -193,6 +195,8 @@ export default function GuardVerify() {
       }))))
       .catch(() => setResidentsDB([]));
     loadActive();
+    // #3: kunin ang HOA admin contact para sa "Call HOA"
+    getAdminContact().then((res) => setAdminContact(res.data || { name: 'HOA Administrator', phone: '' })).catch(() => {});
   }, []);
 
   const isPickup = drivePurpose === 'PICKUP';
@@ -638,6 +642,40 @@ export default function GuardVerify() {
 
   const close = () => navigate('/guard-home');
 
+  // ── #5/#6: back = one step lang (hindi automatic exit); confirm kapag may na-scan na ──
+  const SCAN_SENSITIVE = new Set(['matched', 'confirmed', 'additional', 'selectVisitor', 'blocklistAlert', 'unlisted']);
+  const backTargetFor = (s) => {
+    switch (s) {
+      case 'scan': return isExit ? null : (isDelivery ? 'deliveryResidents' : 'choose');
+      case 'reading': return 'scan';
+      case 'selectVisitor': return 'scan';
+      case 'visitorSearch': return 'scan';
+      case 'exitSelect': return 'scan';
+      case 'pickupResidents': return 'scan';
+      case 'deliveryResidents': return 'choose';
+      case 'activeVisitors': return 'vehicle';
+      case 'matched': return isExit ? 'exitSelect' : (isDelivery ? 'deliveryResidents' : 'scan');
+      case 'additional': return 'matched';
+      case 'confirmed': return 'matched';
+      case 'blocklistAlert': return 'matched';
+      case 'residentList': return isExit ? 'scan' : 'matched';
+      case 'unlisted': return 'residentList';
+      default: return null;
+    }
+  };
+  const doStepBack = () => {
+    const target = backTargetFor(step);
+    if (!target) { close(); return; }   // nasa pinaka-una na → saka lang lalabas
+    setStep(target);
+  };
+  const handleBack = () => {
+    const target = backTargetFor(step);
+    if (!target) { close(); return; }
+    const scannedYet = !!(photo || (scannedName && scannedName.trim()) || matchData.visitor || (driverName && driverName.trim()));
+    if (scannedYet && SCAN_SENSITIVE.has(step)) { setShowBackConfirm(true); return; }  // #6: confirm muna
+    setStep(target);  // #5: isang hakbang lang pabalik
+  };
+
   const handleApprove = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -710,18 +748,38 @@ export default function GuardVerify() {
                 </button>
               </div>
 
-              {entryType && (
+              {/* VISITOR: tanungin kung may sasakyan */}
+              {entryType === 'VISITOR' && (
                 <>
                   <p className="text-center italic text-ink/70 mt-5 mb-3 border-t border-gray-100 pt-4">
-                    {entryType === 'VISITOR' ? 'visitor arrived with vehicle?' : 'driver arrived with vehicle?'}
+                    visitor arrived with vehicle?
                   </p>
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => setStep(entryType === 'DELIVERY' ? 'deliveryResidents' : 'scan')}
+                    <button onClick={() => setStep('scan')}
                             className="px-6 py-2 rounded-full border border-gray-300 text-sm font-bold text-ink">NO</button>
                     <button onClick={() => setStep('vehicle')}
                             className="px-6 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: teal }}>YES</button>
                   </div>
                 </>
+              )}
+
+              {/* #3 DELIVERY: diretso nang plate number (walang "arrived with vehicle?") */}
+              {entryType === 'DELIVERY' && (
+                <div className="mt-5 border-t border-gray-100 pt-4">
+                  <p className="text-center text-xs text-ink/70 mb-2">Enter plate number of the delivery vehicle</p>
+                  <input value={plate} onChange={(e) => setPlate(e.target.value)}
+                         placeholder="DTF 102938573"
+                         className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm text-center mb-4 outline-none focus:border-teal-600" />
+                  <div className="flex justify-center">
+                    <button onClick={() => {
+                              if (!plate.trim()) { alert('Please enter the plate number.'); return; }
+                              setStep('deliveryResidents');
+                            }}
+                            className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                      PROCEED
+                    </button>
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -803,8 +861,8 @@ export default function GuardVerify() {
   return (
     <div className="min-h-screen bg-cream max-w-md mx-auto">
       <header className="bg-ink px-5 py-5 flex items-center gap-3">
-        <button onClick={close} className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-ink font-bold">‹</button>
-        <span className="text-white font-bold text-lg">Back to Home</span>
+        <button onClick={handleBack} className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-ink font-bold">‹</button>
+        <span className="text-white font-bold text-lg">Back</span>
       </header>
 
       <div className="px-6 py-8">
@@ -834,39 +892,42 @@ export default function GuardVerify() {
             </p>
             <p className="text-center text-xs text-ink/50 mb-5">Ensure the ID is clear and readable</p>
 
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col gap-3">
+              {/* #1: Malaki at primary ang CAPTURE ID (mas specified) */}
               <button onClick={captureFromCamera}
-                      className="px-6 py-3 rounded-full text-sm font-bold text-white w-52 inline-flex items-center justify-center gap-2" style={{ backgroundColor: '#0F6E6E' }}>
-                <Camera size={16} /> CAPTURE ID
+                      className="w-full py-5 rounded-2xl text-base font-extrabold text-white inline-flex items-center justify-center gap-2 shadow-md" style={{ backgroundColor: '#0F6E6E' }}>
+                <Camera size={22} /> CAPTURE ID
               </button>
 
-              {/* Fallback: native camera app / file (works even without camera permission) */}
-              <input ref={fileRef} type="file" accept="image/*" capture="environment"
-                     onChange={handlePhoto} style={{ display: 'none' }} />
-              <button onClick={() => fileRef.current?.click()}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
-                TAKE PHOTO OF ID
-              </button>
-              {isExit ? (
-                // EXIT manual fallback (kapag down ang OCR): piliin mula sa listahan ng
-                // active visitors at deliveries na nasa loob pa ng subdivision.
-                <button onClick={() => { stopCamera(); loadActive(); setActiveSearch(''); setStep('exitSelect'); }}
-                        className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
-                  SELECT FROM INSIDE LIST
+              {/* #1: Upload (mula gallery/file) — inalis ang capture="environment" para talagang upload */}
+              <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
+
+              {/* #1: magkatabi (straight line) ang Upload + ikalawang aksyon */}
+              <div className="flex gap-2">
+                <button onClick={() => fileRef.current?.click()}
+                        className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                  UPLOAD PHOTO OF ID
                 </button>
-              ) : (!isDriverFlow) ? (
-                <button onClick={() => { stopCamera(); loadRegistered(); setRegSearch(''); setStep('visitorSearch'); }}
-                        className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
-                  SEARCH REGISTERED VISITOR
-                </button>
-              ) : (
-                <button onClick={() => { stopCamera(); setStep('reading'); }}
-                        className="px-6 py-2 rounded-full text-sm font-bold text-white w-52" style={{ backgroundColor: '#112D31' }}>
-                  TYPE INFO MANUALLY
-                </button>
-              )}
-              <button onClick={() => { stopCamera(); setStep(isExit ? 'exitSelect' : 'choose'); }}
-                      className="px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                {isExit ? (
+                  <button onClick={() => { stopCamera(); loadActive(); setActiveSearch(''); setStep('exitSelect'); }}
+                          className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                    SELECT FROM INSIDE LIST
+                  </button>
+                ) : (!isDriverFlow) ? (
+                  <button onClick={() => { stopCamera(); loadRegistered(); setRegSearch(''); setStep('visitorSearch'); }}
+                          className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                    SEARCH REGISTERED VISITOR
+                  </button>
+                ) : (
+                  <button onClick={() => { stopCamera(); setStep('reading'); }}
+                          className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                    TYPE INFO MANUALLY
+                  </button>
+                )}
+              </div>
+
+              <button onClick={() => { stopCamera(); if (isExit) { loadActive(); setActiveSearch(''); setStep('exitSelect'); } else { handleBack(); } }}
+                      className="self-center px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
                 {isExit ? 'MANUAL SEARCH' : 'BACK'}
               </button>
             </div>
@@ -1197,7 +1258,7 @@ export default function GuardVerify() {
 
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
-                  <button onClick={() => setStep(isExit ? 'exitSelect' : 'residentList')}
+                  <button onClick={() => { if (isExit) { setStep('exitSelect'); } else { loadRegistered(); setRegSearch(''); setStep('visitorSearch'); } }}
                           className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
                     MANUAL SEARCH
                   </button>
@@ -1546,9 +1607,15 @@ export default function GuardVerify() {
             <div className="rounded-2xl px-4 py-3 mb-4 flex items-center justify-between" style={{ backgroundColor: '#FBE0E0' }}>
               <div>
                 <p className="font-bold text-ink text-xs">Need assistance or have concerns?</p>
-                <p className="text-[11px] text-ink/60">Contact the HOA administrator</p>
+                <p className="text-[11px] text-ink/60">
+                  {adminContact.name || 'HOA Administrator'}{adminContact.phone ? ` · ${adminContact.phone}` : ''}
+                </p>
               </div>
-              <button onClick={() => { window.location.href = 'tel:0000'; }}
+              <button onClick={() => {
+                        const num = String(adminContact.phone || '').replace(/[^\d+]/g, '');
+                        if (!num) { alert('No HOA admin contact number set yet.'); return; }
+                        window.location.href = `tel:${num}`;
+                      }}
                       className="text-white font-bold text-[11px] px-4 py-2 rounded-full" style={{ backgroundColor: '#C0392B' }}>CALL</button>
             </div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">RESIDENT LIST</h2>
@@ -1734,6 +1801,22 @@ export default function GuardVerify() {
                         setStep('additional');
                       }}
                       className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>YES</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* #6: Back confirmation (kapag may na-scan na) */}
+      {showBackConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-6" onClick={() => setShowBackConfirm(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-extrabold text-ink mb-1">Go back one step?</h3>
+            <p className="text-ink/60 text-sm mb-5">You already scanned an ID. This will return to the previous step.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowBackConfirm(false)}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">Stay</button>
+              <button onClick={() => { setShowBackConfirm(false); doStepBack(); }}
+                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>Go Back</button>
             </div>
           </div>
         </div>
