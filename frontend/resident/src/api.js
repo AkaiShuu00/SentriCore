@@ -75,6 +75,7 @@ export const adminResidentActive = (id) => api.get(`/admin/residents/${id}/activ
 export const adminAddResident = (data) => api.post('/admin/residents', data);
 export const adminUpdateResident = (id, data) => api.put(`/admin/residents/${id}`, data);
 export const adminResetResidentPassword = (id) => api.post(`/admin/residents/${id}/reset-password`);
+export const adminDeleteResident = (id) => api.delete(`/admin/residents/${id}`);
 
 // ── Admin: Guards ──
 export const adminListGuards = () => api.get('/admin/guards');

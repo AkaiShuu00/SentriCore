@@ -15,6 +15,14 @@ const COLORS = {
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-PH', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—';
 
+// Reusable inline error line (pumapalit sa alert pop-ups)
+function ErrLine({ error }) {
+  if (!error) return null;
+  return (
+    <p style={styles.errText}>{error}</p>
+  );
+}
+
 // ─── Step 1: Choose Registration Type ───────────────────────────────────────
 function StepChooseType({ onSelect, onClose }) {
   const types = [
@@ -50,7 +58,7 @@ function StepChooseType({ onSelect, onClose }) {
 }
 
 // ─── Step 2 (Single): Details ───────────────────────────────────────────────
-function StepDetails({ form, onChange, onBack, onConfirm }) {
+function StepDetails({ form, error, onChange, onBack, onConfirm }) {
   return (
     <div style={styles.modalCard}>
       <button style={styles.backBtn} onClick={onBack}>‹</button>
@@ -87,6 +95,7 @@ function StepDetails({ form, onChange, onBack, onConfirm }) {
         />
       </div>
 
+      <ErrLine error={error} />
       <div style={styles.twoBtn}>
         <button style={styles.btnBack} onClick={onBack}>BACK</button>
         <button style={styles.btnConfirm} onClick={onConfirm}>CONFIRM</button>
@@ -96,7 +105,7 @@ function StepDetails({ form, onChange, onBack, onConfirm }) {
 }
 
 // ─── Step 2 (Delivery): Details ─────────────────────────────────────────────
-function StepDeliveryDetails({ form, onChange, onBack, onConfirm }) {
+function StepDeliveryDetails({ form, error, onChange, onBack, onConfirm }) {
   return (
     <div style={styles.modalCard}>
       <button style={styles.backBtn} onClick={onBack}>‹</button>
@@ -147,6 +156,7 @@ function StepDeliveryDetails({ form, onChange, onBack, onConfirm }) {
         />
       </div>
 
+      <ErrLine error={error} />
       <div style={styles.twoBtn}>
         <button style={styles.btnBack} onClick={onBack}>BACK</button>
         <button style={styles.btnConfirm} onClick={onConfirm}>CONFIRM</button>
@@ -156,7 +166,7 @@ function StepDeliveryDetails({ form, onChange, onBack, onConfirm }) {
 }
 
 // ─── Step 2 (Batch): Multiple Visitor Names ─────────────────────────────────
-function StepBatchDetails({ form, onChange, onUpdateName, onAddName, onRemoveName, onBack, onConfirm }) {
+function StepBatchDetails({ form, error, onChange, onUpdateName, onAddName, onRemoveName, onBack, onConfirm }) {
   return (
     <div style={styles.modalCard}>
       <button style={styles.backBtn} onClick={onBack}>‹</button>
@@ -211,6 +221,7 @@ function StepBatchDetails({ form, onChange, onUpdateName, onAddName, onRemoveNam
         </div>
       </div>
 
+      <ErrLine error={error} />
       <div style={styles.twoBtn}>
         <button style={styles.btnBack} onClick={onBack}>BACK</button>
         <button style={styles.btnConfirm} onClick={onConfirm}>CONFIRM</button>
@@ -220,7 +231,7 @@ function StepBatchDetails({ form, onChange, onUpdateName, onAddName, onRemoveNam
 }
 
 // ─── Step 3 (Single): Confirmation Summary ──────────────────────────────────
-function StepConfirm({ form, onCancel, onConfirmEntry }) {
+function StepConfirm({ form, error, submitting, onCancel, onConfirmEntry }) {
   const rows = [
     { label: 'Registration Type', value: 'Single' },
     { label: 'Visitor Name', value: form.name },
@@ -240,16 +251,19 @@ function StepConfirm({ form, onCancel, onConfirmEntry }) {
         ))}
       </div>
 
+      <ErrLine error={error} />
       <div style={styles.twoBtn}>
         <button style={styles.btnCancel} onClick={onCancel}>CANCEL</button>
-        <button style={styles.btnInk}   onClick={onConfirmEntry}>CONFIRM ENTRY</button>
+        <button style={{ ...styles.btnInk, opacity: submitting ? 0.6 : 1 }} disabled={submitting} onClick={onConfirmEntry}>
+          {submitting ? 'SAVING…' : 'CONFIRM ENTRY'}
+        </button>
       </div>
     </div>
   );
 }
 
 // ─── Step 3 (Delivery): Confirmation Summary ────────────────────────────────
-function StepDeliveryConfirm({ form, onCancel, onConfirmEntry }) {
+function StepDeliveryConfirm({ form, error, submitting, onCancel, onConfirmEntry }) {
   const rows = [
     { label: 'Registration Type', value: 'Delivery' },
     { label: 'Order ID', value: form.orderId },
@@ -269,16 +283,19 @@ function StepDeliveryConfirm({ form, onCancel, onConfirmEntry }) {
         ))}
       </div>
 
+      <ErrLine error={error} />
       <div style={styles.twoBtn}>
         <button style={styles.btnCancel} onClick={onCancel}>CANCEL</button>
-        <button style={styles.btnInk}   onClick={onConfirmEntry}>CONFIRM ENTRY</button>
+        <button style={{ ...styles.btnInk, opacity: submitting ? 0.6 : 1 }} disabled={submitting} onClick={onConfirmEntry}>
+          {submitting ? 'SAVING…' : 'CONFIRM ENTRY'}
+        </button>
       </div>
     </div>
   );
 }
 
 // ─── Step 3 (Batch): Confirmation Summary ───────────────────────────────────
-function StepBatchConfirm({ form, onCancel, onConfirmEntry }) {
+function StepBatchConfirm({ form, error, submitting, onCancel, onConfirmEntry }) {
   const validNames = form.names.map(n => n.trim()).filter(Boolean);
 
   return (
@@ -315,9 +332,12 @@ function StepBatchConfirm({ form, onCancel, onConfirmEntry }) {
         </div>
       </div>
 
+      <ErrLine error={error} />
       <div style={styles.twoBtn}>
         <button style={styles.btnCancel} onClick={onCancel}>CANCEL</button>
-        <button style={styles.btnInk}   onClick={onConfirmEntry}>CONFIRM ENTRY</button>
+        <button style={{ ...styles.btnInk, opacity: submitting ? 0.6 : 1 }} disabled={submitting} onClick={onConfirmEntry}>
+          {submitting ? 'SAVING…' : 'CONFIRM ENTRY'}
+        </button>
       </div>
     </div>
   );
@@ -347,22 +367,24 @@ export default function PreRegister() {
   const [savedCount, setSavedCount] = useState(0);
   const [form, setForm] = useState({ name: '', purpose: '', date: '', names: [''], orderId: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(''); // inline error (pumalit sa alert)
 
   const handleClose = () => navigate('/home');
 
   const handleSelectType = (type) => {
+    setError('');
     setRegType(type);
     setStep(2);
   };
 
-  const handleChange = (field, val) => setForm(p => ({ ...p, [field]: val }));
+  const handleChange = (field, val) => { setError(''); setForm(p => ({ ...p, [field]: val })); };
 
   // Batch name handlers
-  const updateName = (idx, val) => setForm(p => {
+  const updateName = (idx, val) => { setError(''); setForm(p => {
     const names = [...p.names];
     names[idx] = val;
     return { ...p, names };
-  });
+  }); };
   const addName = () => setForm(p => ({ ...p, names: [...p.names, ''] }));
   const removeName = (idx) => setForm(p => {
     if (p.names.length === 1) return p; // keep at least one
@@ -370,34 +392,33 @@ export default function PreRegister() {
   });
 
   const handleDetailsConfirm = () => {
+    setError('');
     if (regType === 'Batch') {
       const validNames = form.names.map(n => n.trim()).filter(Boolean);
-      if (validNames.length === 0) { alert('Please enter at least one visitor name.'); return; }
-      if (!form.date) { alert('Please select an expected date.'); return; }
+      if (validNames.length === 0) { setError('Please enter at least one visitor name.'); return; }
+      if (!form.date) { setError('Please select an expected date.'); return; }
       setStep(3);
       return;
     }
     if (regType === 'Delivery') {
-      if (!form.orderId.trim()) { alert('Please enter the Order ID.'); return; }
-      if (!form.date)           { alert('Please select an expected date.'); return; }
+      if (!form.orderId.trim()) { setError('Please enter the Order ID.'); return; }
+      if (!form.date)           { setError('Please select an expected date.'); return; }
       setStep(3);
       return;
     }
-    if (!form.name.trim()) { alert('Please enter a name.'); return; }
-    if (!form.date)        { alert('Please select an expected date.'); return; }
+    if (!form.name.trim()) { setError('Please enter a name.'); return; }
+    if (!form.date)        { setError('Please select an expected date.'); return; }
     setStep(3);
   };
 
   // Save to the BACKEND (database) via POST /api/registrations
   const handleConfirmEntry = async () => {
-    console.log('🔵 handleConfirmEntry called, submitting:', submitting, 'regType:', regType);
     if (submitting) return;
+    setError('');
     setSubmitting(true);
     try {
       const token = sessionStorage.getItem('sentricore_token');
-      console.log('🔵 token:', token ? 'yes' : 'NO TOKEN');
 
-      // Build the payload that the backend expects
       let payload;
       if (regType === 'Batch') {
         const validNames = form.names.map(n => n.trim()).filter(Boolean);
@@ -429,12 +450,10 @@ export default function PreRegister() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      console.log('🟢 SUCCESS, response:', res.data);
       setSavedCount(res.data.visitorCount || 1);
       setStep(4);
     } catch (err) {
-      console.log('🔴 ERROR:', err.response?.status, err.response?.data || err.message);
-      alert(err.response?.data?.message || 'Failed to save registration. Please try again.');
+      setError(err.response?.data?.message || 'Failed to save registration. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -442,6 +461,7 @@ export default function PreRegister() {
 
   const handleCancel = () => {
     setForm({ name: '', purpose: '', date: '', names: [''], orderId: '' });
+    setError('');
     setStep(1);
   };
 
@@ -459,27 +479,30 @@ export default function PreRegister() {
         {step === 2 && isBatch && (
           <StepBatchDetails
             form={form}
+            error={error}
             onChange={handleChange}
             onUpdateName={updateName}
             onAddName={addName}
             onRemoveName={removeName}
-            onBack={() => setStep(1)}
+            onBack={() => { setError(''); setStep(1); }}
             onConfirm={handleDetailsConfirm}
           />
         )}
         {step === 2 && isDelivery && (
           <StepDeliveryDetails
             form={form}
+            error={error}
             onChange={handleChange}
-            onBack={() => setStep(1)}
+            onBack={() => { setError(''); setStep(1); }}
             onConfirm={handleDetailsConfirm}
           />
         )}
         {step === 2 && !isBatch && !isDelivery && (
           <StepDetails
             form={form}
+            error={error}
             onChange={handleChange}
-            onBack={() => setStep(1)}
+            onBack={() => { setError(''); setStep(1); }}
             onConfirm={handleDetailsConfirm}
           />
         )}
@@ -487,6 +510,8 @@ export default function PreRegister() {
         {step === 3 && isBatch && (
           <StepBatchConfirm
             form={form}
+            error={error}
+            submitting={submitting}
             onCancel={handleCancel}
             onConfirmEntry={handleConfirmEntry}
           />
@@ -494,6 +519,8 @@ export default function PreRegister() {
         {step === 3 && isDelivery && (
           <StepDeliveryConfirm
             form={form}
+            error={error}
+            submitting={submitting}
             onCancel={handleCancel}
             onConfirmEntry={handleConfirmEntry}
           />
@@ -501,6 +528,8 @@ export default function PreRegister() {
         {step === 3 && !isBatch && !isDelivery && (
           <StepConfirm
             form={form}
+            error={error}
+            submitting={submitting}
             onCancel={handleCancel}
             onConfirmEntry={handleConfirmEntry}
           />
@@ -571,6 +600,11 @@ const styles = {
     outline: 'none', boxSizing: 'border-box', color: COLORS.ink,
     minWidth: 0, maxWidth: '100%', display: 'block',
     WebkitAppearance: 'none', appearance: 'none',
+  },
+  errText: {
+    fontFamily: "'Poppins', sans-serif", fontSize: 12, color: '#b91c1c',
+    background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
+    padding: '9px 12px', marginTop: 4, marginBottom: 2,
   },
   nameList: {
     display: 'flex', flexDirection: 'column', gap: 8,

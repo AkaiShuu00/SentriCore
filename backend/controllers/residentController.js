@@ -5,6 +5,16 @@ const { encrypt, decrypt } = require('../config/crypto');
 // ⬇️ CHANGE: account welcome email (username + password)
 const { sendAccountEmail } = require('../config/mailer');
 
+// ⬇️ CHANGE (#5): phone validation — valid PH mobile/landline para matawagan.
+function validatePhone(raw) {
+  if (raw === null || raw === undefined || String(raw).trim() === '') return { ok: true, value: null };
+  const v = String(raw).replace(/[\s()\-]/g, '');
+  const mobile = /^(09\d{9}|\+639\d{9})$/;
+  const landline = /^(\+?63)?0?\d{7,10}$/;
+  if (mobile.test(v) || landline.test(v)) return { ok: true, value: v };
+  return { ok: false, value: v };
+}
+
 // GET /api/residents  (Admin) - list all residents
 async function getResidents(req, res) {
   try {
@@ -15,11 +25,10 @@ async function getResidents(req, res) {
        JOIN Users u ON u.user_id = r.user_id
        ORDER BY r.resident_id`
     );
-    // ⬇️ CHANGE: i-decrypt ang phone_number + email bago ibalik (plaintext rows ay babasahin pa rin)
+    // ⬇️ CHANGE: phone_number lang ang encrypted; email ay plaintext (lookup key sa forgot-password)
     const out = rows.map((r) => ({
       ...r,
       phone_number: decrypt(r.phone_number),
-      email: decrypt(r.email),
     }));
     res.json(out);
   } catch (err) {
@@ -35,6 +44,12 @@ async function createResident(req, res) {
 
     if (!username || !password || !fullName) {
       return res.status(400).json({ message: 'Username, password, and full name are required.' });
+    }
+    // ⬇️ CHANGE (#5): i-validate ang phone
+    const ph = validatePhone(phone);
+    if (!ph.ok) {
+      conn.release();
+      return res.status(400).json({ message: 'Invalid contact number. Use a valid PH mobile (09XXXXXXXXX) or landline.' });
     }
 
     const [existing] = await conn.query('SELECT user_id FROM Users WHERE username = ?', [username]);
@@ -53,7 +68,7 @@ async function createResident(req, res) {
     await conn.query(
       `INSERT INTO Residents (user_id, full_name, unit_address, phone_number, email)
        VALUES (?, ?, ?, ?, ?)`,
-      [u.insertId, fullName, address || null, encrypt(phone || null), encrypt(email || null)]
+      [u.insertId, fullName, address || null, encrypt(ph.value), email || null]
     );
 
     await conn.commit();
@@ -84,12 +99,17 @@ async function updateResident(req, res) {
   try {
     const { id } = req.params;
     const { fullName, address, phone, email } = req.body;
+    // ⬇️ CHANGE (#5): i-validate ang phone
+    const ph = validatePhone(phone);
+    if (!ph.ok) {
+      return res.status(400).json({ message: 'Invalid contact number. Use a valid PH mobile (09XXXXXXXXX) or landline.' });
+    }
 
-    // ⬇️ CHANGE: i-encrypt ang phone_number + email bago i-update
+    // ⬇️ CHANGE: i-encrypt ang phone_number bago i-update (email plaintext)
     const [result] = await pool.query(
       `UPDATE Residents SET full_name = ?, unit_address = ?, phone_number = ?, email = ?
        WHERE resident_id = ?`,
-      [fullName, address || null, encrypt(phone || null), encrypt(email || null), id]
+      [fullName, address || null, encrypt(ph.value), email || null, id]
     );
 
     if (result.affectedRows === 0) {
@@ -126,8 +146,8 @@ async function getMyProfile(req, res) {
       [req.user.residentId]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Profile not found.' });
-    // ⬇️ CHANGE: i-decrypt bago ibalik sa resident
-    const me = { ...rows[0], phone_number: decrypt(rows[0].phone_number), email: decrypt(rows[0].email) };
+    // ⬇️ CHANGE: phone_number lang ang encrypted; email plaintext
+    const me = { ...rows[0], phone_number: decrypt(rows[0].phone_number) };
     res.json(me);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching profile.', error: err.message });

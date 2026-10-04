@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, Settings, X, KeyRound } from 'lucide-react';
+import { Search, Settings, X, KeyRound, Trash2 } from 'lucide-react';
 import {
   adminListResidents, adminResidentActive, adminAddResident,
-  adminUpdateResident, adminResetResidentPassword,
+  adminUpdateResident, adminResetResidentPassword, adminDeleteResident,
 } from '../../api';
+
+// #5: PH phone validation (mobile 09XXXXXXXXX / +639XXXXXXXXX o landline)
+function isValidPhone(raw) {
+  if (!raw || !String(raw).trim()) return true; // optional
+  const v = String(raw).replace(/[\s()\-]/g, '');
+  return /^(09\d{9}|\+639\d{9})$/.test(v) || /^(\+?63)?0?\d{7,10}$/.test(v);
+}
 
 export default function AdminResidents() {
   const [search, setSearch] = useState('');
@@ -18,6 +25,8 @@ export default function AdminResidents() {
   const [showAdd, setShowAdd] = useState(false);
   const [editModal, setEditModal] = useState(null);
   const [credModal, setCredModal] = useState(null); // ipinapakitang generated credentials
+  const [delModal, setDelModal] = useState(null);   // #1: delete confirm
+  const [delBusy, setDelBusy] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -111,9 +120,11 @@ export default function AdminResidents() {
                 </button>
               </span>
               <span className="text-center font-bold">{r.monthlyVisitors}</span>
-              <span className="text-center">
+              <span className="text-center flex items-center justify-center gap-1">
                 <button onClick={() => setEditModal({ ...r })} title="Edit / Settings"
                         className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink"><Settings size={16} /></button>
+                <button onClick={() => setDelModal({ ...r })} title="Delete Resident"
+                        className="w-8 h-8 rounded-full hover:bg-red-50 flex items-center justify-center text-red-600"><Trash2 size={16} /></button>
               </span>
             </div>
           ))}
@@ -181,6 +192,36 @@ export default function AdminResidents() {
           } catch (err) { alert(err.response?.data?.message || 'Failed to update.'); }
         }} />}
 
+      {/* #1: Delete Resident confirm modal */}
+      {delModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setDelModal(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-7 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4"><Trash2 size={28} className="text-red-600" /></div>
+            <h2 className="text-lg font-extrabold text-ink mb-1">Delete Resident?</h2>
+            <p className="text-sm text-ink/60 mb-5">
+              Delete <span className="font-bold text-ink">{delModal.fullName}</span>? If they have visitor records, the account will be deactivated instead to keep history.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDelModal(null)} className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">Cancel</button>
+              <button disabled={delBusy} onClick={async () => {
+                        setDelBusy(true);
+                        try {
+                          const res = await adminDeleteResident(delModal.residentId);
+                          setDelModal(null);
+                          load();
+                          if (res.data?.deactivated) alert(res.data.message || 'Resident deactivated (has records).');
+                        } catch (err) {
+                          alert(err.response?.data?.message || 'Failed to delete resident.');
+                        } finally { setDelBusy(false); }
+                      }}
+                      className="flex-1 py-3 rounded-full text-white font-bold text-sm disabled:opacity-60" style={{ backgroundColor: '#C0392B' }}>
+                {delBusy ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Generated credentials modal */}
       {credModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setCredModal(null)}>
@@ -216,6 +257,7 @@ function ResidentForm({ title, initial, showReset, onClose, onSubmit, onReset })
     contact: initial?.contact || '',
     email: initial?.email || '',
   });
+  const [formErr, setFormErr] = useState('');
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={onClose}>
@@ -240,6 +282,9 @@ function ResidentForm({ title, initial, showReset, onClose, onSubmit, onReset })
           ))}
         </div>
 
+        {/* #5: inline error (hindi na alert) */}
+        {formErr && <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{formErr}</p>}
+
         {showReset && (
           <button onClick={onReset} className="w-full mt-4 py-2.5 rounded-full border border-amber-400 text-amber-700 font-bold text-sm bg-amber-50">
             Reset Password (records stay intact)
@@ -249,7 +294,9 @@ function ResidentForm({ title, initial, showReset, onClose, onSubmit, onReset })
         <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">Cancel</button>
           <button onClick={() => {
-                    if (!form.fullName.trim() || !form.address.trim()) { alert('Full name and address are required.'); return; }
+                    setFormErr('');
+                    if (!form.fullName.trim() || !form.address.trim()) { setFormErr('Full name and address are required.'); return; }
+                    if (!isValidPhone(form.contact)) { setFormErr('Invalid contact number. Use a valid PH mobile (09XXXXXXXXX) or landline.'); return; }
                     onSubmit(form);
                   }}
                   className="flex-1 py-3 rounded-full text-white font-bold text-sm" style={{ backgroundColor: '#0F6E6E' }}>
