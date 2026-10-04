@@ -9,7 +9,7 @@ export default function Schedule() {
   const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
   // #4: reflect ang napiling avatar sa top nav
   const AVATARS = { male: '/avatars/male.png', female: '/avatars/female.png' };
-  const avatarChoice = (() => { try { return sessionStorage.getItem('sentricore_avatar') || 'default'; } catch { return 'default'; } })();
+  const avatarChoice = (() => { try { return localStorage.getItem('sentricore_avatar') || 'default'; } catch { return 'default'; } })();
   const avatarSrc = AVATARS[avatarChoice] || null;
 
   const [search, setSearch] = useState('');

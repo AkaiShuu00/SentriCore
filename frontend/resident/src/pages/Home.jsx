@@ -9,12 +9,17 @@ import {
   MessageSquareWarning, DoorOpen, CalendarDays, FileText, Search, Inbox, Archive,
 } from 'lucide-react';
 
+// #4: parehong avatar mapping gaya sa Profile — para mag-reflect ang napiling icon sa nav.
+const AVATARS = { male: '/avatars/male.png', female: '/avatars/female.png' };
+
 export default function Home() {
   const navigate = useNavigate();
   const { t } = useT();
   const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  // #4: basahin ang napiling avatar (galing Profile, naka-save sa sessionStorage)
+  const avatarChoice = (() => { try { return localStorage.getItem('sentricore_avatar') || 'default'; } catch { return 'default'; } })();
+  const avatarSrc = AVATARS[avatarChoice] || null;
   const [unread, setUnread] = useState(0);
-  const [search, setSearch] = useState('');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [showAnnouncements, setShowAnnouncements] = useState(false);
@@ -102,16 +107,19 @@ export default function Home() {
   // Listahan = base sa piniling araw (default: today)
   const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
   const daySchedule = allRows.filter((s) => s.expectedDate === selectedISO);
-  const filteredSchedule = daySchedule.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredSchedule = daySchedule;   // #7: inalis ang search bar
 
   return (
     <div className="min-h-screen bg-cream pb-24 max-w-md mx-auto relative">
       {/* Header */}
       <header className="bg-ink px-5 py-6 rounded-b-3xl flex items-center justify-between">
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><User size={20} className="text-ink" /></div>
+          {/* #4: ipakita ang napiling avatar (B&W default) katabi ng pangalan */}
+          <div className="w-10 h-10 rounded-full bg-ink flex items-center justify-center overflow-hidden">
+            {avatarSrc
+              ? <img src={avatarSrc} alt={user.name || 'Resident'} className="w-full h-full object-cover" />
+              : <User size={20} className="text-white" />}
+          </div>
           <span className="font-bold text-ink">{user.name || 'Resident'}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -242,14 +250,6 @@ export default function Home() {
             })}
           </div>
           <button onClick={() => scrollDates(1)} className="text-ink/40 text-2xl shrink-0">›</button>
-        </div>
-
-        {/* Search */}
-        <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow mt-4">
-          <Search size={18} className="text-ink/40" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-                 placeholder={t('Search name', 'Maghanap ng pangalan')}
-                 className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
         </div>
 
         {/* Schedule list */}

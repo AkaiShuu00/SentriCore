@@ -5,11 +5,17 @@ import { User, Search, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'VISITORS', 'DELIVERIES'];
 
+// #4: parehong avatar mapping — para mag-reflect ang napiling icon sa nav
+const AVATARS = { male: '/avatars/male.png', female: '/avatars/female.png' };
+
 const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
 
 export default function History() {
   const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
+  // #4: napiling avatar (galing Profile, naka-save sa localStorage)
+  const avatarChoice = (() => { try { return localStorage.getItem('sentricore_avatar') || 'default'; } catch { return 'default'; } })();
+  const avatarSrc = AVATARS[avatarChoice] || null;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [showCalendar, setShowCalendar] = useState(false);
@@ -96,7 +102,12 @@ export default function History() {
       {/* Header */}
       <header className="bg-ink px-5 py-6">
         <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center"><User size={20} className="text-ink" /></div>
+          {/* #4: ipakita ang napiling avatar (B&W default) */}
+          <div className="w-10 h-10 rounded-full bg-ink flex items-center justify-center overflow-hidden">
+            {avatarSrc
+              ? <img src={avatarSrc} alt={user.name || 'Resident'} className="w-full h-full object-cover" />
+              : <User size={20} className="text-white" />}
+          </div>
           <span className="font-bold text-ink">{user.name || 'Resident'}</span>
         </div>
       </header>
