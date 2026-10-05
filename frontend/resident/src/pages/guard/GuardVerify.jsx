@@ -91,6 +91,7 @@ export default function GuardVerify() {
   const [exitNote, setExitNote] = useState('');                 // optional exit note (1 of 4 choices)
   const [exitAdditionalNote, setExitAdditionalNote] = useState(''); // optional free-text
   const [showBackConfirm, setShowBackConfirm] = useState(false);    // #6: confirm back kapag may na-scan na
+  const [dbg, setDbg] = useState('');   // TEMP on-screen debug (iOS — alert suppressed)
   const [adminContact, setAdminContact] = useState({ name: 'HOA Administrator', phone: '' }); // #3: HOA call number
   const [matchData, setMatchData] = useState({});
   const [candidates, setCandidates] = useState([]);   // all matching candidates (disambiguation)
@@ -465,6 +466,7 @@ export default function GuardVerify() {
       });
       const data = await res.json();
       console.log('🟢 OCR response:', data);
+      setDbg('OCR → status ' + res.status + ' | ' + JSON.stringify(data).slice(0, 300));  // TEMP
 
       if (data.success && data.suggestedName) {
         const scanned = data.suggestedName;
@@ -497,21 +499,27 @@ export default function GuardVerify() {
         else {
           setScannedName(scanned);
           try {
-            const matchRes = await fetch(
-              `${API}/entry/match?name=${encodeURIComponent(scanned)}`,
-              { headers: authHeaders() }
-            );
-            const matchJson = await matchRes.json();
-            console.log('🟣 match result:', matchJson);
-            if (matchJson.matched && matchJson.candidates.length === 1) {
-              // Only one → auto-select
-              const c = matchJson.candidates[0];
-              setMatchData(candidateToMatch(c, scanned));
-              setScannedName(c.registeredName || scanned);
+            // Subukan ang LAHAT ng OCR candidates (hindi lang ang best) hanggang may tumama —
+            // matibay kahit mamali ang ranking ng OCR name extraction.
+            const ocrCandidates = Array.isArray(data.candidates) ? data.candidates : [];
+            const tryNames = [scanned, ...ocrCandidates].filter((v, i, a) => v && a.indexOf(v) === i);
+            let picked = null;
+            let lastStatus = '';
+            for (const nm of tryNames) {
+              const mr = await fetch(`${API}/entry/match?name=${encodeURIComponent(nm)}`, { headers: authHeaders() });
+              lastStatus = mr.status;
+              const mj = await mr.json();
+              if (mj.matched && mj.candidates && mj.candidates.length >= 1) { picked = { nm, mj }; break; }
+            }
+            console.log('🟣 match result:', picked);
+            setDbg((d) => d + ' || MATCH status ' + lastStatus + ' tried=[' + tryNames.join(', ') + '] picked=' + (picked ? picked.nm : 'none'));  // TEMP
+            if (picked && picked.mj.candidates.length === 1) {
+              const c = picked.mj.candidates[0];
+              setMatchData(candidateToMatch(c, picked.nm));
+              setScannedName(c.registeredName || picked.nm);
               multiRef.current = false;
-            } else if (matchJson.matched && matchJson.candidates.length > 1) {
-              // Multiple → SELECT VISITOR (guard chooses)
-              setCandidates(matchJson.candidates);
+            } else if (picked && picked.mj.candidates.length > 1) {
+              setCandidates(picked.mj.candidates);
               multiRef.current = true;
             } else {
               setMatchData({});
@@ -527,6 +535,7 @@ export default function GuardVerify() {
       }
     } catch (err) {
       setOcrError('OCR service unavailable. Please type the name manually.');
+      setDbg('ERROR: ' + (err && err.message ? err.message : String(err)));  // TEMP
     } finally {
       setStep(afterReading());
     }
@@ -864,6 +873,19 @@ export default function GuardVerify() {
         <button onClick={handleBack} className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-ink font-bold">‹</button>
         <span className="text-white font-bold text-lg">Back</span>
       </header>
+
+      {/* TEMP DEBUG BANNER — tanggalin kapag naayos na */}
+      {dbg && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+                      background: '#111', color: '#0f0', fontSize: 11, lineHeight: 1.3,
+                      padding: '8px 10px', maxHeight: '40vh', overflowY: 'auto', wordBreak: 'break-all' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <b style={{ color: '#fff' }}>DEBUG</b>
+            <button onClick={() => setDbg('')} style={{ color: '#fff', background: 'transparent', border: '1px solid #555', borderRadius: 6, padding: '1px 8px' }}>×</button>
+          </div>
+          {dbg}
+        </div>
+      )}
 
       <div className="px-6 py-8">
         {/* SCAN ID */}
