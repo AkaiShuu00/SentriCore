@@ -148,10 +148,14 @@ export default function AdminReports() {
         <h1 className="text-3xl font-extrabold text-teal-800">Reports</h1>
         <p className="text-sm text-ink/60">Generated reports and long-term analytics.</p>
       </div>
-      <div className="flex gap-2">
-        <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
-        <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
-      </div>
+      {/* Export buttons — nasa sub-views lang (Monthly, Complaints, Incident, Audit).
+          Walang export sa main Reports/overview tab. */}
+      {view !== 'overview' && (
+        <div className="flex gap-2">
+          <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
+          <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
+        </div>
+      )}
     </div>
   );
 

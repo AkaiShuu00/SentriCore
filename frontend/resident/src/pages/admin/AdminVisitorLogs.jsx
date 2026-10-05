@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { X, FileDown, FileSpreadsheet } from 'lucide-react';
+import { Search, X, FileDown, FileSpreadsheet } from 'lucide-react';
 import { getAllVisitorLogs } from '../../api';
 import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
@@ -18,6 +18,7 @@ const STATUSES = ['All Status', 'Active', 'Departed'];
 const fmt = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-----';
 
 export default function AdminVisitorLogs() {
+  const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [detail, setDetail] = useState(null);
@@ -50,7 +51,11 @@ export default function AdminVisitorLogs() {
 
   const filtered = logs
     .filter((l) => typeFilter === 'All Types' || l.type === typeFilter)
-    .filter((l) => statusFilter === 'All Status' || l.status === statusFilter);
+    .filter((l) => statusFilter === 'All Status' || l.status === statusFilter)
+    .filter((l) => {
+      const q = search.toLowerCase();
+      return !q || l.visitor.toLowerCase().includes(q) || l.pass.toLowerCase().includes(q) || l.resident.toLowerCase().includes(q);
+    });
 
   const modalTitle = { visitor: 'Visitor Details', delivery: 'Delivery Details' };
 
@@ -75,8 +80,13 @@ export default function AdminVisitorLogs() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4">
-        {/* Filters — #6: tinanggal ang search bar */}
+        {/* Filters — may search bar para mabilis hanapin ang bisita */}
         <div className="flex gap-2 mb-4">
+          <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
+            <Search size={18} className="text-ink/40" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search visitor, resident, pass..."
+                   className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
+          </div>
           <input type="date" className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm text-ink outline-none" />
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
                   className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
