@@ -206,6 +206,7 @@ async def extract_name(file: UploadFile = File(...)):
                         })
 
         suggested_name = extract_visitor_name(lines)
+        suggested_name = (suggested_name or "").upper()   # iisang format: ALL CAPS
         print(f"TOTAL: {time.time() - t0:.2f}s  ->  name: '{suggested_name}'")
 
         return {"success": True, "suggestedName": suggested_name, "allLines": lines}
