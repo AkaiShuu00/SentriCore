@@ -10,7 +10,6 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showNoAccount, setShowNoAccount] = useState(false);
 
   async function handleSignIn() {
     setError('');
@@ -23,7 +22,6 @@ export default function SignIn() {
       const res = await axios.post(`${API}/auth/login`, { username, password });
 
       const user = res.data.user;
-      // localStorage (pare-pareho sa buong app)
       sessionStorage.setItem('sentricore_token', res.data.token);
       sessionStorage.setItem('sentricore_user', JSON.stringify(user));
       const role = (user.role || '').toLowerCase();
@@ -50,7 +48,7 @@ export default function SignIn() {
         <div className="px-8">
           <h2 className="text-4xl font-extrabold text-ink text-center my-8">SIGN IN</h2>
 
-          <label className="block text-lg font-bold text-ink mb-2">Username</label>
+          <label className="block text-lg font-semibold text-ink mb-2">Username</label>
           <input
             type="text"
             value={username}
@@ -59,7 +57,7 @@ export default function SignIn() {
             className="w-full bg-black/5 border border-ink/20 rounded-2xl px-5 py-4 text-ink placeholder-ink/40 focus:outline-none focus:ring-2 focus:ring-ink/30 mb-5"
           />
 
-          <label className="block text-lg font-bold text-ink mb-2">Password</label>
+          <label className="block text-lg font-semibold text-ink mb-2">Password</label>
           <input
             type="password"
             value={password}
@@ -83,50 +81,12 @@ export default function SignIn() {
           <button
             onClick={handleSignIn}
             disabled={loading}
-            className="w-full bg-ink text-white font-bold text-xl py-4 rounded-full mt-6 active:scale-95 transition disabled:opacity-60"
+            className="w-full bg-ink text-white font-semibold text-xl py-4 rounded-full mt-6 active:scale-95 transition disabled:opacity-60 whitespace-nowrap"
           >
             {loading ? 'SIGNING IN...' : 'SIGN IN'}
           </button>
-
-          {/* Sign up → modal */}
-          <p className="text-center text-ink mt-5 mb-10">
-            Don't have an account?{' '}
-            <button onClick={() => setShowNoAccount(true)} className="font-bold underline">
-              SIGN UP
-            </button>
-          </p>
         </div>
-
-        {/* No account modal */}
-        {showNoAccount && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center px-6">
-            <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full">
-              <div className="flex justify-center mb-4"><NoAccountIcon /></div>
-              <h3 className="text-2xl font-extrabold text-ink mb-3">Don't have an account?</h3>
-              <p className="text-ink/70 mb-6">
-                Please contact your HOA administrator to request for initial login credentials.
-              </p>
-              <button
-                onClick={() => setShowNoAccount(false)}
-                className="w-full bg-ink text-white font-bold py-4 rounded-full active:scale-95 transition"
-              >
-                BACK TO SIGN IN
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
-  );
-}
-
-function NoAccountIcon() {
-  return (
-    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="36" cy="27" r="9" fill="#112D31" />
-      <path d="M20 52c0-9 7-16 16-16s16 7 16 16" fill="#112D31" />
-      <circle cx="36" cy="36" r="30" stroke="#112D31" strokeWidth="5" fill="none" />
-      <line x1="16" y1="16" x2="56" y2="56" stroke="#112D31" strokeWidth="5" strokeLinecap="round" />
-    </svg>
   );
 }

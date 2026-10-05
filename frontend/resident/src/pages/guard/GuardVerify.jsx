@@ -929,8 +929,8 @@ export default function GuardVerify() {
                   </button>
                 ) : (!isDriverFlow) ? (
                   <button onClick={() => { stopCamera(); loadRegistered(); setRegSearch(''); setStep('visitorSearch'); }}
-                          className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                    SEARCH REGISTERED VISITOR
+                          className="flex-1 py-3 rounded-full text-sm font-semibold text-white whitespace-nowrap" style={{ backgroundColor: '#112D31' }}>
+                    Registered Visitors
                   </button>
                 ) : (
                   <button onClick={() => { stopCamera(); setStep('reading'); }}

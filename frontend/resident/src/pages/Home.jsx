@@ -170,9 +170,8 @@ export default function Home() {
         {/* Quick Actions */}
         <div className="bg-white rounded-3xl p-5 shadow mt-6">
           <h3 className="text-lg font-extrabold text-ink mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-4 gap-2 text-center">
+          <div className="grid grid-cols-3 gap-3 text-center">
             {[
-              { Icon: UserPlus, label: 'Pre-Register', bg: 'bg-teal-100', action: () => navigate('/pre-register') },
               { Icon: CalendarClock, label: 'Expected Visitors', bg: 'bg-blue-100', action: () => navigate('/schedule') },
               { Icon: Phone, label: 'Contact Guard', bg: 'bg-purple-100', action: () => navigate('/contact-guard') },
               { Icon: MessageSquareWarning, label: 'Complaints', bg: 'bg-yellow-100', action: () => navigate('/complaints') },

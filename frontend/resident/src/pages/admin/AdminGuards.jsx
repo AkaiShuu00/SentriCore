@@ -1,18 +1,12 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import { useRef } from 'react';
-import { Search, Settings, X, KeyRound, Trash2, Plus, User, Camera } from 'lucide-react';
+import { Settings, X, KeyRound, Trash2, Plus, User, Camera, FileDown, FileSpreadsheet } from 'lucide-react';
 import {
   adminListGuards, adminAddGuard, adminUpdateGuard,
   adminAssignGate, adminResetGuardPassword, adminDeleteGuard,
 } from '../../api';
-
-const dutyBg = (s) => {
-  const v = (s || '').toLowerCase();
-  if (v.includes('on')) return { backgroundColor: '#2ea44f', color: '#fff' };   // On Duty
-  if (v.includes('break')) return { backgroundColor: '#F1C542', color: '#5a4a12' };
-  return { backgroundColor: '#B7B7B7', color: '#fff' };                          // Off Duty
-};
+import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
 const GATE_LABEL = (id) => (id ? `GATE ${String(id).toUpperCase()}` : 'UNASSIGNED');
 
@@ -27,7 +21,6 @@ function Avatar({ src, size = 40 }) {
   );
 }
 
-// I-crop sa square + i-resize (max 320px) → base64 (para maliit lang ang 1x1 photo)
 const fileToSquare = (file, max = 320) =>
   new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -47,7 +40,6 @@ const fileToSquare = (file, max = 320) =>
   });
 
 export default function AdminGuards() {
-  const [search, setSearch] = useState('');
   const [guards, setGuards] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,22 +57,26 @@ export default function AdminGuards() {
   };
   useEffect(() => { load(); }, []);
 
-  const match = (g) => g.fullName.toLowerCase().includes(search.toLowerCase());
-
   // Isang gate lang ang komunidad — distinct gateId na meron, o Gate 1 bilang default
   const gateIds = Array.from(new Set(guards.map((g) => g.gateId).filter((x) => x != null)));
   if (gateIds.length === 0) gateIds.push('1');
   gateIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
   const hasUnassigned = guards.some((g) => g.gateId == null);
 
+  // #2 — Working exports (guard roster)
+  const EXPORT_HEADER = ['Full Name', 'Username', 'Gate', 'Shift', 'Contact'];
+  const exportRows = () => guards.map((g) => [g.fullName, g.username, g.gate || GATE_LABEL(g.gateId), (g.shift && g.shift !== '—') ? g.shift : 'No shift set', g.contact || '—']);
+  const doExcel = () => exportExcel('guard-roster', 'Guards', EXPORT_HEADER, exportRows());
+  const doPDF = () => exportPDF('Guard Roster', EXPORT_HEADER, exportRows(), { subtitle: 'Gate assignments, shifts, and guard accounts' });
+
   const GateCard = ({ gateId }) => {
-    const list = guards.filter((g) => String(g.gateId ?? '') === String(gateId ?? '') && match(g));
+    const list = guards.filter((g) => String(g.gateId ?? '') === String(gateId ?? ''));
     return (
       <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#EFEBDD' }}>
-          <span className="font-extrabold text-ink">{GATE_LABEL(gateId)}</span>
+          <span className="font-bold text-ink">{GATE_LABEL(gateId)}</span>
           <button onClick={() => setAssignModal({ gateId })}
-                  className="flex items-center gap-1 text-white text-xs font-bold px-3 py-1.5 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>
+                  className="flex items-center gap-1 text-white text-xs font-medium px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
             <Plus size={14} /> Assign Guard
           </button>
         </div>
@@ -93,7 +89,7 @@ export default function AdminGuards() {
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar src={g.photo} />
                   <div className="min-w-0">
-                    <p className="font-bold text-ink truncate">{g.fullName}</p>
+                    <p className="font-semibold text-ink truncate">{g.fullName}</p>
                     <p className="text-xs text-ink/60">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
                     <p className="text-[11px] text-ink/50 truncate">{g.username}</p>
                   </div>
@@ -118,18 +114,19 @@ export default function AdminGuards() {
           <h1 className="text-3xl font-extrabold text-teal-800">Guards</h1>
           <p className="text-sm text-ink/60">Gate assignments, shifts, and guard accounts.</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-                className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>
-          <Plus size={16} /> Add Guard
-        </button>
+        {/* #2 exports + Add Guard */}
+        <div className="flex gap-2">
+          <button onClick={doPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
+          <button onClick={doExcel} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileSpreadsheet size={16} /> Export Excel</button>
+          <button onClick={() => setShowAdd(true)}
+                  className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+            <Plus size={16} /> Add Guard
+          </button>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 rounded-full px-4 py-2 mb-5 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
-        <Search size={18} className="text-ink/40" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
-               className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
-      </div>
+      {/* #4a / #6 — tinanggal ang On Duty/On Break/Off Duty filter at ang search bar
+          (nasa resident Contact Guard na sila). */}
 
       {loading ? (
         <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
@@ -183,7 +180,7 @@ export default function AdminGuards() {
                           catch (err) { alert(err.response?.data?.message || 'Failed to assign.'); }
                         }}
                         className="w-full text-left rounded-xl p-3 border border-gray-200 hover:border-teal-500 flex items-center justify-between">
-                  <span className="font-semibold text-ink text-sm">{g.fullName}</span>
+                  <span className="font-medium text-ink text-sm">{g.fullName}</span>
                   <span className="text-xs text-ink/50">Currently: {g.gate}</span>
                 </button>
               ))}
@@ -200,16 +197,16 @@ export default function AdminGuards() {
             <h2 className="text-lg font-extrabold text-ink mb-1">Guard Login Credentials</h2>
             <p className="text-sm text-ink/60 mb-4">Ibigay ito sa guard. Ipakita lang isang beses.</p>
             <div className="rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
-              <p className="text-xs font-bold text-ink/50">Username</p>
-              <p className="text-base font-extrabold text-teal-800 mb-2">{credModal.username}</p>
-              <p className="text-xs font-bold text-ink/50">Temporary Password</p>
-              <p className="text-base font-extrabold text-teal-800">{credModal.password}</p>
+              <p className="text-xs font-semibold text-ink/50">Username</p>
+              <p className="text-base font-bold text-teal-800 mb-2">{credModal.username}</p>
+              <p className="text-xs font-semibold text-ink/50">Temporary Password</p>
+              <p className="text-base font-bold text-teal-800">{credModal.password}</p>
             </div>
             <button onClick={() => {
                       navigator.clipboard?.writeText(`Username: ${credModal.username}\nPassword: ${credModal.password}`);
                       setCredModal(null);
                     }}
-                    className="w-full text-white font-bold py-3 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>Copy & Close</button>
+                    className="w-full text-white font-semibold py-3 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>Copy & Close</button>
           </div>
         </div>
       )}
@@ -241,9 +238,9 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
         <h2 className="text-xl font-extrabold text-ink mb-1">{title}</h2>
         {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
-        {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-bold">{initial.username}</span></p>}
+        {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-semibold">{initial.username}</span></p>}
 
-        {/* Profile photo (1x1) — icon fallback kung wala pa */}
+        {/* Profile photo (1x1) */}
         <div className="flex flex-col items-center mb-4">
           <div className="relative">
             <Avatar src={form.photo} size={84} />
@@ -257,24 +254,24 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
           <p className="text-[11px] text-ink/50 mt-2">Upload 1x1 photo (optional)</p>
           {form.photo && (
             <button type="button" onClick={() => setForm((f) => ({ ...f, photo: null }))}
-                    className="text-[11px] font-bold text-red-600 mt-1">Remove photo</button>
+                    className="text-[11px] font-semibold text-red-600 mt-1">Remove photo</button>
           )}
         </div>
 
         <div className="space-y-3 mt-2">
           <div>
-            <label className="block text-xs font-bold text-ink mb-1">Full Name</label>
+            <label className="block text-xs font-semibold text-ink mb-1">Full Name</label>
             <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                    placeholder="Carlos Aquino" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
           </div>
           <div>
-            <label className="block text-xs font-bold text-ink mb-1">Contact Number</label>
+            <label className="block text-xs font-semibold text-ink mb-1">Contact Number</label>
             <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })}
                    placeholder="0917 123 4567" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-ink mb-1">Gate Assignment</label>
+              <label className="block text-xs font-semibold text-ink mb-1">Gate Assignment</label>
               <select value={form.gateId} onChange={(e) => setForm({ ...form, gateId: e.target.value })}
                       className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
                 <option value="">Select Gate</option>
@@ -282,7 +279,7 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-ink mb-1">Shift Schedule</label>
+              <label className="block text-xs font-semibold text-ink mb-1">Shift Schedule</label>
               <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}
                       className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
                 <option value="">Select Shift</option>
@@ -293,25 +290,25 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
           </div>
           {initial && (
             <div className="rounded-xl px-4 py-3 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
-              Duty status is <span className="font-bold">automatic</span> — On Duty while the guard is logged in within their shift, Off Duty once the shift time ends.
+              Duty status is <span className="font-semibold">automatic</span> — On Duty while the guard is logged in within their shift, Off Duty once the shift time ends.
             </div>
           )}
         </div>
 
         {showManage && (
           <div className="flex gap-2 mt-4">
-            <button onClick={onReset} className="flex-1 py-2.5 rounded-full border border-amber-400 text-amber-700 font-bold text-xs bg-amber-50 flex items-center justify-center gap-1"><KeyRound size={14} /> Reset Password</button>
-            <button onClick={onDelete} className="flex-1 py-2.5 rounded-full border border-red-300 text-red-700 font-bold text-xs bg-red-50 flex items-center justify-center gap-1"><Trash2 size={14} /> Delete Guard</button>
+            <button onClick={onReset} className="flex-1 py-2.5 rounded-full border border-amber-400 text-amber-700 font-medium text-xs bg-amber-50 flex items-center justify-center gap-1 whitespace-nowrap"><KeyRound size={14} /> Reset Password</button>
+            <button onClick={onDelete} className="flex-1 py-2.5 rounded-full border border-red-300 text-red-700 font-medium text-xs bg-red-50 flex items-center justify-center gap-1 whitespace-nowrap"><Trash2 size={14} /> Delete Guard</button>
           </div>
         )}
 
         <div className="flex gap-3 mt-5">
-          <button onClick={onClose} className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-full border border-gray-300 font-medium text-ink text-sm">Cancel</button>
           <button onClick={() => {
                     if (!form.fullName.trim()) { alert('Full name is required.'); return; }
                     onSubmit(form);
                   }}
-                  className="flex-1 py-3 rounded-full text-white font-bold text-sm" style={{ backgroundColor: '#0F6E6E' }}>
+                  className="flex-1 py-3 rounded-full text-white font-semibold text-sm whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
             {initial ? 'Save Changes' : 'Add Guard'}
           </button>
         </div>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, X, FileDown, FileSpreadsheet } from 'lucide-react';
+import { X, FileDown, FileSpreadsheet } from 'lucide-react';
 import { getAllVisitorLogs } from '../../api';
+import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
 const statusBg = {
   Active:    { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
@@ -9,15 +10,14 @@ const statusBg = {
   Departed:  { backgroundColor: '#F3C9C9', color: '#8a2b2b' },
   Expired:   { backgroundColor: '#D9D9D9', color: '#555' },
 };
-const statusLabel = (s) => (s === 'Completed' ? 'Departed' : s);
 
-const TYPES = ['All Types', 'Visitor', 'Driver', 'Delivery'];
+// #1 — Tinanggal ang "Driver"; Visitors + Delivery na lang.
+const TYPES = ['All Types', 'Visitor', 'Delivery'];
 const STATUSES = ['All Status', 'Active', 'Departed'];
 
 const fmt = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-----';
 
 export default function AdminVisitorLogs() {
-  const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [detail, setDetail] = useState(null);
@@ -50,52 +50,15 @@ export default function AdminVisitorLogs() {
 
   const filtered = logs
     .filter((l) => typeFilter === 'All Types' || l.type === typeFilter)
-    .filter((l) => statusFilter === 'All Status' || l.status === statusFilter)
-    .filter((l) => l.visitor.toLowerCase().includes(search.toLowerCase()) || l.pass.toLowerCase().includes(search.toLowerCase()));
+    .filter((l) => statusFilter === 'All Status' || l.status === statusFilter);
 
-  const modalTitle = { visitor: 'Visitor Details', driver: 'Driver Details', delivery: 'Delivery Details' };
+  const modalTitle = { visitor: 'Visitor Details', delivery: 'Delivery Details' };
 
-  // ── Export CSV/Excel (SheetJS optional; CSV fallback) ──
-  const exportExcel = () => {
-    if (filtered.length === 0) { alert('No logs to export.'); return; }
-    const header = ['Visitor', 'Type', 'Resident', 'Unit', 'Entry', 'Exit', 'Status', 'Guard', 'Pass'];
-    const rows = filtered.map((l) => [l.visitor, l.type, l.resident, l.unit, l.entry, l.exit, l.status, l.guard, l.pass]);
-    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'visitor-logs.csv'; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // ── Export PDF (print-based — walang extra library) ──
-  const exportPDF = () => {
-    if (filtered.length === 0) { alert('No logs to export.'); return; }
-    const rowsHtml = filtered.map((l) => `
-      <tr>
-        <td>${l.visitor}</td><td>${l.type}</td><td>${l.resident}</td>
-        <td>${l.entry}</td><td>${l.exit}</td><td>${l.status}</td><td>${l.guard}</td><td>${l.pass}</td>
-      </tr>`).join('');
-    const html = `
-      <html><head><title>Visitor Logs</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#123}
-        h1{color:#0F6E6E} table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
-        th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
-        th{background:#0E2A2E;color:#fff}
-      </style></head><body>
-      <h1>SentriCore — Visitor Logs</h1>
-      <p>Generated: ${new Date().toLocaleString()}</p>
-      <table><thead><tr>
-        <th>Visitor</th><th>Type</th><th>Resident</th><th>Entry</th><th>Exit</th><th>Status</th><th>Guard</th><th>Pass</th>
-      </tr></thead><tbody>${rowsHtml}</tbody></table>
-      </body></html>`;
-    const w = window.open('', '_blank');
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
-  };
+  // #2 — Working exports (shared template)
+  const EXPORT_HEADER = ['Visitor', 'Type', 'Resident', 'Unit', 'Entry', 'Exit', 'Status', 'Guard', 'Pass'];
+  const exportRows = () => filtered.map((l) => [l.visitor, l.type, l.resident, l.unit, l.entry, l.exit, l.status, l.guard, l.pass]);
+  const doExcel = () => exportExcel('visitor-logs', 'Visitor Logs', EXPORT_HEADER, exportRows());
+  const doPDF = () => exportPDF('Visitor Logs', EXPORT_HEADER, exportRows(), { subtitle: 'Complete visitor transaction history' });
 
   return (
     <AdminLayout>
@@ -106,35 +69,30 @@ export default function AdminVisitorLogs() {
           <p className="text-sm text-ink/60">Complete Visitor Transaction History</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={exportPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink"><FileDown size={16} /> Export PDF</button>
-          <button onClick={exportExcel} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
+          <button onClick={doPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
+          <button onClick={doExcel} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4">
-        {/* Filters */}
+        {/* Filters — #6: tinanggal ang search bar */}
         <div className="flex gap-2 mb-4">
-          <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
-            <Search size={18} className="text-ink/40" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
-                   className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
-          </div>
           <input type="date" className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm text-ink outline-none" />
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-semibold text-ink outline-none">
+                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
             {TYPES.map((t) => <option key={t}>{t}</option>)}
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-semibold text-ink outline-none">
+                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
             {STATUSES.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <select className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-semibold text-ink outline-none">
+          <select className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
             <option>All Gates</option><option>Gate 1</option><option>Gate 2</option>
           </select>
         </div>
 
         {/* Table */}
-        <div className="grid grid-cols-8 gap-2 px-3 py-2 text-[11px] font-bold text-ink/60 border-b border-gray-200">
+        <div className="grid grid-cols-8 gap-2 px-3 py-2 text-xs font-semibold text-ink/60 border-b border-gray-200">
           <span>Visitor Name</span><span>Type</span><span>Resident</span>
           <span>Entry</span><span>Exit</span><span className="text-center">Status</span>
           <span>Guard</span><span>Visitor Pass</span>
@@ -147,24 +105,24 @@ export default function AdminVisitorLogs() {
           ) : (
             filtered.map((l) => (
               <button key={l.id} onClick={() => setDetail(l)}
-                      className="w-full grid grid-cols-8 gap-2 px-3 py-2.5 border-b border-gray-100 text-[12px] text-ink items-center text-left hover:bg-cream/40">
-                <span className="font-semibold truncate">{l.visitor}</span>
+                      className="w-full grid grid-cols-8 gap-2 px-3 py-2.5 border-b border-gray-100 text-xs text-ink items-center text-left hover:bg-cream/40">
+                <span className="font-medium truncate">{l.visitor}</span>
                 <span className="text-ink/70">{l.type}</span>
                 <span className="text-ink/70 truncate">{l.resident}</span>
                 <span className="text-ink/60">{l.entry}</span>
                 <span className="text-ink/60">{l.exit}</span>
                 <span className="text-center">
-                  <span className="text-[9px] font-bold px-3 py-1 rounded-full" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span>
+                  <span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span>
                 </span>
                 <span className="text-ink/70">{l.guard}</span>
-                <span className="font-bold">{l.pass}</span>
+                <span className="font-semibold">{l.pass}</span>
               </button>
             ))
           )}
         </div>
       </div>
 
-      {/* Detail modal — walang ID placeholder */}
+      {/* Detail modal */}
       {detail && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setDetail(null)}>
           <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
@@ -175,7 +133,7 @@ export default function AdminVisitorLogs() {
               {[
                 ['Name', detail.visitor],
                 ['Pass No.', detail.pass],
-                [detail.kind === 'driver' ? 'Driver' : detail.kind === 'delivery' ? 'Delivery' : 'Visitor Type', detail.type],
+                [detail.kind === 'delivery' ? 'Delivery' : 'Visitor Type', detail.type],
                 ['Guard', detail.guard],
                 ['Resident Name', detail.resident],
                 ['Resident Address', detail.unit],
@@ -185,13 +143,13 @@ export default function AdminVisitorLogs() {
                 ['Registration Type', detail.regType],
               ].map(([label, val]) => (
                 <div key={label} className="bg-cream rounded-xl px-3 py-2" style={{ backgroundColor: '#F5F2E9' }}>
-                  <p className="text-[10px] font-bold text-ink/40">{label}</p>
-                  <p className="text-sm text-teal-800 font-semibold">{val || '—'}</p>
+                  <p className="text-[10px] font-semibold text-ink/40">{label}</p>
+                  <p className="text-sm text-teal-800 font-medium">{val || '—'}</p>
                 </div>
               ))}
             </div>
 
-            <button onClick={exportPDF} className="w-full text-white font-bold py-3 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>
+            <button onClick={doPDF} className="w-full text-white font-semibold py-3 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
               Download Record
             </button>
           </div>

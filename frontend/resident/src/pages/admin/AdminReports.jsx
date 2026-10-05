@@ -6,18 +6,18 @@ import {
 } from 'recharts';
 import { adminMonthlyReport, adminListComplaints, adminResolveComplaint, adminAuditReport } from '../../api';
 import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X } from 'lucide-react';
+import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
 const REPORT_CARDS = [
   { key: 'monthly',    title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days.', Icon: TrendingUp },
   { key: 'complaints', title: 'Complaints',          desc: 'Resident-filed complaints & resolutions.', Icon: Megaphone },
   { key: 'incident',   title: 'Incident Monitoring', desc: 'Rejected entries, unresolved exits.', Icon: ShieldAlert },
-  { key: 'audit',      title: 'Audit Trails',        desc: 'Track all system actions.', Icon: Clock },
+  { key: 'audit',      title: 'Audit Trails',        desc: 'Recorded entries, exits & incidents.', Icon: Clock },
 ];
 
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '—';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
-// Mga iminumungkahing resolution kada kategorya (angkop sa uri ng reklamo)
 const RESOLUTIONS = {
   Visitor: ['Visitor issued a warning', 'Visitor added to blocklist', 'Investigated — no violation found', 'Referred to security team', 'Resolved with the resident'],
   Guard: ['Guard verbally reminded', 'Retraining scheduled', 'Written warning issued', 'Investigated — unfounded', 'Escalated to management'],
@@ -36,6 +36,12 @@ const STATUS_COLOR = {
   Resolved: { bg: '#B4E4BE', fg: '#1e6b2e' },
 };
 
+// #4b — ang audit trail ay hindi dapat magpakita ng Login/Logout records.
+const isLoginRow = (row) =>
+  /log\s?in|log\s?out|logged in|logged out|signed in|signed out|login|logout|session/i.test(
+    `${row.action || ''} ${row.details || ''}`
+  );
+
 export default function AdminReports() {
   const [searchParams] = useSearchParams();
   const [view, setView] = useState(searchParams.get('view') || 'overview');
@@ -47,11 +53,11 @@ export default function AdminReports() {
   const [auditSearch, setAuditSearch] = useState('');
 
   // Complaints
-  const [complaints, setComplaints] = useState(null);   // { list, summary }
+  const [complaints, setComplaints] = useState(null);
   const [catFilter, setCatFilter] = useState('All');
   const [compStatus, setCompStatus] = useState('All');
   const [compSearch, setCompSearch] = useState('');
-  const [resolveTarget, setResolveTarget] = useState(null); // napiling complaint
+  const [resolveTarget, setResolveTarget] = useState(null);
   const [resolText, setResolText] = useState('');
   const [resolStatus, setResolStatus] = useState('Resolved');
   const [approveBl, setApproveBl] = useState(false);
@@ -93,55 +99,48 @@ export default function AdminReports() {
     }
   };
 
-  // ── Export helpers (CSV + print PDF) ──
-  const exportCSV = (filename, header, rows) => {
-    if (!rows.length) { alert('No data to export.'); return; }
-    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
-  const exportPDF = (title, header, rows) => {
-    if (!rows.length) { alert('No data to export.'); return; }
-    const rowsHtml = rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('');
-    const html = `<html><head><title>${title}</title>
-      <style>body{font-family:Arial;padding:24px;color:#123}h1{color:#0F6E6E}
-      table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
-      th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#0E2A2E;color:#fff}</style>
-      </head><body><h1>SentriCore — ${title}</h1><p>${new Date().toLocaleString()}</p>
-      <table><thead><tr>${header.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rowsHtml}</tbody></table>
-      </body></html>`;
-    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.focus();
-    setTimeout(() => w.print(), 400);
-  };
-
-  const doExport = (type) => {
-    if (view === 'monthly') {
-      const header = ['Month', 'Visitors', 'Deliveries', 'Total'];
-      const rows = (report?.table || []).map((m) => [m.fullLabel, m.visitors, m.deliveries, m.total]);
-      type === 'pdf' ? exportPDF('Monthly Report', header, rows) : exportCSV('monthly-report.csv', header, rows);
-    } else if (view === 'complaints') {
-      const header = ['Category', 'Subject', 'Type', 'Filed By', 'Incident Date', 'Status', 'Resolution'];
-      const rows = (complaints?.list || []).map((c) => [c.category, c.subject, c.complaint_type, c.resident_name || '—', fmtDate(c.incident_date), c.status, c.resolution || '']);
-      type === 'pdf' ? exportPDF('Complaints', header, rows) : exportCSV('complaints.csv', header, rows);
-    } else if (view === 'incident') {
-      const header = ['Visitor', 'Resident', 'Unit', 'Observation', 'Detail', 'Time'];
-      const rows = (report?.exitNotes?.flagged || []).map((f) => [f.visitor, f.resident, f.unit, f.note, f.detail || '', f.time ? new Date(f.time).toLocaleString('en-US') : '']);
-      type === 'pdf' ? exportPDF('Incident Monitoring', header, rows) : exportCSV('incident-monitoring.csv', header, rows);
-    } else if (view === 'audit') {
-      const header = ['Date & Time', 'Actor', 'Role', 'Action', 'Details'];
-      const rows = (audit?.list || []).map((a) => [a.ts ? new Date(a.ts).toLocaleString('en-US') : '', a.actor, a.role, a.action, a.details]);
-      type === 'pdf' ? exportPDF('Audit Trails', header, rows) : exportCSV('audit-trails.csv', header, rows);
-    } else {
-      alert('Nothing to export on this view yet.');
-    }
-  };
-
   const overview = report?.overview || { totalVisitors: 0, totalDeliveries: 0, peakDay: null, monthLabel: '' };
   const chart = report?.chart || [];
   const table = report?.table || [];
   const summary = report?.summary || {};
+
+  // #4b — "Reports" count = complaints + incident monitoring (non "No Problem")
+  const incidentCounts = report?.exitNotes?.counts || {};
+  const incidentNonOk =
+    (incidentCounts['Small Issue'] || 0) +
+    (incidentCounts['Security Concern'] || 0) +
+    (incidentCounts['Incident Happened'] || 0);
+  const complaintsCount = (complaints?.list || []).length;
+  const reportsCount = complaintsCount + incidentNonOk;
+
+  // #4b — audit list na walang login records
+  const auditClean = (audit?.list || []).filter((row) => !isLoginRow(row));
+
+  // #2 — Working exports (shared template)
+  const doExport = (type) => {
+    const run = (name, sheet, title, header, rows, subtitle) =>
+      type === 'pdf' ? exportPDF(title, header, rows, { subtitle }) : exportExcel(name, sheet, header, rows);
+
+    if (view === 'monthly') {
+      const header = ['Month', 'Visitors', 'Deliveries', 'Total'];
+      const rows = (report?.table || []).map((m) => [m.fullLabel, m.visitors, m.deliveries, m.total]);
+      run('monthly-report', 'Monthly', 'Monthly Report', header, rows, 'Visitor & delivery totals by month');
+    } else if (view === 'complaints') {
+      const header = ['Category', 'Subject', 'Type', 'Filed By', 'Incident Date', 'Status', 'Resolution'];
+      const rows = (complaints?.list || []).map((c) => [c.category, c.subject, c.complaint_type, c.resident_name || '—', fmtDate(c.incident_date), c.status, c.resolution || '']);
+      run('complaints', 'Complaints', 'Complaints', header, rows, 'Resident-filed complaints & resolutions');
+    } else if (view === 'incident') {
+      const header = ['Visitor', 'Resident', 'Unit', 'Observation', 'Detail', 'Time'];
+      const rows = (report?.exitNotes?.flagged || []).map((f) => [f.visitor, f.resident, f.unit, f.note, f.detail || '', f.time ? new Date(f.time).toLocaleString('en-US') : '']);
+      run('incident-monitoring', 'Incidents', 'Incident Monitoring', header, rows, 'Flagged exit observations');
+    } else if (view === 'audit') {
+      const header = ['Date & Time', 'Actor', 'Role', 'Action', 'Details'];
+      const rows = auditClean.map((a) => [a.ts ? new Date(a.ts).toLocaleString('en-US') : '', a.actor, a.role, a.action, a.details]);
+      run('audit-trails', 'Audit', 'Audit Trails', header, rows, 'Recorded entries, exits & incidents');
+    } else {
+      alert('Nothing to export on this view yet.');
+    }
+  };
 
   const Header = () => (
     <div className="flex items-end justify-between mb-5">
@@ -150,8 +149,8 @@ export default function AdminReports() {
         <p className="text-sm text-ink/60">Generated reports and long-term analytics.</p>
       </div>
       <div className="flex gap-2">
-        <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold text-ink"><FileDown size={16} /> Export PDF</button>
-        <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
+        <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
+        <button onClick={() => doExport('excel')} className="flex items-center gap-2 text-white rounded-full px-4 py-2 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}><FileSpreadsheet size={16} /> Export Excel</button>
       </div>
     </div>
   );
@@ -160,14 +159,9 @@ export default function AdminReports() {
     <AdminLayout>
       <Header />
 
-      {/* OVERVIEW */}
+      {/* OVERVIEW — #6: tinanggal ang decorative search bar */}
       {view === 'overview' && (
         <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-5 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
-            <Search size={18} className="text-ink/40" />
-            <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
-          </div>
-
           {/* Month overview banner */}
           <div className="rounded-2xl p-6 flex items-center justify-between mb-6"
                style={{ background: 'linear-gradient(135deg,#0E2A2E 0%,#2E8C7E 100%)' }}>
@@ -178,15 +172,15 @@ export default function AdminReports() {
             </div>
             <div className="flex gap-3">
               <div className="bg-white/95 rounded-2xl px-6 py-3 text-center min-w-[110px]">
-                <p className="text-[10px] font-bold text-ink/50">Total Visitors</p>
+                <p className="text-[10px] font-semibold text-ink/50">Total Visitors</p>
                 <p className="text-3xl font-extrabold text-ink">{overview.totalVisitors}</p>
               </div>
               <div className="bg-white/95 rounded-2xl px-6 py-3 text-center min-w-[110px]">
-                <p className="text-[10px] font-bold text-ink/50">Total Deliveries</p>
+                <p className="text-[10px] font-semibold text-ink/50">Total Deliveries</p>
                 <p className="text-3xl font-extrabold text-ink">{overview.totalDeliveries}</p>
               </div>
               <div className="rounded-2xl px-6 py-3 text-center min-w-[110px] text-white" style={{ backgroundColor: '#1E7E7E' }}>
-                <p className="text-[10px] font-bold text-white/70">Peak Day</p>
+                <p className="text-[10px] font-semibold text-white/70">Peak Day</p>
                 <p className="text-2xl font-extrabold">{fmtDay(overview.peakDay)}</p>
               </div>
             </div>
@@ -197,10 +191,10 @@ export default function AdminReports() {
             {REPORT_CARDS.map((c) => (
               <div key={c.key} className="rounded-2xl p-5 shadow-sm flex items-center gap-4" style={{ backgroundColor: '#F5F2E9' }}>
                 <div className="flex-1">
-                  <p className="font-extrabold text-ink">{c.title}</p>
+                  <p className="font-bold text-ink">{c.title}</p>
                   <p className="text-xs text-ink/60 mb-3">{c.desc}</p>
                   <button onClick={() => setView(c.key)}
-                          className="text-ink text-sm font-bold px-8 py-2 rounded-full bg-white border border-gray-200 shadow-sm">View</button>
+                          className="text-ink text-sm font-medium px-8 py-2 rounded-full bg-white border border-gray-200 shadow-sm whitespace-nowrap">View</button>
                 </div>
                 <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-sm"><c.Icon size={26} className="text-teal-700" /></div>
               </div>
@@ -209,25 +203,20 @@ export default function AdminReports() {
         </div>
       )}
 
-      {/* MONTHLY */}
+      {/* MONTHLY — #6: tinanggal ang decorative search bar */}
       {view === 'monthly' && (
         <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
-            <Search size={18} className="text-ink/40" />
-            <input placeholder="Search name, resident..." className="flex-1 outline-none text-sm bg-transparent" />
-          </div>
-
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h3 className="font-extrabold text-ink">Monthly Report</h3>
+              <h3 className="font-bold text-ink">Monthly Report</h3>
               <p className="text-xs text-ink/60">Total visitors, trends, peak visitation days.</p>
             </div>
-            <button onClick={() => setShowGen(true)} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
+            <button onClick={() => setShowGen(true)} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
           </div>
 
           {/* Chart */}
           <div className="border border-gray-100 rounded-2xl p-4 mt-3">
-            <p className="text-center font-extrabold text-teal-800 mb-3">
+            <p className="text-center font-bold text-teal-800 mb-3">
               {chart.length ? `${chart[0].label} to ${chart[chart.length - 1].label} Report` : 'Report'}
             </p>
             <div style={{ width: '100%', height: 260 }}>
@@ -248,26 +237,26 @@ export default function AdminReports() {
           {/* Table */}
           <div className="grid grid-cols-4 gap-2 mt-5 mb-2">
             {['MONTH', 'VISITORS', 'DELIVERIES', 'TOTAL'].map((h, i) => (
-              <span key={h} className={`text-[11px] font-bold text-white px-4 py-2 rounded-lg ${i > 0 ? 'text-center' : ''}`} style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
+              <span key={h} className={`text-[11px] font-semibold text-white px-4 py-2 rounded-lg ${i > 0 ? 'text-center' : ''}`} style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
             ))}
           </div>
           {table.map((m, i) => (
             <div key={i} className={`grid grid-cols-4 gap-2 px-4 py-3 border-b border-gray-100 text-sm ${i === 0 ? 'rounded-xl' : ''}`}
                  style={i === 0 ? { backgroundColor: '#CFEDE4' } : {}}>
-              <span className="font-bold text-ink">{m.fullLabel}</span>
+              <span className="font-semibold text-ink">{m.fullLabel}</span>
               <span className="text-center text-ink/80">{m.visitors}</span>
               <span className="text-center text-ink/80">{m.deliveries}</span>
-              <span className="text-center font-bold text-ink">{m.total}</span>
+              <span className="text-center font-semibold text-ink">{m.total}</span>
             </div>
           ))}
 
           <div className="flex justify-end mt-5">
-            <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full flex items-center gap-1" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+            <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full flex items-center gap-1 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
           </div>
         </div>
       )}
 
-      {/* COMPLAINTS — mula sa residents, may resolution ng admin */}
+      {/* COMPLAINTS */}
       {view === 'complaints' && (() => {
         const cx = complaints || { list: [], summary: {} };
         const sum = cx.summary || {};
@@ -284,27 +273,25 @@ export default function AdminReports() {
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-extrabold text-ink">Complaints</h3>
+                <h3 className="font-bold text-ink">Complaints</h3>
                 <p className="text-xs text-ink/60">Resident-filed complaints — acknowledge & resolve.</p>
               </div>
-              <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+              <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
 
-            {/* Category count cards */}
             <div className="grid grid-cols-4 gap-3 mb-4">
               {['Visitor', 'Guard', 'Security', 'HOA'].map((k) => (
                 <div key={k} className="rounded-2xl px-4 py-3 text-center" style={{ backgroundColor: CAT_COLOR[k].bg }}>
                   <p className="text-2xl font-extrabold" style={{ color: CAT_COLOR[k].fg }}>{sum.byCategory ? (sum.byCategory[k] || 0) : 0}</p>
-                  <p className="text-[11px] font-bold mt-0.5" style={{ color: CAT_COLOR[k].fg }}>{k}</p>
+                  <p className="text-[11px] font-semibold mt-0.5" style={{ color: CAT_COLOR[k].fg }}>{k}</p>
                 </div>
               ))}
             </div>
 
-            {/* Filters: category tabs + status + search */}
             <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
               {cats.map((c) => (
                 <button key={c} onClick={() => setCatFilter(c)}
-                        className={`px-4 py-2 rounded-full text-xs font-bold shrink-0 ${catFilter === c ? 'text-white' : 'bg-white text-ink border border-gray-200'}`}
+                        className={`px-4 py-2 rounded-full text-xs font-medium shrink-0 whitespace-nowrap ${catFilter === c ? 'text-white' : 'bg-white text-ink border border-gray-200'}`}
                         style={catFilter === c ? { backgroundColor: '#0F6E6E' } : {}}>
                   {c}
                 </button>
@@ -322,14 +309,13 @@ export default function AdminReports() {
               </div>
             </div>
 
-            {/* Table */}
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <span className="col-span-2 text-[11px] font-bold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>CATEGORY</span>
-              <span className="col-span-3 text-[11px] font-bold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>SUBJECT</span>
-              <span className="col-span-2 text-[11px] font-bold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>TYPE</span>
-              <span className="col-span-2 text-[11px] font-bold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>FILED BY</span>
-              <span className="col-span-1 text-[11px] font-bold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE</span>
-              <span className="col-span-2 text-[11px] font-bold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>STATUS</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>CATEGORY</span>
+              <span className="col-span-3 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>SUBJECT</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>TYPE</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>FILED BY</span>
+              <span className="col-span-1 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>STATUS</span>
             </div>
             {list.length === 0 ? (
               <p className="text-center text-ink/50 py-10 text-sm">No complaints found.</p>
@@ -342,16 +328,16 @@ export default function AdminReports() {
                     <button key={c.complaint_id} onClick={() => openResolve(c)}
                             className="w-full text-left grid grid-cols-12 gap-2 px-3 py-3 border-b border-gray-100 text-sm items-center hover:bg-gray-50">
                       <span className="col-span-2">
-                        <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{c.category}</span>
+                        <span className="text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{c.category}</span>
                       </span>
-                      <span className="col-span-3 font-bold text-ink truncate">{c.subject}
-                        {c.blocklist ? <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: '#F3C9C9', color: '#9b2c2c' }}>BLOCKLIST</span> : null}
+                      <span className="col-span-3 font-semibold text-ink truncate">{c.subject}
+                        {c.blocklist ? <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: '#F3C9C9', color: '#9b2c2c' }}>BLOCKLIST</span> : null}
                       </span>
                       <span className="col-span-2 text-ink/70 text-xs truncate">{c.complaint_type}</span>
                       <span className="col-span-2 text-ink/70 text-xs truncate">{c.resident_name || '—'}</span>
                       <span className="col-span-1 text-ink/60 text-xs">{fmtDate(c.incident_date)}</span>
                       <span className="col-span-2">
-                        <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: sc.bg, color: sc.fg }}>{c.status}</span>
+                        <span className="text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: sc.bg, color: sc.fg }}>{c.status}</span>
                       </span>
                     </button>
                   );
@@ -362,7 +348,7 @@ export default function AdminReports() {
         );
       })()}
 
-      {/* INCIDENT MONITORING — driven by Exit Notes logged by guards */}
+      {/* INCIDENT MONITORING */}
       {view === 'incident' && (() => {
         const en = report?.exitNotes || { counts: {}, totalLogged: 0, flagged: [] };
         const counts = en.counts || {};
@@ -376,34 +362,32 @@ export default function AdminReports() {
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h3 className="font-extrabold text-ink">Incident Monitoring</h3>
+                <h3 className="font-bold text-ink">Incident Monitoring</h3>
                 <p className="text-xs text-ink/60">Exit-note observations logged by guards — {overview.monthLabel || 'this month'}.</p>
               </div>
-              <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+              <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
 
-            {/* Count cards */}
             <div className="grid grid-cols-4 gap-3 mt-4 mb-6">
               {cards.map(([label, n, bg, fg]) => (
                 <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
                   <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
-                  <p className="text-[11px] font-bold mt-1" style={{ color: fg }}>{label}</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: fg }}>{label}</p>
                 </div>
               ))}
             </div>
 
-            {/* Flagged observations (Security Concern / Incident Happened) */}
-            <p className="text-sm font-bold text-ink mb-2">Flagged Observations</p>
+            <p className="text-sm font-semibold text-ink mb-2">Flagged Observations</p>
             <div className="grid grid-cols-5 gap-2 mb-2">
               {['VISITOR', 'RESIDENT', 'UNIT', 'OBSERVATION', 'DETAIL / TIME'].map((h) => (
-                <span key={h} className="text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
+                <span key={h} className="text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
               ))}
             </div>
             {(en.flagged || []).length === 0 ? (
               <p className="text-center text-ink/50 py-10 text-sm">No flagged exit observations this month.</p>
             ) : en.flagged.map((f, i) => (
               <div key={i} className="grid grid-cols-5 gap-2 px-4 py-3 border-b border-gray-100 text-sm items-center">
-                <span className="font-bold text-ink">{f.visitor}</span>
+                <span className="font-semibold text-ink">{f.visitor}</span>
                 <span className="text-ink/70">{f.resident}</span>
                 <span className="text-ink/70">{f.unit}</span>
                 <span className="font-semibold" style={{ color: f.note === 'Incident Happened' ? '#5b2c86' : '#9b2c2c' }}>{f.note}</span>
@@ -417,12 +401,11 @@ export default function AdminReports() {
         );
       })()}
 
-      {/* AUDIT TRAILS — sino-ang-gumawa-ng-ano-at-kailan (guard movements + logins) */}
+      {/* AUDIT TRAILS — #4b: walang Login records; stat na "Active Guards" → "Reports" */}
       {view === 'audit' && (() => {
-        const a = audit || { list: [], summary: {} };
-        const s = a.summary || {};
+        const s = audit?.summary || {};
         const q = auditSearch.toLowerCase();
-        const list = (a.list || []).filter((row) =>
+        const list = auditClean.filter((row) =>
           !q ||
           (row.actor || '').toLowerCase().includes(q) ||
           (row.action || '').toLowerCase().includes(q) ||
@@ -437,28 +420,28 @@ export default function AdminReports() {
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h3 className="font-extrabold text-ink">Audit Trails</h3>
-                <p className="text-xs text-ink/60">All recorded movements and system actions — {s.monthLabel || 'this month'}.</p>
+                <h3 className="font-bold text-ink">Audit Trails</h3>
+                <p className="text-xs text-ink/60">Recorded entries, exits, and incident reports — {s.monthLabel || 'this month'}.</p>
               </div>
-              <button onClick={() => setView('overview')} className="text-white text-sm font-bold px-6 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
+              <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
 
-            {/* Summary cards */}
+            {/* Summary cards — Active Guards pinalitan ng Reports */}
             <div className="grid grid-cols-4 gap-3 mt-4 mb-5">
               {[
-                ['Total Actions', s.total ?? 0, '#CFEDE4', '#0F6E6E'],
+                ['Total Records', list.length, '#CFEDE4', '#0F6E6E'],
                 ['Entries Logged', s.entries ?? 0, '#DCF3E4', '#1e6b2e'],
                 ['Exits Logged', s.exits ?? 0, '#F3C9C9', '#9b2c2c'],
-                ['Active Guards', s.activeGuards ?? 0, '#F1D88A', '#8a6d12'],
+                ['Reports', reportsCount, '#F1D88A', '#8a6d12'],
               ].map(([label, n, bg, fg]) => (
                 <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
                   <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
-                  <p className="text-[11px] font-bold mt-1" style={{ color: fg }}>{label}</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: fg }}>{label}</p>
                 </div>
               ))}
             </div>
 
-            {/* Search */}
+            {/* Search (functional audit filter — pinananatili) */}
             <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
               <Search size={18} className="text-ink/40" />
               <input value={auditSearch} onChange={(e) => setAuditSearch(e.target.value)}
@@ -466,12 +449,11 @@ export default function AdminReports() {
                      className="flex-1 outline-none text-sm bg-transparent" />
             </div>
 
-            {/* Table */}
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <span className="col-span-3 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE &amp; TIME</span>
-              <span className="col-span-3 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTOR</span>
-              <span className="col-span-2 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTION</span>
-              <span className="col-span-4 text-[11px] font-bold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DETAILS</span>
+              <span className="col-span-3 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE &amp; TIME</span>
+              <span className="col-span-3 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTOR</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTION</span>
+              <span className="col-span-4 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DETAILS</span>
             </div>
             {list.length === 0 ? (
               <p className="text-center text-ink/50 py-10 text-sm">No audit records for this period.</p>
@@ -483,10 +465,10 @@ export default function AdminReports() {
                     <div key={i} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 text-sm items-center">
                       <span className="col-span-3 text-ink/70 text-xs">{row.ts ? new Date(row.ts).toLocaleString('en-US') : '—'}</span>
                       <span className="col-span-3 flex items-center gap-2">
-                        <span className="font-bold text-ink">{row.actor}</span>
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: rc.bg, color: rc.fg }}>{row.role}</span>
+                        <span className="font-semibold text-ink">{row.actor}</span>
+                        <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: rc.bg, color: rc.fg }}>{row.role}</span>
                       </span>
-                      <span className="col-span-2 font-semibold text-ink/80 text-xs">{row.action}</span>
+                      <span className="col-span-2 font-medium text-ink/80 text-xs">{row.action}</span>
                       <span className="col-span-4 text-ink/70 text-xs">{row.details}</span>
                     </div>
                   );
@@ -507,7 +489,7 @@ export default function AdminReports() {
               Generated for {overview.monthLabel}. Includes month-over-month trend, total entries, and peak visitation days.
             </p>
             <div className="rounded-xl px-5 py-4" style={{ backgroundColor: '#F5F2E9' }}>
-              <span className="text-xs font-bold text-white px-4 py-1.5 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>Highlights</span>
+              <span className="text-xs font-semibold text-white px-4 py-1.5 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>Highlights</span>
               <ul className="space-y-2 mt-3">
                 <li className="text-sm text-ink flex gap-2">
                   <span>•</span>{summary.totalVisitors ?? 0} total visitors
@@ -533,52 +515,50 @@ export default function AdminReports() {
               <button onClick={() => setResolveTarget(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
 
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{c.category} Complaint</span>
-                {c.blocklist ? <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ backgroundColor: '#F3C9C9', color: '#9b2c2c' }}>Blocklist requested</span> : null}
+                <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{c.category} Complaint</span>
+                {c.blocklist ? <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: '#F3C9C9', color: '#9b2c2c' }}>Blocklist requested</span> : null}
               </div>
               <h2 className="text-lg font-extrabold text-ink">{c.subject}</h2>
               <p className="text-xs text-ink/60 mb-3">{c.complaint_type} · Incident: {fmtDate(c.incident_date)} · Filed by {c.resident_name || '—'}{c.unit_address ? ` (${c.unit_address})` : ''}</p>
 
               {c.description && (
                 <div className="rounded-xl px-4 py-3 mb-4" style={{ backgroundColor: '#F5F2E9' }}>
-                  <p className="text-[10px] font-bold text-ink/50 mb-1">DESCRIPTION</p>
+                  <p className="text-[10px] font-semibold text-ink/50 mb-1">DESCRIPTION</p>
                   <p className="text-sm text-ink whitespace-pre-wrap">{c.description}</p>
                 </div>
               )}
 
-              {/* Suggested resolutions */}
-              <p className="text-[10px] font-bold text-ink/60 mb-1">SUGGESTED RESOLUTIONS</p>
+              <p className="text-[10px] font-semibold text-ink/60 mb-1">SUGGESTED RESOLUTIONS</p>
               <div className="flex flex-wrap gap-2 mb-3">
                 {presets.map((p) => (
                   <button key={p} type="button" onClick={() => setResolText(p)}
-                          className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-gray-200 text-ink hover:border-teal-500">
+                          className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-ink hover:border-teal-500">
                     {p}
                   </button>
                 ))}
               </div>
 
-              <label className="block text-[10px] font-bold text-ink/60 mb-1">RESOLUTION / RESPONSE (nakikita ng resident)</label>
+              <label className="block text-[10px] font-semibold text-ink/60 mb-1">RESOLUTION / RESPONSE (nakikita ng resident)</label>
               <textarea value={resolText} onChange={(e) => setResolText(e.target.value)} rows={3}
                         placeholder="Type or pick a resolution above…"
                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none mb-3" />
 
-              {/* Allow blocklist — kapag hiniling ng resident sa Visitor complaint */}
               {c.category === 'Visitor' && c.blocklist ? (
                 <button type="button" onClick={() => setApproveBl(!approveBl)}
                         className="w-full flex items-center justify-between rounded-xl px-4 py-3 mb-4 border"
                         style={{ borderColor: approveBl ? '#9b2c2c' : '#e5e7eb', backgroundColor: approveBl ? '#F3C9C9' : '#fff' }}>
-                  <span className="text-sm font-bold text-ink text-left">Allow blocklist request<br /><span className="text-[11px] font-normal text-ink/60">Idadagdag si "{c.subject}" sa blocklist ng resident.</span></span>
+                  <span className="text-sm font-semibold text-ink text-left">Allow blocklist request<br /><span className="text-[11px] font-normal text-ink/60">Idadagdag si "{c.subject}" sa blocklist ng resident.</span></span>
                   <span className="w-10 h-6 rounded-full flex items-center px-0.5" style={{ backgroundColor: approveBl ? '#9b2c2c' : '#d1d5db', justifyContent: approveBl ? 'flex-end' : 'flex-start' }}>
                     <span className="w-5 h-5 rounded-full bg-white" />
                   </span>
                 </button>
               ) : null}
 
-              <label className="block text-[10px] font-bold text-ink/60 mb-1">STATUS</label>
+              <label className="block text-[10px] font-semibold text-ink/60 mb-1">STATUS</label>
               <div className="flex gap-2 mb-5">
                 {['Acknowledged', 'Resolved'].map((s) => (
                   <button key={s} type="button" onClick={() => setResolStatus(s)}
-                          className={`px-4 py-2 rounded-full text-xs font-bold border-2 ${resolStatus === s ? '' : 'border-gray-200 text-ink'}`}
+                          className={`px-4 py-2 rounded-full text-xs font-semibold border-2 ${resolStatus === s ? '' : 'border-gray-200 text-ink'}`}
                           style={resolStatus === s ? { backgroundColor: STATUS_COLOR[s].bg, color: STATUS_COLOR[s].fg, borderColor: STATUS_COLOR[s].fg } : {}}>
                     {s}
                   </button>
@@ -586,9 +566,9 @@ export default function AdminReports() {
               </div>
 
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setResolveTarget(null)} className="px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300">Cancel</button>
+                <button onClick={() => setResolveTarget(null)} className="px-6 py-2 rounded-full text-sm font-medium text-ink border border-gray-300">Cancel</button>
                 <button onClick={saveResolve} disabled={savingResol}
-                        className="px-6 py-2 rounded-full text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: '#0F6E6E' }}>
+                        className="px-6 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
                   {savingResol ? 'Saving…' : 'Save'}
                 </button>
               </div>

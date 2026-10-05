@@ -101,7 +101,6 @@ export default function Profile() {
   ];
 
   const settings = [
-    { Icon: KeyRound, label: t('Reset Password', 'I-reset ang Password'), action: openReset },
     { Icon: ShieldCheck, label: t('Password and Security', 'Password at Seguridad'), action: () => navigate('/password-security') },
     { Icon: Ban, label: t('Blocklisted', 'Blocklist'), action: () => navigate('/blocklist') },
     { Icon: HelpCircle, label: t('Help Center', 'Sentro ng Tulong'), action: () => navigate('/help-center') },

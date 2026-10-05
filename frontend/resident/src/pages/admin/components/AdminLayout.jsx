@@ -101,13 +101,7 @@ export default function AdminLayout({ children }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header */}
-        <header className="flex items-center justify-between px-8 py-5">
-          <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm w-96 max-w-full">
-            <Search size={18} className="text-ink/40" />
-            <input placeholder="Search anything..."
-                   className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
-          </div>
-
+        <header className="flex items-center justify-end px-8 py-5">
           {/* Account → open profile editor */}
           <button onClick={openProfile} className="flex items-center gap-3" title="Account settings">
             <div className="text-right leading-tight">
