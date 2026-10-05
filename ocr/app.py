@@ -1,6 +1,15 @@
 import os
 os.environ["FLAGS_use_mkldnn"] = "0"
 
+# Pilitin ang UTF-8 sa stdout/stderr — iwas 'charmap' UnicodeEncodeError sa NSSM (cp1252),
+# na siyang dahilan kaya nagre-return ng success:false kapag may non-ASCII sa logs (hal. '->').
+import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 import time
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -155,20 +164,49 @@ async def extract_name(file: UploadFile = File(...)):
         img_array = np.array(image)
 
         t1 = time.time()
+
+        # First OCR attempt
         result = ocr.predict(img_array)
-        print(f"OCR predict: {time.time() - t1:.2f}s")
+        print(f"OCR predict attempt 1: {time.time() - t1:.2f}s")
 
         lines = []
         if result:
             for res in result:
                 texts = res.get("rec_texts", [])
                 scores = res.get("rec_scores", [])
+
                 for i, text in enumerate(texts):
                     confidence = float(scores[i]) if i < len(scores) else 0.0
-                    lines.append({"text": text, "confidence": confidence})
+                    lines.append({
+                        "text": text,
+                        "confidence": confidence
+                    })
+
+        # Retry once if OCR returned no text
+        if not lines:
+            print("OCR returned no text. Retrying once...", flush=True)
+
+            retry_start = time.time()
+            result = ocr.predict(img_array)
+            print(
+                f"OCR predict attempt 2: {time.time() - retry_start:.2f}s",
+                flush=True
+            )
+
+            if result:
+                for res in result:
+                    texts = res.get("rec_texts", [])
+                    scores = res.get("rec_scores", [])
+
+                    for i, text in enumerate(texts):
+                        confidence = float(scores[i]) if i < len(scores) else 0.0
+                        lines.append({
+                            "text": text,
+                            "confidence": confidence
+                        })
 
         suggested_name = extract_visitor_name(lines)
-        print(f"TOTAL: {time.time() - t0:.2f}s  →  name: '{suggested_name}'")
+        print(f"TOTAL: {time.time() - t0:.2f}s  ->  name: '{suggested_name}'")
 
         return {"success": True, "suggestedName": suggested_name, "allLines": lines}
     except Exception as e:
