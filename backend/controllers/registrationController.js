@@ -107,8 +107,17 @@ async function getMyRegistrations(req, res) {
       const txByName = {};
       for (const t of txs) txByName[(t.visitor_name || '').toUpperCase()] = t;
 
+      // ⬇️ CHANGE (delivery): ang rider name ay madalas hindi tumutugma sa placeholder,
+      // kaya gumamit tayo ng registration-level na status mula sa aktwal na transaction.
+      const isDelivery = String(r.registration_type) === 'Delivery';
+      const anyActive = txs.some((t) => t.status === 'Active');
+      const anyTx = txs.length > 0;
+      const allCompleted = anyTx && txs.every((t) => t.status === 'Completed');
+      const deliveryTx = isDelivery ? (txs.find((t) => t.status === 'Active') || txs[txs.length - 1]) : null;
+
       const visitors = details.map((d) => {
-        const t = txByName[(d.visitor_name || '').toUpperCase()];
+        let t = txByName[(d.visitor_name || '').toUpperCase()];
+        if (!t && isDelivery) t = deliveryTx;   // delivery: fallback sa transaction ng registration
         let status = 'Expected', timeIn = null, timeOut = null, passNumber = null, plateNumber = null;
         if (t) {
           timeIn = t.entry_time;
@@ -117,6 +126,11 @@ async function getMyRegistrations(req, res) {
           plateNumber = t.plate_number || null;
           if (t.status === 'Active') status = 'Active';
           else if (t.status === 'Completed') status = 'Departed';
+        }
+        // Delivery safety net gamit ang registration-level signal
+        if (isDelivery && status === 'Expected') {
+          if (anyActive) status = 'Active';
+          else if (allCompleted) status = 'Departed';
         }
         return { name: d.visitor_name, status, timeIn, timeOut, pass_number: passNumber, plate_number: plateNumber };
       });

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, Settings, X, KeyRound, Trash2 } from 'lucide-react';
+import { Search, Settings, X, KeyRound, Trash2, Archive, FileText } from 'lucide-react';
 import {
   adminListResidents, adminResidentActive, adminAddResident,
   adminUpdateResident, adminResetResidentPassword, adminDeleteResident,
+  adminListDeactivatedResidents, adminResidentTransactions,
 } from '../../api';
 
 // #5: PH phone validation (mobile 09XXXXXXXXX / +639XXXXXXXXX o landline)
@@ -27,6 +28,37 @@ export default function AdminResidents() {
   const [credModal, setCredModal] = useState(null); // ipinapakitang generated credentials
   const [delModal, setDelModal] = useState(null);   // #1: delete confirm
   const [delBusy, setDelBusy] = useState(false);
+
+  // #3: Deactivated accounts
+  const [showDeact, setShowDeact] = useState(false);
+  const [deactList, setDeactList] = useState([]);
+  const [deactLoading, setDeactLoading] = useState(false);
+  const [txModal, setTxModal] = useState(null);     // { resident }
+  const [txData, setTxData] = useState(null);
+  const [txFrom, setTxFrom] = useState('');
+  const [txTo, setTxTo] = useState('');
+  const [txLoading, setTxLoading] = useState(false);
+
+  const openDeact = () => {
+    setShowDeact(true);
+    setDeactLoading(true);
+    adminListDeactivatedResidents()
+      .then((res) => setDeactList(res.data || []))
+      .catch(() => setDeactList([]))
+      .finally(() => setDeactLoading(false));
+  };
+
+  const openTx = (r) => {
+    setTxModal(r); setTxData(null); setTxFrom(''); setTxTo('');
+    loadTx(r.residentId, '', '');
+  };
+  const loadTx = (id, from, to) => {
+    setTxLoading(true);
+    adminResidentTransactions(id, { from: from || undefined, to: to || undefined })
+      .then((res) => setTxData(res.data))
+      .catch(() => setTxData({ transactions: [] }))
+      .finally(() => setTxLoading(false));
+  };
 
   const load = () => {
     setLoading(true);
@@ -69,10 +101,16 @@ export default function AdminResidents() {
           <h1 className="text-3xl font-extrabold text-teal-800">Resident</h1>
           <p className="text-sm text-ink/60">Manage resident records and visitor associations.</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-                className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>
-          + Add Resident
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={openDeact}
+                  className="flex items-center gap-2 rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold border border-gray-300 bg-white text-ink">
+            <Archive size={16} /> Deactivated Accounts
+          </button>
+          <button onClick={() => setShowAdd(true)}
+                  className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>
+            + Add Resident
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4">
@@ -130,6 +168,88 @@ export default function AdminResidents() {
           ))}
         </div>
       </div>
+
+      {/* #3: Deactivated Accounts modal */}
+      {showDeact && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setShowDeact(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-2xl p-6 relative max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowDeact(false)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
+            <h2 className="text-2xl font-extrabold text-ink mb-1">Deactivated Accounts</h2>
+            <p className="text-sm text-ink/60 mb-4">Records are retained. View their past transactions anytime.</p>
+            {deactLoading ? (
+              <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
+            ) : deactList.length === 0 ? (
+              <p className="text-center text-ink/50 py-10 text-sm">No deactivated accounts.</p>
+            ) : (
+              <div className="space-y-2">
+                {deactList.map((r) => (
+                  <div key={r.residentId} className="flex items-center justify-between gap-2 border border-gray-200 rounded-2xl p-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-ink text-sm">{r.fullName}</p>
+                      <p className="text-xs text-ink/60 truncate">{r.address} · {r.contact || '—'}</p>
+                      <p className="text-[11px] text-ink/50">{r.totalVisitors} total visitor record(s)</p>
+                    </div>
+                    <button onClick={() => openTx(r)}
+                            className="shrink-0 inline-flex items-center gap-1 text-white text-[11px] font-bold px-4 py-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }}>
+                      <FileText size={14} /> View Transactions
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* #3: Resident Transactions modal (may date filter) */}
+      {txModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-4" onClick={() => setTxModal(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setTxModal(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
+            <h2 className="text-xl font-extrabold text-ink mb-1">Transactions — {txModal.fullName}</h2>
+            <p className="text-sm text-ink/60 mb-3">{txModal.address}</p>
+
+            {/* Date filter */}
+            <div className="flex flex-wrap items-end gap-2 mb-4">
+              <div>
+                <label className="block text-[11px] font-bold text-ink/60 mb-1">From</label>
+                <input type="date" value={txFrom} onChange={(e) => setTxFrom(e.target.value)} className="border border-gray-300 rounded-xl px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-ink/60 mb-1">To</label>
+                <input type="date" value={txTo} onChange={(e) => setTxTo(e.target.value)} className="border border-gray-300 rounded-xl px-3 py-2 text-sm" />
+              </div>
+              <button onClick={() => loadTx(txModal.residentId, txFrom, txTo)}
+                      className="text-white text-sm font-bold px-5 py-2 rounded-xl" style={{ backgroundColor: '#0F6E6E' }}>Apply</button>
+              <button onClick={() => { setTxFrom(''); setTxTo(''); loadTx(txModal.residentId, '', ''); }}
+                      className="text-ink text-sm font-bold px-4 py-2 rounded-xl border border-gray-300">Clear</button>
+            </div>
+
+            <div className="grid grid-cols-5 gap-1 bg-gray-100 px-3 py-2 rounded-lg text-center mb-1">
+              {['Visitor', 'Type / Purpose', 'Entry', 'Exit', 'Status'].map((h) => (
+                <span key={h} className="text-[11px] font-bold text-ink">{h}</span>
+              ))}
+            </div>
+            {txLoading ? (
+              <p className="text-center text-ink/50 py-8 text-sm">Loading…</p>
+            ) : !txData || txData.transactions.length === 0 ? (
+              <p className="text-center text-ink/50 py-8 text-sm">No transactions in this range.</p>
+            ) : (
+              <div className="max-h-[50vh] overflow-y-auto">
+                {txData.transactions.map((t) => (
+                  <div key={t.id} className="grid grid-cols-5 gap-1 px-3 py-3 border-b border-gray-100 text-xs text-ink items-center">
+                    <span className="font-semibold">{t.name}</span>
+                    <span className="text-ink/70">{t.type}{t.purpose ? ` · ${t.purpose}` : ''}</span>
+                    <span className="text-ink/70">{fmt(t.entry)}</span>
+                    <span className="text-ink/70">{t.exit ? fmt(t.exit) : '—'}</span>
+                    <span className="text-center font-bold">{t.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Active Visitors modal */}
       {activeModal && (

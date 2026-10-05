@@ -430,15 +430,24 @@ export default function GuardVerify() {
   }, [step]);
 
   // Capture a frame from the live video → process it like a photo
+  // I-crop sa gitna gamit ang ID-card aspect (~1.586 landscape) para hindi masakop ang
+  // background/portrait — tutugma sa guide box, ID lang ang kukunin.
   const captureFromCamera = async () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) { setCameraError('The camera is not ready yet, please wait.'); return; }
-    const maxDim = 1000;
-    const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
-    const w = Math.round(video.videoWidth * scale), h = Math.round(video.videoHeight * scale);
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const ID_AR = 1.586; // standard ID card (85.6mm x 54mm)
+    // Pinakamalaking landscape na ID-aspect rectangle na kasya sa frame, naka-gitna
+    let cw = Math.min(vw, vh * ID_AR);
+    let ch = cw / ID_AR;
+    if (ch > vh) { ch = vh; cw = ch * ID_AR; }
+    const sx = (vw - cw) / 2, sy = (vh - ch) / 2;
+    const maxW = 1100;
+    const scale = Math.min(1, maxW / cw);
+    const w = Math.round(cw * scale), h = Math.round(ch * scale);
     const canvas = canvasRef.current || document.createElement('canvas');
     canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+    canvas.getContext('2d').drawImage(video, sx, sy, cw, ch, 0, 0, w, h); // crop (src rect) → full canvas
     canvas.toBlob(async (blob) => {
       if (!blob) { setCameraError('Capture failed, please try again.'); return; }
       stopCamera();
@@ -882,7 +891,7 @@ export default function GuardVerify() {
                      className="w-full h-full object-cover" />
               {/* guide box overlay */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="border-2 border-white/80 rounded-xl" style={{ width: '82%', height: '62%' }} />
+                <div className="border-2 border-white/80 rounded-xl" style={{ width: '88%', aspectRatio: '1.586', maxHeight: '88%' }} />
               </div>
               {cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-4">
@@ -1046,9 +1055,10 @@ export default function GuardVerify() {
                       className="w-60 py-2 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm inline-flex items-center justify-center gap-2">
                 <RefreshCw size={16} /> REFRESH LIST
               </button>
+              <p className="text-xs font-semibold text-ink/60 mt-1">Not listed?</p>
               <button onClick={() => setStep('residentList')}
                       className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
-                NOT LISTED — CONTACT RESIDENT
+                Contact Resident
               </button>
               <button onClick={() => setStep('scan')}
                       className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">

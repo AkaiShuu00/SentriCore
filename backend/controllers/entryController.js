@@ -469,14 +469,25 @@ async function getSchedule(req, res) {
       const txByName = {};
       for (const t of txs) txByName[(t.visitor_name || '').toUpperCase()] = t;
 
+      // Delivery: ang rider name ay madalas hindi tumutugma sa placeholder → gamitin ang tx ng registration.
+      const isDelivery = String(r.registration_type) === 'Delivery';
+      const anyActive = txs.some((t) => t.status === 'Active');
+      const allCompleted = txs.length > 0 && txs.every((t) => t.status === 'Completed');
+      const deliveryTx = isDelivery ? (txs.find((t) => t.status === 'Active') || txs[txs.length - 1]) : null;
+
       const visitors = details.map((d) => {
-        const t = txByName[(d.visitor_name || '').toUpperCase()];
+        let t = txByName[(d.visitor_name || '').toUpperCase()];
+        if (!t && isDelivery) t = deliveryTx;
         let status = 'EXPECTED', timeIn = null, timeOut = null, arrivalId = null, transactionId = null, passNumber = null;
         if (t) {
           transactionId = t.transaction_id; arrivalId = t.arrival_id; timeIn = t.entry_time; timeOut = t.exit_time;
           passNumber = t.pass_number;
           if (t.status === 'Active') status = 'ACTIVE';
           else if (t.status === 'Completed') status = 'DEPARTED';
+        }
+        if (isDelivery && status === 'EXPECTED') {
+          if (anyActive) status = 'ACTIVE';
+          else if (allCompleted) status = 'DEPARTED';
         }
         return { name: d.visitor_name, status, timeIn, timeOut, arrivalId, transactionId, passNumber };
       });

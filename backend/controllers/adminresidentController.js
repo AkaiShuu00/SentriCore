@@ -50,6 +50,7 @@ async function listResidents(req, res) {
               u.username, u.status
        FROM Residents r
        LEFT JOIN Users u ON u.user_id = r.user_id
+       WHERE u.status IS NULL OR u.status <> 'Inactive'   -- ACTIVE lang; deactivated ay hiwalay
        ORDER BY r.full_name ASC`
     );
 
@@ -247,6 +248,80 @@ async function deleteResident(req, res) {
   }
 }
 
+// GET /api/admin/residents/deactivated  (Admin) - mga Inactive na resident (retrievable pa rin)
+async function listDeactivatedResidents(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT r.resident_id, r.full_name, r.unit_address, r.phone_number, r.email, u.username, u.status
+       FROM Residents r
+       JOIN Users u ON u.user_id = r.user_id
+       WHERE u.status = 'Inactive'
+       ORDER BY r.full_name ASC`
+    );
+    const result = [];
+    for (const r of rows) {
+      const [[total]] = await pool.query(
+        `SELECT COUNT(*) AS n FROM VisitorTransactions WHERE resident_id = ?`, [r.resident_id]
+      );
+      result.push({
+        residentId: r.resident_id,
+        fullName: r.full_name,
+        address: r.unit_address,
+        contact: decrypt(r.phone_number),
+        email: r.email,
+        username: r.username,
+        status: r.status,
+        totalVisitors: total.n,
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching deactivated residents.', error: err.message });
+  }
+}
+
+// GET /api/admin/residents/:id/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD  (Admin)
+// Buong transaction history ng isang resident (gamit sa deactivated view), may date filter.
+async function residentTransactions(req, res) {
+  try {
+    const { id } = req.params;
+    const { from, to } = req.query;
+    const where = ['t.resident_id = ?'];
+    const params = [id];
+    if (from) { where.push('t.entry_time >= ?'); params.push(from + ' 00:00:00'); }
+    if (to)   { where.push('t.entry_time <= ?'); params.push(to + ' 23:59:59'); }
+
+    const [[r]] = await pool.query(`SELECT full_name, unit_address FROM Residents WHERE resident_id = ?`, [id]);
+    const [rows] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose, t.plate_number,
+              t.pass_number, t.entry_time, t.exit_time, t.status
+       FROM VisitorTransactions t
+       WHERE ${where.join(' AND ')}
+       ORDER BY t.entry_time DESC, t.transaction_id DESC`,
+      params
+    );
+    res.json({
+      resident: r ? r.full_name : '',
+      unit: r ? r.unit_address : '',
+      count: rows.length,
+      transactions: rows.map((t) => ({
+        id: t.transaction_id,
+        name: t.visitor_name,
+        type: t.visitor_type,
+        purpose: t.purpose,
+        plate: t.plate_number,
+        pass: t.pass_number,
+        entry: t.entry_time,
+        exit: t.exit_time,
+        status: t.status === 'Completed' ? 'Departed' : t.status,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching resident transactions.', error: err.message });
+  }
+}
+
 module.exports = {
   listResidents, residentActiveVisitors, addResident, updateResident, resetResidentPassword, deleteResident,
+  listDeactivatedResidents, residentTransactions,
 };

@@ -76,6 +76,8 @@ export const adminAddResident = (data) => api.post('/admin/residents', data);
 export const adminUpdateResident = (id, data) => api.put(`/admin/residents/${id}`, data);
 export const adminResetResidentPassword = (id) => api.post(`/admin/residents/${id}/reset-password`);
 export const adminDeleteResident = (id) => api.delete(`/admin/residents/${id}`);
+export const adminListDeactivatedResidents = () => api.get('/admin/residents/deactivated');
+export const adminResidentTransactions = (id, params) => api.get(`/admin/residents/${id}/transactions`, { params });
 
 // ── Admin: own profile (name/phone/email/password) + public contact for guard ──
 export const getMyAdminProfile = () => api.get('/admin/me');
