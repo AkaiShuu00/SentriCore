@@ -5,6 +5,7 @@ import { getAdminSummary, getAnnouncements, adminListComplaints } from '../../ap
 import {
   MapPin, LogIn, CalendarDays, ShieldCheck, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle,
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 // ── Sample data (iko-connect sa DB after) ──
 // Stat card styling (value + sub galing DB)
@@ -45,10 +46,11 @@ export default function AdminDashboard() {
   const [recent, setRecent] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [pendingComplaints, setPendingComplaints] = useState(0);
+  const [weeklyExpected, setWeeklyExpected] = useState([]);
 
   useEffect(() => {
     getAdminSummary()
-      .then((res) => { setStats(res.data.stats || {}); setRecent(res.data.recent || []); })
+      .then((res) => { setStats(res.data.stats || {}); setRecent(res.data.recent || []); setWeeklyExpected(res.data.weeklyExpected || []); })
       .catch(() => {});
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => {});
     // Bilang ng bagong (Pending) na complaints mula sa residents
@@ -118,6 +120,25 @@ export default function AdminDashboard() {
                 <p className="text-[11px] font-semibold text-white/80 mt-2">{s.sub}</p>
               </div>
             ))}
+          </div>
+
+          {/* #4 — Expected visitors this week (Mon–Sun) */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm mt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-extrabold text-ink">Expected Visitors This Week</h3>
+              <span className="text-xs text-ink/50">Mon–Sun</span>
+            </div>
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <BarChart data={weeklyExpected} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="expected" name="Expected" fill="#1E7E7E" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Recent Activity */}

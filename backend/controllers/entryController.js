@@ -351,6 +351,30 @@ async function getAdminSummary(req, res) {
          AND entry_time <  (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY) + INTERVAL 7 DAY`
     );
 
+    // #4 — Expected visitors kada araw ngayong linggo (Lunes–Linggo) para sa dashboard chart.
+    const [weeklyRows] = await pool.query(
+      `SELECT DATE(r.expected_date) AS d, COUNT(*) AS n
+       FROM VisitorRegistrationDetails det
+       JOIN VisitorRegistrations r ON r.registration_id = det.registration_id
+       WHERE DATE(r.expected_date) >= (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY)
+         AND DATE(r.expected_date) <  (CURDATE() - INTERVAL WEEKDAY(CURDATE()) DAY) + INTERVAL 7 DAY
+       GROUP BY DATE(r.expected_date)`
+    );
+    // Buuin ang Mon→Sun na array (laging 7 araw, 0 kung walang expected)
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7)); // Monday
+    const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const byDate = {};
+    weeklyRows.forEach((w) => {
+      const key = (w.d instanceof Date ? w.d : new Date(w.d));
+      byDate[`${key.getFullYear()}-${String(key.getMonth() + 1).padStart(2, '0')}-${String(key.getDate()).padStart(2, '0')}`] = w.n;
+    });
+    const weeklyExpected = DOW.map((label, i) => {
+      const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { day: label, date: key, expected: byDate[key] || 0 };
+    });
+
     const [recent] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.status, t.entry_time, t.exit_time,
               res.full_name AS resident_name, res.unit_address, g.full_name AS guard_name
@@ -371,6 +395,7 @@ async function getAdminSummary(req, res) {
 
     res.json({
       stats: { activeVisitors: active.n, todayEntries: todayEntries.n, expectedToday: expected.n, activeGates, weeklyVisitors: weekly.n, total: total.n },
+      weeklyExpected,
       recent: recent.map((r) => ({
         id: r.transaction_id, name: r.visitor_name, resident: r.resident_name, unit: r.unit_address,
         guard: r.guard_name || '—', status: r.status, entry: r.entry_time, exit: r.exit_time,

@@ -4,7 +4,7 @@ import AdminLayout from './components/AdminLayout';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-import { adminMonthlyReport, adminListComplaints, adminResolveComplaint, adminAuditReport } from '../../api';
+import { adminMonthlyReport, adminListComplaints, adminResolveComplaint, adminAuditReport, adminGuardReports, adminAckGuardReport } from '../../api';
 import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X } from 'lucide-react';
 import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
@@ -59,9 +59,12 @@ export default function AdminReports() {
   const [compSearch, setCompSearch] = useState('');
   const [resolveTarget, setResolveTarget] = useState(null);
   const [resolText, setResolText] = useState('');
-  const [resolStatus, setResolStatus] = useState('Resolved');
+  const [resolStatus, setResolStatus] = useState('Acknowledged');
   const [approveBl, setApproveBl] = useState(false);
   const [savingResol, setSavingResol] = useState(false);
+
+  // #1 — Incident Monitoring = mga report ni guard (hindi na exit notes)
+  const [guardReports, setGuardReports] = useState({ list: [], summary: {} });
 
   const loadComplaints = () =>
     adminListComplaints()
@@ -77,19 +80,22 @@ export default function AdminReports() {
     adminAuditReport()
       .then((res) => setAudit(res.data))
       .catch(() => setAudit(null));
+    adminGuardReports()
+      .then((res) => setGuardReports(res.data || { list: [], summary: {} }))
+      .catch(() => setGuardReports({ list: [], summary: {} }));
   }, []);
 
   const openResolve = (c) => {
     setResolveTarget(c);
     setResolText(c.resolution || '');
-    setResolStatus(c.status === 'Resolved' ? 'Resolved' : 'Acknowledged');
+    setResolStatus('Acknowledged'); // admin acknowledge lang; resident ang mag-resolve
     setApproveBl(false);
   };
   const saveResolve = async () => {
     if (!resolveTarget) return;
     setSavingResol(true);
     try {
-      await adminResolveComplaint(resolveTarget.complaint_id, { status: resolStatus, resolution: resolText, approveBlocklist: approveBl });
+      await adminResolveComplaint(resolveTarget.complaint_id, { status: 'Acknowledged', resolution: resolText, approveBlocklist: approveBl });
       await loadComplaints();
       setResolveTarget(null);
     } catch {
@@ -104,14 +110,10 @@ export default function AdminReports() {
   const table = report?.table || [];
   const summary = report?.summary || {};
 
-  // #4b — "Reports" count = complaints + incident monitoring (non "No Problem")
-  const incidentCounts = report?.exitNotes?.counts || {};
-  const incidentNonOk =
-    (incidentCounts['Small Issue'] || 0) +
-    (incidentCounts['Security Concern'] || 0) +
-    (incidentCounts['Incident Happened'] || 0);
+  // #4b — "Reports" count = complaints + guard reports (incident monitoring)
+  const guardReportCount = (guardReports?.list || []).length;
   const complaintsCount = (complaints?.list || []).length;
-  const reportsCount = complaintsCount + incidentNonOk;
+  const reportsCount = complaintsCount + guardReportCount;
 
   // #4b — audit list na walang login records
   const auditClean = (audit?.list || []).filter((row) => !isLoginRow(row));
@@ -130,9 +132,9 @@ export default function AdminReports() {
       const rows = (complaints?.list || []).map((c) => [c.category, c.subject, c.complaint_type, c.resident_name || '—', fmtDate(c.incident_date), c.status, c.resolution || '']);
       run('complaints', 'Complaints', 'Complaints', header, rows, 'Resident-filed complaints & resolutions');
     } else if (view === 'incident') {
-      const header = ['Visitor', 'Resident', 'Unit', 'Observation', 'Detail', 'Time'];
-      const rows = (report?.exitNotes?.flagged || []).map((f) => [f.visitor, f.resident, f.unit, f.note, f.detail || '', f.time ? new Date(f.time).toLocaleString('en-US') : '']);
-      run('incident-monitoring', 'Incidents', 'Incident Monitoring', header, rows, 'Flagged exit observations');
+      const header = ['Guard', 'Category', 'Type of Concern', 'Location', 'Description', 'Status', 'Date'];
+      const rows = (guardReports?.list || []).map((g) => [g.guard_name || '—', g.category, g.report_type, g.location || '—', g.description || '', g.status, g.created_at ? new Date(g.created_at).toLocaleString('en-US') : '']);
+      run('incident-monitoring', 'Incidents', 'Incident Monitoring', header, rows, 'Guard-filed reports');
     } else if (view === 'audit') {
       const header = ['Date & Time', 'Actor', 'Role', 'Action', 'Details'];
       const rows = auditClean.map((a) => [a.ts ? new Date(a.ts).toLocaleString('en-US') : '', a.actor, a.role, a.action, a.details]);
@@ -354,53 +356,72 @@ export default function AdminReports() {
 
       {/* INCIDENT MONITORING */}
       {view === 'incident' && (() => {
-        const en = report?.exitNotes || { counts: {}, totalLogged: 0, flagged: [] };
-        const counts = en.counts || {};
+        const GR_COLOR = {
+          'Security Concern': { bg: '#F3C9C9', fg: '#9b2c2c' },
+          'Small Problem': { bg: '#F1D88A', fg: '#8a6d12' },
+          'Incident': { bg: '#D9C2E9', fg: '#5b2c86' },
+        };
+        const sum = guardReports?.summary?.byCategory || {};
+        const list = guardReports?.list || [];
         const cards = [
-          ['No Problem', counts['No Problem'] || 0, '#B4E4BE', '#1e6b2e'],
-          ['Small Issue', counts['Small Issue'] || 0, '#F1D88A', '#8a6d12'],
-          ['Security Concern', counts['Security Concern'] || 0, '#F3C9C9', '#9b2c2c'],
-          ['Incident Happened', counts['Incident Happened'] || 0, '#D9C2E9', '#5b2c86'],
+          ['Security Concern', sum['Security Concern'] || 0],
+          ['Small Problem', sum['Small Problem'] || 0],
+          ['Incident', sum['Incident'] || 0],
         ];
         return (
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="font-bold text-ink">Incident Monitoring</h3>
-                <p className="text-xs text-ink/60">Exit-note observations logged by guards — {overview.monthLabel || 'this month'}.</p>
+                <p className="text-xs text-ink/60">Reports filed by guards (Security Concern · Small Problem · Incident).</p>
               </div>
               <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
 
-            <div className="grid grid-cols-4 gap-3 mt-4 mb-6">
-              {cards.map(([label, n, bg, fg]) => (
-                <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
-                  <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
-                  <p className="text-[11px] font-semibold mt-1" style={{ color: fg }}>{label}</p>
+            <div className="grid grid-cols-3 gap-3 mt-4 mb-6">
+              {cards.map(([label, n]) => (
+                <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: GR_COLOR[label].bg }}>
+                  <p className="text-3xl font-extrabold" style={{ color: GR_COLOR[label].fg }}>{n}</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: GR_COLOR[label].fg }}>{label}</p>
                 </div>
               ))}
             </div>
 
-            <p className="text-sm font-semibold text-ink mb-2">Flagged Observations</p>
-            <div className="grid grid-cols-5 gap-2 mb-2">
-              {['VISITOR', 'RESIDENT', 'UNIT', 'OBSERVATION', 'DETAIL / TIME'].map((h) => (
-                <span key={h} className="text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
-              ))}
-            </div>
-            {(en.flagged || []).length === 0 ? (
-              <p className="text-center text-ink/50 py-10 text-sm">No flagged exit observations this month.</p>
-            ) : en.flagged.map((f, i) => (
-              <div key={i} className="grid grid-cols-5 gap-2 px-4 py-3 border-b border-gray-100 text-sm items-center">
-                <span className="font-semibold text-ink">{f.visitor}</span>
-                <span className="text-ink/70">{f.resident}</span>
-                <span className="text-ink/70">{f.unit}</span>
-                <span className="font-semibold" style={{ color: f.note === 'Incident Happened' ? '#5b2c86' : '#9b2c2c' }}>{f.note}</span>
-                <span className="text-ink/70 text-xs">
-                  {f.detail || '—'}
-                  <span className="block text-ink/40">{f.time ? new Date(f.time).toLocaleString('en-US') : ''}</span>
-                </span>
+            <p className="text-sm font-semibold text-ink mb-2">Guard Reports</p>
+            {list.length === 0 ? (
+              <p className="text-center text-ink/50 py-10 text-sm">No guard reports yet.</p>
+            ) : (
+              <div className="max-h-[52vh] overflow-y-auto space-y-3">
+                {list.map((g) => {
+                  const cc = GR_COLOR[g.category] || { bg: '#eee', fg: '#555' };
+                  return (
+                    <div key={g.report_id} className="border border-gray-100 rounded-2xl p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{g.category}</span>
+                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full"
+                              style={g.status === 'Acknowledged' ? { backgroundColor: '#B4E4BE', color: '#1e6b2e' } : { backgroundColor: '#F1D88A', color: '#8a6d12' }}>
+                          {g.status}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-ink text-sm">{g.report_type}</p>
+                      <p className="text-xs text-ink/60 mt-0.5">
+                        By {g.guard_name || '—'}{g.location ? ` · 📍 ${g.location}` : ''} · {g.created_at ? new Date(g.created_at).toLocaleString('en-US') : ''}
+                      </p>
+                      {g.description && <p className="text-xs text-ink/70 mt-1">{g.description}</p>}
+                      {g.status !== 'Acknowledged' && (
+                        <button onClick={async () => {
+                                  try { await adminAckGuardReport(g.report_id); const r = await adminGuardReports(); setGuardReports(r.data || { list: [], summary: {} }); }
+                                  catch { alert('Failed to acknowledge.'); }
+                                }}
+                                className="mt-3 text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+                          Mark Acknowledged
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
           </div>
         );
       })()}
@@ -558,22 +579,17 @@ export default function AdminReports() {
                 </button>
               ) : null}
 
-              <label className="block text-[10px] font-semibold text-ink/60 mb-1">STATUS</label>
-              <div className="flex gap-2 mb-5">
-                {['Acknowledged', 'Resolved'].map((s) => (
-                  <button key={s} type="button" onClick={() => setResolStatus(s)}
-                          className={`px-4 py-2 rounded-full text-xs font-semibold border-2 ${resolStatus === s ? '' : 'border-gray-200 text-ink'}`}
-                          style={resolStatus === s ? { backgroundColor: STATUS_COLOR[s].bg, color: STATUS_COLOR[s].fg, borderColor: STATUS_COLOR[s].fg } : {}}>
-                    {s}
-                  </button>
-                ))}
+              {/* #2 — Admin ay AKNOWLEDGE lang. Ang resident ang magma-mark ng Resolved. */}
+              <div className="rounded-xl px-4 py-3 mb-5 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
+                Saving this will mark the complaint <span className="font-semibold">Acknowledged</span> and notify the resident.
+                Only the resident can mark it <span className="font-semibold">Resolved</span> once the issue is settled.
               </div>
 
               <div className="flex gap-2 justify-end">
                 <button onClick={() => setResolveTarget(null)} className="px-6 py-2 rounded-full text-sm font-medium text-ink border border-gray-300">Cancel</button>
                 <button onClick={saveResolve} disabled={savingResol}
                         className="px-6 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-                  {savingResol ? 'Saving…' : 'Save'}
+                  {savingResol ? 'Saving…' : 'Acknowledge'}
                 </button>
               </div>
             </div>

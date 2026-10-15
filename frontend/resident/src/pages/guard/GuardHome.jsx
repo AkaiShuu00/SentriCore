@@ -7,6 +7,7 @@ import {
   Flame, Droplet, Zap, ShieldAlert, Users, Wrench, Megaphone, Shield, Clock,
   CalendarDays, FileText, Search, Inbox, Phone, X,
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const AnnIcon = ({ a, ...p }) => {
   const t = `${a.category || ''} ${a.title || ''}`.toLowerCase();
@@ -169,6 +170,25 @@ export default function GuardHome() {
   });
   const totalToday = activeCount + expectedToday + departedToday;
 
+  // #4 — Expected visitors per day (Mon–Sun) para sa chart ni guard.
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Monday
+  const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const weekKeys = DOW_LABELS.map((label, i) => {
+    const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+    return { label, iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` };
+  });
+  const expectedByDay = {};
+  schedule.forEach((reg) => {
+    const regDate = toLocalISO(pick(reg, ['expectedDate', 'expected_date', 'expected_time', 'visit_date', 'date']));
+    const visitors = Array.isArray(reg.visitors) && reg.visitors.length ? reg.visitors : [reg];
+    visitors.forEach((v) => {
+      const vDate = toLocalISO(pick(v, ['expectedDate', 'expected_date', 'expected_time', 'visit_date'])) || regDate;
+      if (vDate) expectedByDay[vDate] = (expectedByDay[vDate] || 0) + 1;
+    });
+  });
+  const weekChart = weekKeys.map((k) => ({ day: k.label, expected: expectedByDay[k.iso] || 0 }));
+
   // Build ALL days of the current month with correct day labels
   const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -268,6 +288,31 @@ export default function GuardHome() {
             <p className="text-sm text-ink">Total Today</p>
             <p className="text-4xl font-extrabold my-2" style={{ color: '#8a2b2b' }}>{totalToday}</p>
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-lg" style={{ backgroundColor: '#A83232' }}><FileText size={20} /></div>
+          </div>
+        </div>
+
+        {/* #4 — Expected visitors this week (chart) + File a Report shortcut */}
+        <div className="bg-white rounded-3xl p-5 shadow mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-lg font-extrabold text-ink">EXPECTED VISITORS</h3>
+              <p className="text-xs text-ink/50">This week · Mon–Sun</p>
+            </div>
+            <button onClick={() => navigate('/guard-report')}
+                    className="inline-flex items-center gap-1 text-white text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#9b2c2c' }}>
+              <ShieldAlert size={14} /> File a Report
+            </button>
+          </div>
+          <div style={{ width: '100%', height: 190 }}>
+            <ResponsiveContainer>
+              <LineChart data={weekChart} margin={{ top: 8, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="expected" stroke="#0F6E6E" strokeWidth={3} dot={{ r: 4, fill: '#0F6E6E' }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 

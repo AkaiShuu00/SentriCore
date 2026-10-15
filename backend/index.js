@@ -22,6 +22,7 @@ const adminReportRoutes = require('./routes/adminreport');
 const complaintRoutes = require('./routes/complaints');
 const notificationRoutes = require('./routes/notifications');
 const pickupRoutes = require('./routes/pickups');
+const guardReportRoutes = require('./routes/guardreports');
 
 // Import db
 require('./config/db');
@@ -50,6 +51,7 @@ app.use('/api/admin', adminGuardRoutes);
 app.use('/api/admin', adminReportRoutes);
 app.use('/api', complaintRoutes);
 app.use('/api', notificationRoutes);
+app.use('/api', guardReportRoutes);
 app.use('/api/pickups', require('./routes/pickups'));
 
 // Health check

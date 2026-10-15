@@ -101,8 +101,16 @@ export const adminAuditReport = (params) => api.get('/admin/reports/audit', { pa
 // ── Complaints ──
 export const createComplaint = (data) => api.post('/complaints', data);
 export const getMyComplaints = () => api.get('/complaints/mine');
+export const residentResolveComplaint = (id) => api.put(`/complaints/${id}/resolve`);
+export const reopenComplaint = (id, data) => api.put(`/complaints/${id}/reopen`, data);
 export const adminListComplaints = (params) => api.get('/admin/complaints', { params });
 export const adminResolveComplaint = (id, data) => api.put(`/admin/complaints/${id}`, data);
+
+// ── Guard Reports (hiwalay sa exit note; papasok sa admin Incident Monitoring) ──
+export const createGuardReport = (data) => api.post('/guard-reports', data);
+export const getMyGuardReports = () => api.get('/guard-reports/mine');
+export const adminGuardReports = () => api.get('/admin/guard-reports');
+export const adminAckGuardReport = (id) => api.put(`/admin/guard-reports/${id}`);
 
 // ── Notifications ──
 export const getNotifications = () => api.get('/notifications');

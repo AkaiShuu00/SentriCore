@@ -1551,9 +1551,11 @@ export default function GuardVerify() {
             <div className="rounded-2xl p-4 mb-4 border-2 text-center" style={{ backgroundColor: '#FDECEC', borderColor: '#9b2c2c' }}>
               <div className="flex justify-center mb-2"><ShieldAlert size={34} style={{ color: '#9b2c2c' }} /></div>
               <h2 className="text-xl font-extrabold" style={{ color: '#9b2c2c' }}>BLOCKLIST MATCH</h2>
-              <p className="text-xs text-ink/70 mt-1">
-                "{matchData.visitor || scannedName}" matches a blocklisted person. This may be a different person with
-                the same name — verify before deciding.
+              <p className="text-xs text-ink/80 mt-1 font-semibold">
+                This person was flagged as blocklisted by resident: {(blockInfo?.matches?.[0]?.reported_by) || 'a resident'}.
+              </p>
+              <p className="text-[11px] text-ink/60 mt-1">
+                Kung ang bisita ay para sa IBANG resident (hindi yung nag-blocklist), i-refer sa HOA admin para sila ang magdesisyon.
               </p>
             </div>
 
@@ -1607,6 +1609,14 @@ export default function GuardVerify() {
                       }}
                       className="w-full py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#0F6E6E' }}>
                 VERIFIED — DIFFERENT PERSON, PROCEED
+              </button>
+              <button onClick={() => {
+                        const num = String(adminContact.phone || '').replace(/[^\d+]/g, '');
+                        if (!num) { alert('No HOA admin contact number is set.'); return; }
+                        window.location.href = `tel:${num}`;
+                      }}
+                      className="w-full py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#1a5fa8' }}>
+                REFER TO HOA ADMIN (visitor is for another resident)
               </button>
               <button onClick={() => setStep('matched')}
                       className="w-full py-2 rounded-full text-sm font-bold text-ink border border-gray-300">
@@ -1743,38 +1753,18 @@ export default function GuardVerify() {
               })}
             </div>
 
-            {/* OPTIONAL EXIT NOTE — only on exit, before final approval (not required) */}
+            {/* NOTE: Tinanggal ang exit-note selector dito. Ang report ni guard
+                (Security Concern / Small Problem / Incident) ay hiwalay na sa
+                Guard Report page (/guard-report). */}
             {isExit && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-5">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-bold text-ink">Exit Note</label>
-                  <span className="text-[10px] text-ink/40 font-semibold">OPTIONAL</span>
-                </div>
-                <p className="text-[11px] text-ink/50 mb-3">Log any observation for this exit. You can leave this blank.</p>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  {[
-                    ['No Problem', '#B4E4BE', '#1e6b2e'],
-                    ['Small Issue', '#F1D88A', '#8a6d12'],
-                    ['Security Concern', '#F3C9C9', '#9b2c2c'],
-                    ['Incident Happened', '#D9C2E9', '#5b2c86'],
-                  ].map(([label, bg, fg]) => {
-                    const active = exitNote === label;
-                    return (
-                      <button key={label} type="button"
-                              onClick={() => setExitNote(active ? '' : label)}
-                              className="rounded-xl px-3 py-2 text-[11px] font-bold border-2 transition"
-                              style={active
-                                ? { backgroundColor: bg, color: fg, borderColor: fg }
-                                : { backgroundColor: '#fff', color: '#112D31', borderColor: '#e5e7eb' }}>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <label className="block text-[10px] font-bold text-ink/60 mb-1">ADDITIONAL NOTE (optional)</label>
-                <textarea value={exitAdditionalNote} onChange={(e) => setExitAdditionalNote(e.target.value)}
-                          rows={2} placeholder="Add any extra detail (optional)"
-                          className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none" />
+              <div className="rounded-2xl px-4 py-3 mb-5 flex items-center justify-between gap-3" style={{ backgroundColor: '#FBE9E7' }}>
+                <p className="text-[11px] text-ink/70">
+                  May naobserbahan ba? Mag-file ng hiwalay na report (security concern, small problem, o incident).
+                </p>
+                <button type="button" onClick={() => navigate('/guard-report')}
+                        className="shrink-0 text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#9b2c2c' }}>
+                  File a Report
+                </button>
               </div>
             )}
 
