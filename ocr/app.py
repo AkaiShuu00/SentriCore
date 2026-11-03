@@ -18,6 +18,17 @@ from PIL import Image
 import numpy as np
 import io
 
+# ── OCR ENHANCEMENT modules (ID classification + layout-aware, name-only extraction) ──
+# Guarded import: kung sakaling kulang ang files, babalik sa legacy extractor sa ibaba
+# para hindi mabasag ang service.
+try:
+    from ocr_enhance import build_response_from_tokens
+    _ENHANCE = True
+    print("OCR enhancement modules loaded.")
+except Exception as _e:
+    _ENHANCE = False
+    print("OCR enhancement NOT loaded (using legacy extractor):", _e)
+
 app = FastAPI(title="SentriCore OCR Service")
 
 app.add_middleware(
@@ -53,6 +64,10 @@ def health():
     return {"status": "OCR service running"}
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# LEGACY fallback extractor (ginagamit LANG kapag hindi na-load ang ocr_enhance).
+# Pinanatili para hindi mabasag ang service kung may problema sa bagong modules.
+# ──────────────────────────────────────────────────────────────────────────────
 def extract_visitor_name(lines):
     blacklist = [
         "REPUBLIC", "PHILIPPINE", "PHILIPPINES", "POSTAL", "IDENTITY", "CARD",
@@ -85,14 +100,12 @@ def extract_visitor_name(lines):
     def title_case(text):
         return " ".join(w.capitalize() for w in text.split())
 
-    # ── STRATEGY 1: MRZ (passport machine-readable zone) — pinaka-reliable ──
-    # Format: P<PHLSURNAME<<GIVEN<NAMES<<<<<<...
     for l in lines:
         t = l["text"].strip().upper()
         if t.startswith("P<") and "<<" in t:
             try:
-                body = t[2:]                       # alisin ang "P<"
-                rest = body[3:] if len(body) > 3 else body  # alisin ang country code (PHL)
+                body = t[2:]
+                rest = body[3:] if len(body) > 3 else body
                 surname_part, _, given_part = rest.partition("<<")
                 surname = surname_part.replace("<", " ").strip()
                 given = given_part.replace("<", " ").strip()
@@ -102,7 +115,6 @@ def extract_visitor_name(lines):
             except Exception:
                 pass
 
-    # ── STRATEGY 2: labeled fields (SURNAME / GIVEN / MIDDLE) ──
     surname = given = middle = ""
     for i, l in enumerate(lines):
         label = l["text"].upper().replace(" ", "")
@@ -118,7 +130,6 @@ def extract_visitor_name(lines):
     if given and surname:
         return clean_name(f"{given} {middle} {surname}")
 
-    # ── STRATEGY 3: "Last, First Middle" sa isang linya (Driver's License) ──
     for l in lines:
         t = l["text"].strip()
         if "," in t and has_no_digits(t) and is_clean(t):
@@ -128,7 +139,6 @@ def extract_visitor_name(lines):
                 if letters and sum(1 for c in letters if c.isupper()) / len(letters) > 0.6:
                     return clean_name(f"{parts[1]} {parts[0]}")
 
-    # ── STRATEGY 4: full name sa isang linya (Postal / National ID) ──
     def looks_like_name(text):
         t = text.strip()
         if len(t) < 5 or not has_no_digits(t):
@@ -149,6 +159,31 @@ def extract_visitor_name(lines):
     return ""
 
 
+def _run_ocr(img_array):
+    """Patakbuhin ang PaddleOCR; ibalik ang listahan ng {text, confidence, box}."""
+    result = ocr.predict(img_array)
+    lines = []
+    if result:
+        for res in result:
+            texts = res.get("rec_texts", [])
+            scores = res.get("rec_scores", [])
+            # Bounding boxes (para sa positional fallback) — optional, iba-iba ang key name.
+            polys = res.get("rec_polys", None)
+            if polys is None:
+                polys = res.get("dt_polys", None)
+            for i, text in enumerate(texts):
+                confidence = float(scores[i]) if i < len(scores) else 0.0
+                box = None
+                try:
+                    if polys is not None and i < len(polys):
+                        p = polys[i]
+                        box = p.tolist() if hasattr(p, "tolist") else list(p)
+                except Exception:
+                    box = None
+                lines.append({"text": text, "confidence": confidence, "box": box})
+    return lines
+
+
 @app.post("/ocr")
 async def extract_name(file: UploadFile = File(...)):
     try:
@@ -162,53 +197,36 @@ async def extract_name(file: UploadFile = File(...)):
             image = image.resize((max_width, int(image.height * ratio)))
 
         img_array = np.array(image)
-
         t1 = time.time()
 
-        # First OCR attempt
-        result = ocr.predict(img_array)
+        # First attempt (+ retry once kung walang nabasa)
+        lines = _run_ocr(img_array)
         print(f"OCR predict attempt 1: {time.time() - t1:.2f}s")
-
-        lines = []
-        if result:
-            for res in result:
-                texts = res.get("rec_texts", [])
-                scores = res.get("rec_scores", [])
-
-                for i, text in enumerate(texts):
-                    confidence = float(scores[i]) if i < len(scores) else 0.0
-                    lines.append({
-                        "text": text,
-                        "confidence": confidence
-                    })
-
-        # Retry once if OCR returned no text
         if not lines:
             print("OCR returned no text. Retrying once...", flush=True)
+            rs = time.time()
+            lines = _run_ocr(img_array)
+            print(f"OCR predict attempt 2: {time.time() - rs:.2f}s", flush=True)
 
-            retry_start = time.time()
-            result = ocr.predict(img_array)
-            print(
-                f"OCR predict attempt 2: {time.time() - retry_start:.2f}s",
-                flush=True
-            )
+        # ── BAGONG daloy: classify ID + layout-aware, NAME-ONLY extraction ──
+        if _ENHANCE:
+            tokens = [{"text": l["text"], "score": l["confidence"], "box": l.get("box")} for l in lines]
+            resp = build_response_from_tokens(tokens)
+            # Iisang format (ALL CAPS) para tugma sa matching logic ng backend/frontend.
+            resp["suggestedName"] = (resp.get("suggestedName") or "").upper()
+            if isinstance(resp.get("extractedName"), dict):
+                resp["extractedName"]["fullName"] = (resp["extractedName"].get("fullName") or "").upper()
+            resp["candidates"] = [(c or "").upper() for c in resp.get("candidates", [])]
+            print(f"TOTAL: {time.time() - t0:.2f}s  ->  id: {resp.get('detectedIdType')}  name: '{resp.get('suggestedName')}'")
+            # Privacy: WALANG allLines / raw OCR text na ibinabalik.
+            return resp
 
-            if result:
-                for res in result:
-                    texts = res.get("rec_texts", [])
-                    scores = res.get("rec_scores", [])
+        # ── Legacy fallback (kung hindi na-load ang modules) ──
+        suggested_name = (extract_visitor_name(lines) or "").upper()
+        print(f"TOTAL (legacy): {time.time() - t0:.2f}s  ->  name: '{suggested_name}'")
+        return {"success": bool(suggested_name), "suggestedName": suggested_name,
+                "detectedIdType": "UNKNOWN", "requiresConfirmation": True, "candidates": []}
 
-                    for i, text in enumerate(texts):
-                        confidence = float(scores[i]) if i < len(scores) else 0.0
-                        lines.append({
-                            "text": text,
-                            "confidence": confidence
-                        })
-
-        suggested_name = extract_visitor_name(lines)
-        suggested_name = (suggested_name or "").upper()   # iisang format: ALL CAPS
-        print(f"TOTAL: {time.time() - t0:.2f}s  ->  name: '{suggested_name}'")
-
-        return {"success": True, "suggestedName": suggested_name, "allLines": lines}
     except Exception as e:
+        # Iwas mag-expose ng personal info sa error; mensahe lang.
         return {"success": False, "error": str(e), "suggestedName": ""}

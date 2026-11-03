@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, User, Shield, BarChart3, Search, ChevronDown, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, User, Shield, BarChart3, ChevronDown, LogOut, X } from 'lucide-react';
 import { getMyAdminProfile, updateMyAdminProfile } from '../../api';
 
-// Shared admin shell: dark sidebar (left) + top header + content area
+// Shared admin shell: FIXED na sidebar (hindi gumagalaw sa scroll) + top header + scrollable content.
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,7 +43,6 @@ export default function AdminLayout({ children }) {
     setPLoading(true);
     try {
       await updateMyAdminProfile(form);
-      // I-reflect agad ang bagong pangalan sa dashboard header
       const updated = { ...user, name: form.displayName.trim() };
       sessionStorage.setItem('sentricore_user', JSON.stringify(updated));
       setUser(updated);
@@ -66,51 +65,68 @@ export default function AdminLayout({ children }) {
 
   const field = (label, key, type = 'text', ph = '') => (
     <div>
-      <label className="block text-xs font-bold text-ink mb-1">{label}</label>
+      <label className="block text-xs font-semibold text-ink mb-1">{label}</label>
       <input type={type} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })}
              placeholder={ph}
-             className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
+             className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20" />
     </div>
   );
 
+  // Lighter na sidebar background (para mas visible ang logo) + banayad na gradient.
+  const SIDEBAR_BG = 'linear-gradient(180deg, #2A6E70 0%, #1E5A5C 55%, #18504F 100%)';
+
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#EFEBDD' }}>
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 flex flex-col py-8 px-4 min-h-screen" style={{ backgroundColor: '#0E2A2E' }}>
-        <div className="flex flex-col items-center mb-10">
-          <img src="/logo.png" alt="SentriCore" className="w-14 h-14 object-contain" />
-          <p className="text-sm font-extrabold tracking-widest mt-2 text-white">SENTRICORE</p>
+    <div className="min-h-screen" style={{ backgroundColor: '#F2EFE4' }}>
+      {/* ───── FIXED Sidebar (hindi gumagalaw sa scroll, kahit anong tab) ───── */}
+      <aside className="fixed top-0 left-0 w-60 h-screen flex flex-col py-7 px-4 z-30 shadow-xl"
+             style={{ background: SIDEBAR_BG }}>
+        <div className="flex flex-col items-center mb-9">
+          {/* Logo sa loob ng maliwanag na puting bilog → mas kita */}
+          <div className="w-20 h-20 rounded-2xl bg-white shadow-lg flex items-center justify-center p-2">
+            <img src="/logo.png" alt="SentriCore" className="w-full h-full object-contain" />
+          </div>
+          <p className="text-sm font-extrabold tracking-[0.25em] mt-3 text-white">SENTRICORE</p>
+          <p className="text-[10px] tracking-wide text-white/55 mt-0.5">Admin Console</p>
         </div>
-        <nav className="flex flex-col gap-3 flex-1">
+
+        <nav className="flex flex-col gap-2 flex-1">
           {nav.map((n) => {
             const active = isActive(n.to);
             return (
               <button key={n.key} onClick={() => navigate(n.to)}
-                      className="flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-bold transition text-left shadow-sm"
+                      className="group flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all text-left"
                       style={active
-                        ? { background: 'linear-gradient(135deg,#1E7E7E,#3FA89A)', color: '#fff' }
-                        : { backgroundColor: '#fff', color: '#0E2A2E' }}>
-                <n.Icon size={18} className="shrink-0" />
+                        ? { backgroundColor: '#fff', color: '#14484C', boxShadow: '0 6px 16px rgba(0,0,0,0.12)' }
+                        : { backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)' }}>
+                <n.Icon size={19} className="shrink-0" style={{ color: active ? '#1E7E7E' : 'rgba(255,255,255,0.85)' }} />
                 {n.label}
               </button>
             );
           })}
         </nav>
+
+        <div className="pt-4 mt-2 border-t border-white/15">
+          <button onClick={() => setShowLogout(true)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-white/80 hover:bg-white/10 transition">
+            <LogOut size={18} className="shrink-0" /> Log Out
+          </button>
+        </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* ───── Main (naka-offset sa fixed sidebar; ito lang ang nag-sscroll) ───── */}
+      <div className="ml-60 flex flex-col min-h-screen">
         {/* Top header */}
         <header className="flex items-center justify-end px-8 py-5">
-          {/* Account → open profile editor */}
-          <button onClick={openProfile} className="flex items-center gap-3" title="Account settings">
+          <button onClick={openProfile}
+                  className="flex items-center gap-3 bg-white rounded-full pl-5 pr-2 py-1.5 shadow-sm hover:shadow-md transition"
+                  title="Account settings">
             <div className="text-right leading-tight">
               <p className="text-sm font-bold text-ink">{user.name || 'Admin'}</p>
-              <p className="text-[10px] text-ink/50">Admin</p>
+              <p className="text-[10px] text-ink/50">Administrator</p>
             </div>
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-white"
                  style={{ background: 'linear-gradient(135deg,#1E7E7E,#3FA89A)' }}><User size={20} /></div>
-            <ChevronDown size={18} className="text-ink/50" />
+            <ChevronDown size={16} className="text-ink/40" />
           </button>
         </header>
 
@@ -130,7 +146,7 @@ export default function AdminLayout({ children }) {
                 {field('Phone Number (HOA contact)', 'phoneNumber', 'text', '0912 345 6789')}
                 {field('Email', 'email', 'email', 'admin@email.com')}
                 <div className="border-t border-gray-100 pt-3">
-                  <p className="text-xs font-bold text-ink/60 mb-2">Change Password (optional)</p>
+                  <p className="text-xs font-semibold text-ink/60 mb-2">Change Password (optional)</p>
                   {field('Current Password', 'currentPassword', 'password', '••••••••')}
                   <div className="h-3" />
                   {field('New Password', 'newPassword', 'password', 'at least 6 characters')}
@@ -138,15 +154,15 @@ export default function AdminLayout({ children }) {
               </div>
 
               <div className="flex gap-3 mt-5">
-                <button onClick={() => setShowProfile(false)} className="flex-1 py-3 rounded-full border border-gray-300 font-bold text-ink text-sm">Close</button>
+                <button onClick={() => setShowProfile(false)} className="flex-1 py-3 rounded-full border border-gray-300 font-semibold text-ink text-sm">Close</button>
                 <button onClick={saveProfile} disabled={pLoading}
-                        className="flex-1 py-3 rounded-full text-white font-bold text-sm disabled:opacity-60" style={{ backgroundColor: '#0F6E6E' }}>
+                        className="flex-1 py-3 rounded-full text-white font-semibold text-sm disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
                   {pLoading ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
 
               <button onClick={() => { setShowProfile(false); setShowLogout(true); }}
-                      className="w-full mt-3 py-2.5 rounded-full border border-red-300 text-red-600 font-bold text-sm bg-red-50 inline-flex items-center justify-center gap-2">
+                      className="w-full mt-3 py-2.5 rounded-full border border-red-300 text-red-600 font-semibold text-sm bg-red-50 inline-flex items-center justify-center gap-2">
                 <LogOut size={16} /> Log Out
               </button>
             </div>
@@ -162,16 +178,16 @@ export default function AdminLayout({ children }) {
               <p className="text-ink/60 text-sm mb-5">Are you sure you want to log out of your admin account?</p>
               <div className="flex gap-3">
                 <button onClick={() => setShowLogout(false)}
-                        className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">Cancel</button>
+                        className="flex-1 py-3 rounded-full text-sm font-semibold text-ink border border-gray-300">Cancel</button>
                 <button onClick={doLogout}
-                        className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#C0392B' }}>Log Out</button>
+                        className="flex-1 py-3 rounded-full text-sm font-semibold text-white" style={{ backgroundColor: '#C0392B' }}>Log Out</button>
               </div>
             </div>
           </div>
         )}
 
         {/* Page content */}
-        <main className="flex-1 px-8 pb-8 overflow-y-auto">
+        <main className="flex-1 px-8 pb-8">
           {children}
         </main>
       </div>
