@@ -10,7 +10,6 @@ import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
 const GATE_LABEL = (id) => (id ? `GATE ${String(id).toUpperCase()}` : 'UNASSIGNED');
 
-// Avatar — larawan ng guard o icon fallback
 function Avatar({ src, size = 40 }) {
   return (
     <div className="rounded-full bg-teal-100 flex items-center justify-center overflow-hidden shrink-0"
@@ -57,51 +56,49 @@ export default function AdminGuards() {
   };
   useEffect(() => { load(); }, []);
 
-  // Isang gate lang ang komunidad — distinct gateId na meron, o Gate 1 bilang default
   const gateIds = Array.from(new Set(guards.map((g) => g.gateId).filter((x) => x != null)));
   if (gateIds.length === 0) gateIds.push('1');
   gateIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
   const hasUnassigned = guards.some((g) => g.gateId == null);
 
-  // #2 — Working exports (guard roster)
   const EXPORT_HEADER = ['Full Name', 'Username', 'Gate', 'Shift', 'Contact'];
   const exportRows = () => guards.map((g) => [g.fullName, g.username, g.gate || GATE_LABEL(g.gateId), (g.shift && g.shift !== '—') ? g.shift : 'No shift set', g.contact || '—']);
   const doExcel = () => exportExcel('guard-roster', 'Guards', EXPORT_HEADER, exportRows());
   const doPDF = () => exportPDF('Guard Roster', EXPORT_HEADER, exportRows(), { subtitle: 'Gate assignments, shifts, and guard accounts' });
 
+  // #2 — Mas MALAKI at HORIZONTAL na layout (occupied ang space)
   const GateCard = ({ gateId }) => {
     const list = guards.filter((g) => String(g.gateId ?? '') === String(gateId ?? ''));
     return (
-      <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#EFEBDD' }}>
-          <span className="font-bold text-ink">{GATE_LABEL(gateId)}</span>
+      <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: '#EFEBDD' }}>
+          <span className="font-extrabold text-ink text-lg">{GATE_LABEL(gateId)}</span>
           <button onClick={() => setAssignModal({ gateId })}
-                  className="flex items-center gap-1 text-white text-xs font-medium px-3 py-1.5 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-            <Plus size={14} /> Assign Guard
+                  className="flex items-center gap-1 text-white text-sm font-medium px-4 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+            <Plus size={16} /> Assign Guard
           </button>
         </div>
-        <div className="p-4 min-h-[160px]">
+        <div className="p-5">
           {list.length === 0 ? (
-            <p className="text-center text-ink/40 py-8 text-sm">No guards assigned.</p>
-          ) : list.map((g, i) => (
-            <div key={g.guardId}>
-              <div className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Avatar src={g.photo} />
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink truncate">{g.fullName}</p>
-                    <p className="text-xs text-ink/60">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
-                    <p className="text-[11px] text-ink/50 truncate">{g.username}</p>
+            <p className="text-center text-ink/40 py-10 text-sm">No guards assigned to this gate.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {list.map((g) => (
+                <div key={g.guardId}
+                     className="flex items-center gap-4 rounded-2xl border border-gray-100 shadow-sm p-4 bg-white">
+                  <Avatar src={g.photo} size={60} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-ink text-base truncate">{g.fullName}</p>
+                    <p className="text-sm text-ink/70 truncate">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
+                    <p className="text-xs text-ink/45 truncate">{g.username}</p>
+                    {g.contact && <p className="text-xs text-ink/45 truncate">📞 {g.contact}</p>}
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
                   <button onClick={() => setEditModal({ ...g })} title="Edit"
-                          className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink"><Settings size={16} /></button>
+                          className="w-10 h-10 rounded-full hover:bg-cream flex items-center justify-center text-ink shrink-0"><Settings size={18} /></button>
                 </div>
-              </div>
-              {i < list.length - 1 && <div className="border-b border-gray-100" />}
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </div>
     );
@@ -114,7 +111,6 @@ export default function AdminGuards() {
           <h1 className="text-3xl font-extrabold text-teal-800">Guards</h1>
           <p className="text-sm text-ink/60">Gate assignments, shifts, and guard accounts.</p>
         </div>
-        {/* #2 exports + Add Guard */}
         <div className="flex gap-2">
           <button onClick={doPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
           <button onClick={doExcel} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileSpreadsheet size={16} /> Export Excel</button>
@@ -125,13 +121,10 @@ export default function AdminGuards() {
         </div>
       </div>
 
-      {/* #4a / #6 — tinanggal ang On Duty/On Break/Off Duty filter at ang search bar
-          (nasa resident Contact Guard na sila). */}
-
       {loading ? (
         <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
       ) : (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="space-y-6">
           {gateIds.map((id) => <GateCard key={id} gateId={id} />)}
           {hasUnassigned && <GateCard gateId={null} />}
         </div>
@@ -240,7 +233,6 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
         {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
         {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-semibold">{initial.username}</span></p>}
 
-        {/* Profile photo (1x1) */}
         <div className="flex flex-col items-center mb-4">
           <div className="relative">
             <Avatar src={form.photo} size={84} />

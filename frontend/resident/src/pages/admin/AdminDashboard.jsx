@@ -3,20 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import { getAdminSummary, getAnnouncements, adminListComplaints } from '../../api';
 import {
-  MapPin, LogIn, CalendarDays, ShieldCheck, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle,
+  MapPin, LogIn, CalendarDays, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-// ── Sample data (iko-connect sa DB after) ──
 // Stat card styling (value + sub galing DB)
+// #4 — "Registered Visitors" (expectedToday) ay PAREHAS na ng gradient sa "Today's Entries".
+const ENTRIES_GRADIENT = 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)';
 const STAT_META = [
   { key: 'activeVisitors', label: 'Active Visitors', sub: 'Inside Subdivision', Icon: MapPin,
     gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
   { key: 'todayEntries', label: "Today's Entries", sub: 'Entries logged today', Icon: LogIn,
-    gradient: 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)', dark: true },
+    gradient: ENTRIES_GRADIENT, dark: true },
   { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', Icon: CalendarDays,
-    gradient: 'linear-gradient(135deg,#3FA89A 0%,#2E8C7E 100%)', dark: true },
-  { key: 'weeklyVisitors', label: 'Visitors This Week', sub: 'Mon–Sun (resets Monday)', Icon: Users,
+    gradient: ENTRIES_GRADIENT, dark: true },
+  { key: 'weeklyVisitors', label: 'Visitors This Week', sub: 'Mon–Sun', Icon: Users,
     gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
 ];
 
@@ -31,13 +32,11 @@ const annIcon = (text) => {
 };
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const today = new Date();
   const [selected, setSelected] = useState(new Date(today));
-  const [showFullCal, setShowFullCal] = useState(false);
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewYear, setViewYear] = useState(today.getFullYear());
 
@@ -53,7 +52,6 @@ export default function AdminDashboard() {
       .then((res) => { setStats(res.data.stats || {}); setRecent(res.data.recent || []); setWeeklyExpected(res.data.weeklyExpected || []); })
       .catch(() => {});
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => {});
-    // Bilang ng bagong (Pending) na complaints mula sa residents
     adminListComplaints()
       .then((res) => {
         const list = res.data?.list || [];
@@ -64,19 +62,7 @@ export default function AdminDashboard() {
 
   const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
 
-  // ── WEEK STRIP: ang linggo kung nasaan ang `selected` ──
-  const weekStart = new Date(selected);
-  weekStart.setDate(selected.getDate() - selected.getDay()); // Sunday
-  const weekDays = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate() + i);
-    return d;
-  });
-
-  const headerLabel = selected.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const weekdayLabel = selected.toLocaleDateString('en-US', { weekday: 'long' });
-
-  // ── FULL MONTH grid ──
+  // ── FULL MONTH grid (#5 — buong buwan na agad ang nakikita) ──
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
@@ -87,12 +73,6 @@ export default function AdminDashboard() {
 
   const monthName = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-  const openFullCal = () => {
-    setViewMonth(selected.getMonth());
-    setViewYear(selected.getFullYear());
-    setShowFullCal(true);
-  };
   const changeMonth = (dir) => {
     let m = viewMonth + dir, y = viewYear;
     if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
@@ -122,7 +102,7 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* #4 — Expected visitors this week (Mon–Sun) */}
+          {/* Expected visitors this week (Mon–Sun) */}
           <div className="bg-white rounded-3xl p-6 shadow-sm mt-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-extrabold text-ink">Expected Visitors This Week</h3>
@@ -145,7 +125,9 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-3xl p-6 shadow-sm mt-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-extrabold text-ink">Recent Activity</h3>
-              <button className="text-xs font-bold text-teal-700">View All ›</button>
+              {/* #1 — View All → Audit Trails */}
+              <button onClick={() => navigate('/admin-reports?view=audit')}
+                      className="text-xs font-bold text-teal-700">View All ›</button>
             </div>
             <div className="space-y-2">
               {recent.length === 0 ? (
@@ -169,27 +151,30 @@ export default function AdminDashboard() {
 
         {/* RIGHT column */}
         <div className="w-96 shrink-0">
-          {/* Calendar (week strip) */}
+          {/* #5 — FULL MONTH calendar (inline) */}
           <div className="bg-white rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-xl font-extrabold text-ink">
-                {headerLabel} <span className="text-sm font-semibold text-ink/50 ml-1">{weekdayLabel}</span>
-              </p>
-              <button onClick={openFullCal} className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink text-lg">›</button>
+              <p className="text-xl font-extrabold text-ink">{monthName}</p>
+              <div className="flex gap-2">
+                <button onClick={() => changeMonth(-1)} className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink text-lg">‹</button>
+                <button onClick={() => changeMonth(1)} className="w-8 h-8 rounded-full hover:bg-cream flex items-center justify-center text-ink text-lg">›</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center mb-1">
+              {DAY_LETTERS.map((d, i) => <span key={i} className="text-[11px] font-bold text-ink/50 py-1">{d}</span>)}
             </div>
             <div className="grid grid-cols-7 gap-1 text-center">
-              {weekDays.map((d) => (
-                <span key={d.toISOString()} className="text-[11px] font-bold text-ink/50 py-1">{DAY_SHORT[d.getDay()]}</span>
-              ))}
-              {weekDays.map((d) => {
-                const active = isSameDay(d, selected);
-                const isToday = isSameDay(d, today);
+              {cells.map((c, i) => {
+                const cellDate = !c.other ? new Date(viewYear, viewMonth, c.day) : null;
+                const active = cellDate && isSameDay(cellDate, selected);
+                const isToday = cellDate && isSameDay(cellDate, today);
                 return (
-                  <button key={'d' + d.toISOString()} onClick={() => setSelected(new Date(d))}
-                          className={`aspect-square rounded-full text-sm font-bold flex items-center justify-center
-                            ${active ? 'text-white' : isToday ? 'text-white' : 'text-ink hover:bg-cream'}`}
+                  <button key={i} disabled={c.other}
+                          onClick={() => cellDate && setSelected(cellDate)}
+                          className={`aspect-square rounded-full text-sm font-semibold flex items-center justify-center
+                            ${c.other ? 'text-ink/20' : active ? 'text-white' : isToday ? 'text-white' : 'text-ink hover:bg-cream'}`}
                           style={active ? { backgroundColor: '#0E2A2E' } : isToday ? { backgroundColor: '#3FA89A' } : {}}>
-                    {d.getDate()}
+                    {c.day}
                   </button>
                 );
               })}
@@ -199,8 +184,6 @@ export default function AdminDashboard() {
           {/* Announcement panel */}
           <div className="bg-white rounded-3xl p-5 shadow-sm mt-5">
             <h3 className="text-lg font-extrabold text-ink mb-4">Announcement</h3>
-
-            {/* Dark compose bar + View All */}
             <div className="flex gap-2 mb-4">
               <button onClick={() => navigate('/admin-announcements')}
                       className="flex-1 flex items-center gap-2 bg-ink text-white rounded-xl px-4 py-3 text-sm font-semibold">
@@ -211,8 +194,6 @@ export default function AdminDashboard() {
                 ▦ View All
               </button>
             </div>
-
-            {/* List */}
             <div className="space-y-3">
               {announcements.length === 0 ? (
                 <p className="text-center text-ink/50 py-4 text-sm">No announcements yet.</p>
@@ -228,7 +209,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Complaint Reports — notification kapag may bagong reklamo mula sa residents */}
+          {/* Complaint Reports */}
           <button onClick={() => navigate('/admin-reports?view=complaints')}
                   className="w-full mt-5 bg-white rounded-3xl p-5 shadow-sm flex items-center gap-4 text-left active:scale-[0.99] transition">
             <div className="relative shrink-0">
@@ -253,53 +234,6 @@ export default function AdminDashboard() {
           </button>
         </div>
       </div>
-
-      {/* FULL MONTH calendar modal */}
-      {showFullCal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setShowFullCal(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-lg p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <p className="text-2xl font-extrabold text-ink">{monthName}</p>
-              <div className="flex gap-2">
-                <button onClick={() => changeMonth(-1)} className="w-9 h-9 rounded-full hover:bg-cream flex items-center justify-center text-ink text-lg">‹</button>
-                <button onClick={() => changeMonth(1)} className="w-9 h-9 rounded-full hover:bg-cream flex items-center justify-center text-ink text-lg">›</button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center mb-2">
-              {DAY_LETTERS.map((d, i) => <span key={i} className="text-xs font-bold text-ink/50 py-1">{d}</span>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center">
-              {cells.map((c, i) => {
-                const cellDate = !c.other ? new Date(viewYear, viewMonth, c.day) : null;
-                const active = cellDate && isSameDay(cellDate, selected);
-                const isToday = cellDate && isSameDay(cellDate, today);
-                return (
-                  <button key={i} disabled={c.other}
-                          onClick={() => cellDate && setSelected(cellDate)}
-                          className={`aspect-square rounded-full text-sm font-semibold flex items-center justify-center
-                            ${c.other ? 'text-ink/25' : active ? 'text-white' : isToday ? 'text-white' : 'text-ink hover:bg-cream'}`}
-                          style={active ? { backgroundColor: '#0E2A2E' } : isToday ? { backgroundColor: '#3FA89A' } : {}}>
-                    {c.day}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center justify-between mt-8">
-              <button onClick={() => setShowFullCal(false)}
-                      className="px-8 py-2.5 rounded-full border border-gray-300 font-bold text-ink text-sm bg-white shadow-sm">
-                BACK
-              </button>
-              <button onClick={() => setShowFullCal(false)}
-                      className="px-8 py-2.5 rounded-full font-bold text-ink text-sm shadow-sm"
-                      style={{ backgroundColor: '#A9E5B0' }}>
-                CONFIRM
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminLayout>
   );
 }

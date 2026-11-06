@@ -5,14 +5,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import { adminMonthlyReport, adminListComplaints, adminResolveComplaint, adminAuditReport, adminGuardReports, adminAckGuardReport } from '../../api';
-import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X } from 'lucide-react';
+import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X, CheckCircle2 } from 'lucide-react';
 import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
 const REPORT_CARDS = [
   { key: 'monthly',    title: 'Monthly Report',      desc: 'Total visitors, trends, peak visitation days.', Icon: TrendingUp },
   { key: 'complaints', title: 'Complaints',          desc: 'Resident-filed complaints & resolutions.', Icon: Megaphone },
-  { key: 'incident',   title: 'Incident Monitoring', desc: 'Rejected entries, unresolved exits.', Icon: ShieldAlert },
-  { key: 'audit',      title: 'Audit Trails',        desc: 'Recorded entries, exits & incidents.', Icon: Clock },
+  { key: 'incident',   title: 'Incident Monitoring', desc: 'Reports filed by guards.', Icon: ShieldAlert },
+  { key: 'audit',      title: 'Audit Trails',        desc: 'Recorded entries, exits & reports.', Icon: Clock },
 ];
 
 const fmtDay = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : '—';
@@ -36,12 +36,6 @@ const STATUS_COLOR = {
   Resolved: { bg: '#B4E4BE', fg: '#1e6b2e' },
 };
 
-// #4b — ang audit trail ay hindi dapat magpakita ng Login/Logout records.
-const isLoginRow = (row) =>
-  /log\s?in|log\s?out|logged in|logged out|signed in|signed out|login|logout|session/i.test(
-    `${row.action || ''} ${row.details || ''}`
-  );
-
 export default function AdminReports() {
   const [searchParams] = useSearchParams();
   const [view, setView] = useState(searchParams.get('view') || 'overview');
@@ -59,11 +53,9 @@ export default function AdminReports() {
   const [compSearch, setCompSearch] = useState('');
   const [resolveTarget, setResolveTarget] = useState(null);
   const [resolText, setResolText] = useState('');
-  const [resolStatus, setResolStatus] = useState('Acknowledged');
   const [approveBl, setApproveBl] = useState(false);
   const [savingResol, setSavingResol] = useState(false);
 
-  // #1 — Incident Monitoring = mga report ni guard (hindi na exit notes)
   const [guardReports, setGuardReports] = useState({ list: [], summary: {} });
 
   const loadComplaints = () =>
@@ -88,7 +80,6 @@ export default function AdminReports() {
   const openResolve = (c) => {
     setResolveTarget(c);
     setResolText(c.resolution || '');
-    setResolStatus('Acknowledged'); // admin acknowledge lang; resident ang mag-resolve
     setApproveBl(false);
   };
   const saveResolve = async () => {
@@ -110,15 +101,8 @@ export default function AdminReports() {
   const table = report?.table || [];
   const summary = report?.summary || {};
 
-  // #4b — "Reports" count = complaints + guard reports (incident monitoring)
-  const guardReportCount = (guardReports?.list || []).length;
-  const complaintsCount = (complaints?.list || []).length;
-  const reportsCount = complaintsCount + guardReportCount;
+  const auditList = audit?.list || [];
 
-  // #4b — audit list na walang login records
-  const auditClean = (audit?.list || []).filter((row) => !isLoginRow(row));
-
-  // #2 — Working exports (shared template)
   const doExport = (type) => {
     const run = (name, sheet, title, header, rows, subtitle) =>
       type === 'pdf' ? exportPDF(title, header, rows, { subtitle }) : exportExcel(name, sheet, header, rows);
@@ -137,8 +121,8 @@ export default function AdminReports() {
       run('incident-monitoring', 'Incidents', 'Incident Monitoring', header, rows, 'Guard-filed reports');
     } else if (view === 'audit') {
       const header = ['Date & Time', 'Actor', 'Role', 'Action', 'Details'];
-      const rows = auditClean.map((a) => [a.ts ? new Date(a.ts).toLocaleString('en-US') : '', a.actor, a.role, a.action, a.details]);
-      run('audit-trails', 'Audit', 'Audit Trails', header, rows, 'Recorded entries, exits & incidents');
+      const rows = auditList.map((a) => [a.ts ? new Date(a.ts).toLocaleString('en-US') : '', a.actor, a.role, a.action, a.details]);
+      run('audit-trails', 'Audit', 'Audit Trails', header, rows, 'Recorded entries, exits & reports');
     } else {
       alert('Nothing to export on this view yet.');
     }
@@ -150,8 +134,6 @@ export default function AdminReports() {
         <h1 className="text-3xl font-extrabold text-teal-800">Reports</h1>
         <p className="text-sm text-ink/60">Generated reports and long-term analytics.</p>
       </div>
-      {/* Export buttons — nasa sub-views lang (Monthly, Complaints, Incident, Audit).
-          Walang export sa main Reports/overview tab. */}
       {view !== 'overview' && (
         <div className="flex gap-2">
           <button onClick={() => doExport('pdf')} className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
@@ -165,10 +147,9 @@ export default function AdminReports() {
     <AdminLayout>
       <Header />
 
-      {/* OVERVIEW — #6: tinanggal ang decorative search bar */}
+      {/* OVERVIEW */}
       {view === 'overview' && (
         <div className="bg-white rounded-2xl shadow-sm p-6">
-          {/* Month overview banner */}
           <div className="rounded-2xl p-6 flex items-center justify-between mb-6"
                style={{ background: 'linear-gradient(135deg,#0E2A2E 0%,#2E8C7E 100%)' }}>
             <div className="text-white">
@@ -192,7 +173,6 @@ export default function AdminReports() {
             </div>
           </div>
 
-          {/* Report cards */}
           <div className="grid grid-cols-2 gap-4">
             {REPORT_CARDS.map((c) => (
               <div key={c.key} className="rounded-2xl p-5 shadow-sm flex items-center gap-4" style={{ backgroundColor: '#F5F2E9' }}>
@@ -209,7 +189,7 @@ export default function AdminReports() {
         </div>
       )}
 
-      {/* MONTHLY — #6: tinanggal ang decorative search bar */}
+      {/* MONTHLY */}
       {view === 'monthly' && (
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-2">
@@ -220,7 +200,6 @@ export default function AdminReports() {
             <button onClick={() => setShowGen(true)} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
           </div>
 
-          {/* Chart */}
           <div className="border border-gray-100 rounded-2xl p-4 mt-3">
             <p className="text-center font-bold text-teal-800 mb-3">
               {chart.length ? `${chart[0].label} to ${chart[chart.length - 1].label} Report` : 'Report'}
@@ -240,7 +219,6 @@ export default function AdminReports() {
             </div>
           </div>
 
-          {/* Table */}
           <div className="grid grid-cols-4 gap-2 mt-5 mb-2">
             {['MONTH', 'VISITORS', 'DELIVERIES', 'TOTAL'].map((h, i) => (
               <span key={h} className={`text-[11px] font-semibold text-white px-4 py-2 rounded-lg ${i > 0 ? 'text-center' : ''}`} style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
@@ -280,7 +258,7 @@ export default function AdminReports() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="font-bold text-ink">Complaints</h3>
-                <p className="text-xs text-ink/60">Resident-filed complaints — acknowledge & resolve.</p>
+                <p className="text-xs text-ink/60">Resident-filed complaints — acknowledge; resident marks resolved.</p>
               </div>
               <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
@@ -342,8 +320,9 @@ export default function AdminReports() {
                       <span className="col-span-2 text-ink/70 text-xs truncate">{c.complaint_type}</span>
                       <span className="col-span-2 text-ink/70 text-xs truncate">{c.resident_name || '—'}</span>
                       <span className="col-span-1 text-ink/60 text-xs">{fmtDate(c.incident_date)}</span>
-                      <span className="col-span-2">
+                      <span className="col-span-2 flex items-center gap-1">
                         <span className="text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: sc.bg, color: sc.fg }}>{c.status}</span>
+                        {c.status === 'Resolved' && <CheckCircle2 size={13} className="text-green-600 shrink-0" title="Resolved by resident" />}
                       </span>
                     </button>
                   );
@@ -426,11 +405,11 @@ export default function AdminReports() {
         );
       })()}
 
-      {/* AUDIT TRAILS — #4b: walang Login records; stat na "Active Guards" → "Reports" */}
+      {/* AUDIT TRAILS — konektado sa Recent Activity + Reports */}
       {view === 'audit' && (() => {
         const s = audit?.summary || {};
         const q = auditSearch.toLowerCase();
-        const list = auditClean.filter((row) =>
+        const list = auditList.filter((row) =>
           !q ||
           (row.actor || '').toLowerCase().includes(q) ||
           (row.action || '').toLowerCase().includes(q) ||
@@ -446,18 +425,18 @@ export default function AdminReports() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="font-bold text-ink">Audit Trails</h3>
-                <p className="text-xs text-ink/60">Recorded entries, exits, and incident reports — {s.monthLabel || 'this month'}.</p>
+                <p className="text-xs text-ink/60">Recorded entries, exits, and reports — {s.monthLabel || 'this month'}.</p>
               </div>
               <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
 
-            {/* Summary cards — Active Guards pinalitan ng Reports */}
+            {/* Summary cards — Total Records = Entries + Exits + Reports */}
             <div className="grid grid-cols-4 gap-3 mt-4 mb-5">
               {[
-                ['Total Records', list.length, '#CFEDE4', '#0F6E6E'],
+                ['Total Records', s.total ?? list.length, '#CFEDE4', '#0F6E6E'],
                 ['Entries Logged', s.entries ?? 0, '#DCF3E4', '#1e6b2e'],
                 ['Exits Logged', s.exits ?? 0, '#F3C9C9', '#9b2c2c'],
-                ['Reports', reportsCount, '#F1D88A', '#8a6d12'],
+                ['Reports', s.reports ?? 0, '#F1D88A', '#8a6d12'],
               ].map(([label, n, bg, fg]) => (
                 <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
                   <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
@@ -466,7 +445,6 @@ export default function AdminReports() {
               ))}
             </div>
 
-            {/* Search (functional audit filter — pinananatili) */}
             <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
               <Search size={18} className="text-ink/40" />
               <input value={auditSearch} onChange={(e) => setAuditSearch(e.target.value)}
@@ -529,11 +507,12 @@ export default function AdminReports() {
         </div>
       )}
 
-      {/* Complaint DETAIL + RESOLVE modal */}
+      {/* Complaint DETAIL + RESOLVE modal (thread) */}
       {resolveTarget && (() => {
         const c = resolveTarget;
         const cc = CAT_COLOR[c.category] || { bg: '#eee', fg: '#555' };
         const presets = RESOLUTIONS[c.category] || [];
+        const isResolved = c.status === 'Resolved';
         return (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setResolveTarget(null)}>
             <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -546,51 +525,61 @@ export default function AdminReports() {
               <h2 className="text-lg font-extrabold text-ink">{c.subject}</h2>
               <p className="text-xs text-ink/60 mb-3">{c.complaint_type} · Incident: {fmtDate(c.incident_date)} · Filed by {c.resident_name || '—'}{c.unit_address ? ` (${c.unit_address})` : ''}</p>
 
+              {isResolved && (
+                <div className="rounded-xl px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: '#E3F5E9', color: '#1e6b2e' }}>
+                  <CheckCircle2 size={16} /> <span className="text-sm font-semibold">Marked as Resolved by the resident.</span>
+                </div>
+              )}
+
+              {/* THREAD — conversation history (resident ↔ admin) */}
               {c.description && (
                 <div className="rounded-xl px-4 py-3 mb-4" style={{ backgroundColor: '#F5F2E9' }}>
-                  <p className="text-[10px] font-semibold text-ink/50 mb-1">DESCRIPTION</p>
+                  <p className="text-[10px] font-semibold text-ink/50 mb-1">THREAD</p>
                   <p className="text-sm text-ink whitespace-pre-wrap">{c.description}</p>
                 </div>
               )}
 
-              <p className="text-[10px] font-semibold text-ink/60 mb-1">SUGGESTED RESOLUTIONS</p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {presets.map((p) => (
-                  <button key={p} type="button" onClick={() => setResolText(p)}
-                          className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-ink hover:border-teal-500">
-                    {p}
+              {!isResolved && (<>
+                <p className="text-[10px] font-semibold text-ink/60 mb-1">SUGGESTED RESOLUTIONS</p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {presets.map((p) => (
+                    <button key={p} type="button" onClick={() => setResolText(p)}
+                            className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-ink hover:border-teal-500">
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="block text-[10px] font-semibold text-ink/60 mb-1">ACKNOWLEDGEMENT / RESPONSE (nakikita ng resident)</label>
+                <textarea value={resolText} onChange={(e) => setResolText(e.target.value)} rows={3}
+                          placeholder="Type or pick a response above…"
+                          className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none mb-3" />
+
+                {c.category === 'Visitor' && c.blocklist ? (
+                  <button type="button" onClick={() => setApproveBl(!approveBl)}
+                          className="w-full flex items-center justify-between rounded-xl px-4 py-3 mb-4 border"
+                          style={{ borderColor: approveBl ? '#9b2c2c' : '#e5e7eb', backgroundColor: approveBl ? '#F3C9C9' : '#fff' }}>
+                    <span className="text-sm font-semibold text-ink text-left">Allow blocklist request<br /><span className="text-[11px] font-normal text-ink/60">Idadagdag si "{c.subject}" sa blocklist ng resident.</span></span>
+                    <span className="w-10 h-6 rounded-full flex items-center px-0.5" style={{ backgroundColor: approveBl ? '#9b2c2c' : '#d1d5db', justifyContent: approveBl ? 'flex-end' : 'flex-start' }}>
+                      <span className="w-5 h-5 rounded-full bg-white" />
+                    </span>
                   </button>
-                ))}
-              </div>
+                ) : null}
 
-              <label className="block text-[10px] font-semibold text-ink/60 mb-1">RESOLUTION / RESPONSE (nakikita ng resident)</label>
-              <textarea value={resolText} onChange={(e) => setResolText(e.target.value)} rows={3}
-                        placeholder="Type or pick a resolution above…"
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none mb-3" />
-
-              {c.category === 'Visitor' && c.blocklist ? (
-                <button type="button" onClick={() => setApproveBl(!approveBl)}
-                        className="w-full flex items-center justify-between rounded-xl px-4 py-3 mb-4 border"
-                        style={{ borderColor: approveBl ? '#9b2c2c' : '#e5e7eb', backgroundColor: approveBl ? '#F3C9C9' : '#fff' }}>
-                  <span className="text-sm font-semibold text-ink text-left">Allow blocklist request<br /><span className="text-[11px] font-normal text-ink/60">Idadagdag si "{c.subject}" sa blocklist ng resident.</span></span>
-                  <span className="w-10 h-6 rounded-full flex items-center px-0.5" style={{ backgroundColor: approveBl ? '#9b2c2c' : '#d1d5db', justifyContent: approveBl ? 'flex-end' : 'flex-start' }}>
-                    <span className="w-5 h-5 rounded-full bg-white" />
-                  </span>
-                </button>
-              ) : null}
-
-              {/* #2 — Admin ay AKNOWLEDGE lang. Ang resident ang magma-mark ng Resolved. */}
-              <div className="rounded-xl px-4 py-3 mb-5 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
-                Saving this will mark the complaint <span className="font-semibold">Acknowledged</span> and notify the resident.
-                Only the resident can mark it <span className="font-semibold">Resolved</span> once the issue is settled.
-              </div>
+                <div className="rounded-xl px-4 py-3 mb-5 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
+                  Saving will mark the complaint <span className="font-semibold">Acknowledged</span> and notify the resident.
+                  Only the resident can mark it <span className="font-semibold">Resolved</span>; kung hindi pa ayos, ire-resubmit nila ito sa thread.
+                </div>
+              </>)}
 
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setResolveTarget(null)} className="px-6 py-2 rounded-full text-sm font-medium text-ink border border-gray-300">Cancel</button>
-                <button onClick={saveResolve} disabled={savingResol}
-                        className="px-6 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-                  {savingResol ? 'Saving…' : 'Acknowledge'}
-                </button>
+                <button onClick={() => setResolveTarget(null)} className="px-6 py-2 rounded-full text-sm font-medium text-ink border border-gray-300">Close</button>
+                {!isResolved && (
+                  <button onClick={saveResolve} disabled={savingResol}
+                          className="px-6 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+                    {savingResol ? 'Saving…' : 'Acknowledge'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

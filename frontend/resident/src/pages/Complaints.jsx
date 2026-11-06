@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createComplaint, getMyComplaints, residentResolveComplaint, reopenComplaint } from '../api';
-import { UserX, Shield, Siren, Building2, CheckCircle2, RotateCcw, X } from 'lucide-react';
+import { UserX, Shield, Siren, Building2, CheckCircle2, RotateCcw, X, MessageSquare } from 'lucide-react';
 
 const CATEGORIES = [
   { key: 'visitor', Icon: UserX, label: 'VISITOR COMPLAINT' },
@@ -41,6 +41,7 @@ export default function Complaints() {
   // ── My complaints ──
   const [mine, setMine] = useState([]);
   const [loadingMine, setLoadingMine] = useState(false);
+  const [openThread, setOpenThread] = useState(null);   // complaint_id na naka-expand
   const [reopenTarget, setReopenTarget] = useState(null);
   const [reopenText, setReopenText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -109,7 +110,8 @@ export default function Complaints() {
       </header>
 
       <div className="px-4">
-        <h2 className="text-3xl font-extrabold text-ink text-center my-6">RESIDENT COMPLAINTS</h2>
+        {/* #3 — pinaliit ang heading para hindi masyadong sumakop */}
+        <h2 className="text-xl font-extrabold text-ink text-center my-4 tracking-wide">Resident Complaints</h2>
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4">
@@ -207,6 +209,7 @@ export default function Complaints() {
               </div>
             ) : mine.map((c) => {
               const sc = STATUS_COLOR[c.status] || STATUS_COLOR.Pending;
+              const expanded = openThread === c.complaint_id;
               return (
                 <div key={c.complaint_id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                   <div className="flex items-center justify-between mb-1">
@@ -215,17 +218,25 @@ export default function Complaints() {
                   </div>
                   <p className="font-semibold text-ink text-sm">{c.subject}</p>
                   <p className="text-xs text-ink/60">{c.complaint_type}{c.incident_date ? ` · ${fmt(c.incident_date)}` : ''}</p>
-                  {c.description && <p className="text-xs text-ink/70 mt-1 whitespace-pre-wrap">{c.description}</p>}
 
-                  {/* Admin's response */}
-                  {c.resolution && (
+                  {/* Tap to open the THREAD (conversation history) */}
+                  <button onClick={() => setOpenThread(expanded ? null : c.complaint_id)}
+                          className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700">
+                    <MessageSquare size={13} /> {expanded ? 'Hide thread' : 'View thread'}
+                  </button>
+                  {expanded && c.description && (
                     <div className="rounded-xl px-3 py-2 mt-2" style={{ backgroundColor: '#F5F2E9' }}>
-                      <p className="text-[10px] font-semibold text-ink/50">ADMIN RESPONSE</p>
-                      <p className="text-xs text-ink">{c.resolution}</p>
+                      <p className="text-xs text-ink whitespace-pre-wrap">{c.description}</p>
                     </div>
                   )}
 
-                  {/* Resident actions — only once acknowledged, and not yet resolved */}
+                  {c.status === 'Resolved' && (
+                    <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-green-700">
+                      <CheckCircle2 size={13} /> You marked this resolved.
+                    </div>
+                  )}
+
+                  {/* Actions — only once acknowledged by admin, and not yet resolved */}
                   {c.status === 'Acknowledged' && (
                     <div className="flex gap-2 mt-3">
                       <button onClick={() => markResolved(c)} disabled={busy}
