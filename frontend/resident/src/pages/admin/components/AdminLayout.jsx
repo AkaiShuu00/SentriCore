@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ClipboardList, User, Shield, BarChart3, ChevronDown, LogOut, X } from 'lucide-react';
-import { getMyAdminProfile, updateMyAdminProfile } from '../../api';
-
+import { getMyAdminProfile, updateMyAdminProfile } from "../../../api";
 // Shared admin shell: FIXED na sidebar (hindi gumagalaw sa scroll) + top header + scrollable content.
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
