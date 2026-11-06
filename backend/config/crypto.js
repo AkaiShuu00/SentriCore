@@ -5,7 +5,13 @@
 // Ligtas (backward-compatible): ang encrypted values ay may prefix na "enc:".
 // Kapag hindi "enc:" ang laman (lumang plaintext row), ibabalik as-is ng decrypt().
 const crypto = require('crypto');
-require('dotenv').config();
+const path = require('path');
+
+// IMPORTANTE: i-load ang .env mula sa ABSOLUTE path ng backend folder (config/..),
+// hindi umaasa sa current working directory. Ito ang dahilan kung bakit nagiging
+// "enc:" (hindi na-decrypt) ang numero kapag iba ang cwd ng NSSM service — hindi
+// nahahanap ang .env kaya default key ang nagamit at hindi tumugma sa data.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const ALGO = 'aes-256-gcm';
 // Gawing 32-byte key kahit anong haba ng ENCRYPTION_KEY (SHA-256 derive).
@@ -34,7 +40,7 @@ function decrypt(data) {
     const d = crypto.createDecipheriv(ALGO, KEY, iv);
     d.setAuthTag(tag);
     return Buffer.concat([d.update(enc), d.final()]).toString('utf8');
-  } catch {
+  } catch { 
     return data; // kung sakaling mali ang key/data, huwag mag-crash
   }
 }

@@ -4,11 +4,15 @@ const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
 const {
   createComplaint, getMyComplaints, getAllComplaints, resolveComplaint,
+  residentResolveComplaint, reopenComplaint,
 } = require('../controllers/complaintController');
 
 // ── Resident ──
 router.post('/complaints', verifyToken, requireRole('Resident'), createComplaint);
 router.get('/complaints/mine', verifyToken, requireRole('Resident'), getMyComplaints);
+// Resident LANG ang makaka-mark ng Resolved, o mag-re-submit (thread)
+router.put('/complaints/:id/resolve', verifyToken, requireRole('Resident'), residentResolveComplaint);
+router.put('/complaints/:id/reopen',  verifyToken, requireRole('Resident'), reopenComplaint);
 
 // ── Admin ──
 router.get('/admin/complaints', verifyToken, requireRole('Admin'), getAllComplaints);
