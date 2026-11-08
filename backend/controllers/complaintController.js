@@ -223,7 +223,26 @@ async function reopenComplaint(req, res) {
   }
 }
 
+// DELETE /api/complaints/:id  (Resident) — deletable LANG habang Pending (hindi pa na-acknowledge).
+async function deleteComplaint(req, res) {
+  try {
+    const residentId = req.user?.residentId || null;
+    const { id } = req.params;
+    const [[c]] = await pool.query(
+      `SELECT status FROM Complaints WHERE complaint_id = ? AND resident_id = ?`, [id, residentId]
+    );
+    if (!c) return res.status(404).json({ message: 'Complaint not found.' });
+    if (c.status !== 'Pending') {
+      return res.status(403).json({ message: 'Cannot delete — the complaint was already acknowledged by the admin.' });
+    }
+    await pool.query(`DELETE FROM Complaints WHERE complaint_id = ? AND resident_id = ?`, [id, residentId]);
+    res.json({ message: 'Complaint deleted.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting complaint.', error: err.message });
+  }
+}
+
 module.exports = {
   createComplaint, getMyComplaints, getAllComplaints, resolveComplaint,
-  residentResolveComplaint, reopenComplaint,
+  residentResolveComplaint, reopenComplaint, deleteComplaint,
 };

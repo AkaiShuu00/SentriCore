@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createComplaint, getMyComplaints, residentResolveComplaint, reopenComplaint } from '../api';
-import { UserX, Shield, Siren, Building2, CheckCircle2, RotateCcw, X, MessageSquare } from 'lucide-react';
+import { createComplaint, getMyComplaints, residentResolveComplaint, reopenComplaint, deleteComplaint } from '../api';
+import { UserX, Shield, Siren, Building2, CheckCircle2, RotateCcw, X, MessageSquare, Trash2 } from 'lucide-react';
 
 const CATEGORIES = [
   { key: 'visitor', Icon: UserX, label: 'VISITOR COMPLAINT' },
@@ -84,6 +84,14 @@ export default function Complaints() {
     setBusy(true);
     try { await residentResolveComplaint(c.complaint_id); loadMine(); }
     catch { alert('Failed to update. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  const removeComplaint = async (c) => {
+    if (!window.confirm('Delete this complaint? This can only be done while it is still Pending.')) return;
+    setBusy(true);
+    try { await deleteComplaint(c.complaint_id); loadMine(); }
+    catch (e) { alert(e.response?.data?.message || 'Failed to delete.'); }
     finally { setBusy(false); }
   };
 
@@ -250,7 +258,13 @@ export default function Complaints() {
                     </div>
                   )}
                   {c.status === 'Pending' && (
-                    <p className="text-[11px] text-ink/50 mt-2 italic">Waiting for the admin to acknowledge this complaint.</p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-ink/50 italic">Waiting for the admin to acknowledge this complaint.</p>
+                      <button onClick={() => removeComplaint(c)} disabled={busy}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 whitespace-nowrap disabled:opacity-60 shrink-0">
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
                   )}
                 </div>
               );

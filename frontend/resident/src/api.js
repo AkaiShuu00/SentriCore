@@ -95,6 +95,7 @@ export const createComplaint = (data) => api.post('/complaints', data);
 export const getMyComplaints = () => api.get('/complaints/mine');
 export const residentResolveComplaint = (id) => api.put(`/complaints/${id}/resolve`);
 export const reopenComplaint = (id, data) => api.put(`/complaints/${id}/reopen`, data);
+export const deleteComplaint = (id) => api.delete(`/complaints/${id}`);
 export const adminListComplaints = (params) => api.get('/admin/complaints', { params });
 export const adminResolveComplaint = (id, data) => api.put(`/admin/complaints/${id}`, data);
 
@@ -103,6 +104,7 @@ export const createGuardReport = (data) => api.post('/guard-reports', data);
 export const getMyGuardReports = () => api.get('/guard-reports/mine');
 export const resolveGuardReport = (id) => api.put(`/guard-reports/${id}/resolve`);
 export const reopenGuardReport = (id, data) => api.put(`/guard-reports/${id}/reopen`, data);
+export const deleteGuardReport = (id) => api.delete(`/guard-reports/${id}`);
 export const adminGuardReports = () => api.get('/admin/guard-reports');
 export const adminAckGuardReport = (id, data) => api.put(`/admin/guard-reports/${id}`, data);
 

@@ -4,7 +4,7 @@ const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
 const {
   createGuardReport, getMyGuardReports, getAdminGuardReports, acknowledgeGuardReport,
-  resolveGuardReport, reopenGuardReport,
+  resolveGuardReport, reopenGuardReport, deleteGuardReport,
 } = require('../controllers/guardreportController');
 
 // ── Guard ──
@@ -13,6 +13,8 @@ router.get('/guard-reports/mine', verifyToken, requireRole('Guard'), getMyGuardR
 // Guard LANG ang makaka-mark Resolved, o mag-re-submit (thread) — parang resident complaints
 router.put('/guard-reports/:id/resolve', verifyToken, requireRole('Guard'), resolveGuardReport);
 router.put('/guard-reports/:id/reopen',  verifyToken, requireRole('Guard'), reopenGuardReport);
+// Delete — habang Open LANG (hindi pa na-acknowledge ng admin)
+router.delete('/guard-reports/:id', verifyToken, requireRole('Guard'), deleteGuardReport);
 
 // ── Admin (Incident Monitoring) ──
 router.get('/admin/guard-reports', verifyToken, requireRole('Admin'), getAdminGuardReports);

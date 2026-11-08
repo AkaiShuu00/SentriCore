@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { createGuardReport, getMyGuardReports, resolveGuardReport, reopenGuardReport } from '../../api';
-import { ShieldAlert, AlertTriangle, Siren, MapPin, CheckCircle2, RotateCcw, MessageSquare, X } from 'lucide-react';
+import { createGuardReport, getMyGuardReports, resolveGuardReport, reopenGuardReport, deleteGuardReport } from '../../api';
+import { ShieldAlert, AlertTriangle, Siren, MapPin, CheckCircle2, RotateCcw, MessageSquare, X, Trash2 } from 'lucide-react';
 
 const CATEGORIES = [
   { key: 'Security Concern', Icon: ShieldAlert, label: 'SECURITY CONCERN',
@@ -78,6 +78,14 @@ export default function GuardReports() {
     catch { alert('Failed to update. Please try again.'); }
     finally { setBusy(false); }
   };
+  const removeReport = async (r) => {
+    if (!window.confirm('Delete this report? This can only be done while it is still Open.')) return;
+    setBusy(true);
+    try { await deleteGuardReport(r.report_id); loadMine(); }
+    catch (e) { alert(e.response?.data?.message || 'Failed to delete.'); }
+    finally { setBusy(false); }
+  };
+
   const submitReopen = async () => {
     if (!reopenTarget) return;
     setBusy(true);
@@ -223,7 +231,13 @@ export default function GuardReports() {
                     </div>
                   )}
                   {r.status === 'Open' && (
-                    <p className="text-[11px] text-ink/50 mt-2 italic">Waiting for the admin to acknowledge this report.</p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-ink/50 italic">Waiting for the admin to acknowledge this report.</p>
+                      <button onClick={() => removeReport(r)} disabled={busy}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 whitespace-nowrap disabled:opacity-60 shrink-0">
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
                   )}
                 </div>
               );

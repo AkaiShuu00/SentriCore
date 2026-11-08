@@ -157,7 +157,27 @@ async function reopenGuardReport(req, res) {
   }
 }
 
+// DELETE /api/guard-reports/:id  (Guard) — deletable LANG habang Open (hindi pa na-acknowledge).
+async function deleteGuardReport(req, res) {
+  try {
+    const guardId = req.user?.guardId || null;
+    const { id } = req.params;
+    const r = await getReport(id);
+    if (!r) return res.status(404).json({ message: 'Report not found.' });
+    if (guardId && r.guard_id && Number(r.guard_id) !== Number(guardId)) {
+      return res.status(403).json({ message: 'Not your report.' });
+    }
+    if (r.status !== 'Open') {
+      return res.status(403).json({ message: 'Cannot delete — the report was already acknowledged by the admin.' });
+    }
+    await pool.query(`DELETE FROM GuardReports WHERE report_id = ?`, [id]);
+    res.json({ message: 'Report deleted.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting report.', error: err.message });
+  }
+}
+
 module.exports = {
   createGuardReport, getMyGuardReports, getAdminGuardReports, acknowledgeGuardReport,
-  resolveGuardReport, reopenGuardReport,
+  resolveGuardReport, reopenGuardReport, deleteGuardReport,
 };
