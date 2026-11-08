@@ -43,7 +43,9 @@ export default function AdminDashboard() {
   // ── DB data ──
   const [stats, setStats] = useState({ activeVisitors: 0, todayEntries: 0, expectedToday: 0, activeGates: 0, total: 0 });
   const [announcements, setAnnouncements] = useState([]);
-  const [pendingComplaints, setPendingComplaints] = useState(0); // resident Pending + guard Open
+  const [pendRes, setPendRes] = useState(0);     // resident Pending
+  const [pendGuard, setPendGuard] = useState(0); // guard Open
+  const pendingComplaints = pendRes + pendGuard;
   const [weeklyExpected, setWeeklyExpected] = useState([]);
   const [recentAudit, setRecentAudit] = useState([]); // #3 — recent activity = audit (entries/exits/complaints/reports)
 
@@ -63,10 +65,9 @@ export default function AdminDashboard() {
       adminListComplaints().then((res) => res.data?.list || []).catch(() => []),
       adminGuardReports().then((res) => res.data?.list || []).catch(() => []),
     ]).then(([comps, greps]) => {
-      const pendRes = comps.filter((c) => (c.status || 'Pending') === 'Pending').length;
-      const openGuard = greps.filter((g) => (g.status || 'Open') === 'Open').length;
-      setPendingComplaints(pendRes + openGuard);
-    }).catch(() => setPendingComplaints(0));
+      setPendRes(comps.filter((c) => (c.status || 'Pending') === 'Pending').length);
+      setPendGuard(greps.filter((g) => (g.status || 'Open') === 'Open').length);
+    }).catch(() => { setPendRes(0); setPendGuard(0); });
   }, []);
 
   const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
@@ -245,9 +246,13 @@ export default function AdminDashboard() {
             <div className="flex-1 min-w-0">
               <p className="font-extrabold text-ink">Complaint Reports</p>
               <p className="text-xs text-ink/60">
-                {pendingComplaints > 0
-                  ? `${pendingComplaints} new complaint${pendingComplaints > 1 ? 's' : ''} reported by residents`
-                  : 'No complaints reported'}
+                {(() => {
+                  if (pendingComplaints === 0) return 'No complaints reported';
+                  const plural = pendingComplaints > 1 ? 's' : '';
+                  const by = pendRes > 0 && pendGuard > 0 ? 'resident and guard'
+                    : pendGuard > 0 ? 'guard' : 'resident';
+                  return `${pendingComplaints} new complaint${plural} reported by ${by}`;
+                })()}
               </p>
             </div>
             <span className="text-ink/40 shrink-0">›</span>

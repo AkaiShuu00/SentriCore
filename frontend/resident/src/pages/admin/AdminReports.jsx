@@ -269,6 +269,9 @@ export default function AdminReports() {
       {view === 'complaints' && (() => {
         const cx = complaints || { list: [], summary: {} };
         const sum = cx.summary || {};
+        // Count ng "new" (hindi pa na-acknowledge): resident = Pending, guard = Open
+        const residentNew = (cx.list || []).filter((c) => (c.status || 'Pending') === 'Pending').length;
+        const guardNew = (guardReports?.list || []).filter((g) => (g.status || 'Open') === 'Open').length;
         const cats = ['All', 'Visitor', 'Guard', 'Security', 'HOA'];
         const statuses = ['All', 'Pending', 'Acknowledged', 'Resolved'];
         const q = compSearch.toLowerCase();
@@ -291,14 +294,26 @@ export default function AdminReports() {
             {/* Toggle: Resident vs Guard complaints */}
             <div className="flex gap-2 mb-5">
               <button onClick={() => setCompSource('resident')}
-                      className="px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap"
+                      className="px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap flex items-center gap-2"
                       style={compSource === 'resident' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
                 Resident Complaints
+                {residentNew > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                        style={compSource === 'resident' ? { backgroundColor: '#fff', color: '#0F6E6E' } : { backgroundColor: '#DC2626', color: '#fff' }}>
+                    {residentNew}
+                  </span>
+                )}
               </button>
               <button onClick={() => setCompSource('guard')}
-                      className="px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap"
+                      className="px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap flex items-center gap-2"
                       style={compSource === 'guard' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
                 Guard Complaints
+                {guardNew > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                        style={compSource === 'guard' ? { backgroundColor: '#fff', color: '#0F6E6E' } : { backgroundColor: '#DC2626', color: '#fff' }}>
+                    {guardNew}
+                  </span>
+                )}
               </button>
             </div>
 

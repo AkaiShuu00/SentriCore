@@ -47,9 +47,37 @@ export default function GuardReports() {
   const [reopenText, setReopenText] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // --- "Not read" indicator: Acknowledged na ni admin pero hindi pa nabubuksan ng guard ---
+  const SEEN_KEY = 'sc_guard_seen_acks';
+  const [seenAcks, setSeenAcks] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+    catch { return new Set(); }
+  });
+  const persistSeen = (set) => {
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...set])); } catch { /* ignore */ }
+  };
+  const markSeen = (id) => setSeenAcks((prev) => {
+    if (prev.has(id)) return prev;
+    const next = new Set(prev); next.add(id); persistSeen(next); return next;
+  });
+  const isUnread = (r) => r.status === 'Acknowledged' && !seenAcks.has(r.report_id);
+  const unreadCount = mine.filter(isUnread).length;
+
   const loadMine = () => {
     setLoadingMine(true);
-    getMyGuardReports().then((res) => setMine(res.data || [])).catch(() => setMine([])).finally(() => setLoadingMine(false));
+    getMyGuardReports().then((res) => {
+      const list = res.data || [];
+      setMine(list);
+      // Linisin ang 'seen' para sa mga bumalik sa Open (re-submitted) — para mag-notify ulit kapag na-acknowledge muli
+      setSeenAcks((prev) => {
+        const openIds = new Set(list.filter((r) => r.status === 'Open').map((r) => r.report_id));
+        let changed = false;
+        const next = new Set(prev);
+        for (const id of prev) if (openIds.has(id)) { next.delete(id); changed = true; }
+        if (changed) persistSeen(next);
+        return changed ? next : prev;
+      });
+    }).catch(() => setMine([])).finally(() => setLoadingMine(false));
   };
   useEffect(() => { if (tab === 'mine') loadMine(); }, [tab]);
 
@@ -113,9 +141,15 @@ export default function GuardReports() {
             New Report
           </button>
           <button onClick={() => setTab('mine')}
-                  className="flex-1 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap"
+                  className="flex-1 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap inline-flex items-center justify-center gap-2"
                   style={tab === 'mine' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31' }}>
             My Reports
+            {unreadCount > 0 && (
+              <span className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                    style={tab === 'mine' ? { backgroundColor: '#fff', color: '#0F6E6E' } : { backgroundColor: '#DC2626', color: '#fff' }}>
+                {unreadCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -189,12 +223,22 @@ export default function GuardReports() {
               const cc = CAT_COLOR[r.category] || { bg: '#eee', fg: '#555' };
               const sc = STATUS_COLOR[r.status] || STATUS_COLOR.Open;
               const expanded = openThread === r.report_id;
+              const unread = isUnread(r);
               return (
-                <div key={r.report_id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div key={r.report_id} className="rounded-2xl p-4 shadow-sm"
+                     style={unread
+                       ? { backgroundColor: '#EAF4F1', border: '1px solid #0F6E6E55' }
+                       : { backgroundColor: '#fff', border: '1px solid #f3f4f6' }}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{r.category}</span>
                     <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: sc.bg, color: sc.fg }}>{r.status}</span>
                   </div>
+                  {unread && (
+                    <p className="text-[11px] font-bold mb-1 inline-flex items-center gap-1.5" style={{ color: '#0F6E6E' }}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#0F6E6E' }} />
+                      Acknowledged by admin — tap to view
+                    </p>
+                  )}
                   <p className="font-semibold text-ink text-sm">{r.report_type}</p>
                   {r.location && (
                     <p className="text-xs text-ink/60 mt-0.5 inline-flex items-center gap-1">
@@ -203,7 +247,7 @@ export default function GuardReports() {
                   )}
                   <p className="text-[10px] text-ink/40 mt-1">{fmt(r.created_at)}</p>
 
-                  <button onClick={() => setOpenThread(expanded ? null : r.report_id)}
+                  <button onClick={() => { setOpenThread(expanded ? null : r.report_id); markSeen(r.report_id); }}
                           className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700">
                     <MessageSquare size={13} /> {expanded ? 'Hide thread' : 'View thread'}
                   </button>
