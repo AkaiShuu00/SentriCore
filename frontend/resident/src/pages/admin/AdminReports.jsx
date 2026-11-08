@@ -57,12 +57,20 @@ export default function AdminReports() {
   const [savingResol, setSavingResol] = useState(false);
 
   const [guardReports, setGuardReports] = useState({ list: [], summary: {} });
-  const [grThread, setGrThread] = useState(null); // report_id na naka-expand na thread
+  const [grThread, setGrThread] = useState(null); // report_id na naka-expand na thread (Incident view)
+  const [compSource, setCompSource] = useState(searchParams.get('comp') === 'guard' ? 'guard' : 'resident'); // Complaints tab: resident | guard
+  const [grTarget, setGrTarget] = useState(null);           // guard report sa detail modal
+  const [ackNote, setAckNote] = useState('');
+  const [savingAck, setSavingAck] = useState(false);
 
   const loadComplaints = () =>
     adminListComplaints()
       .then((res) => setComplaints(res.data))
       .catch(() => setComplaints({ list: [], summary: {} }));
+  const loadGuardReports = () =>
+    adminGuardReports()
+      .then((res) => setGuardReports(res.data || { list: [], summary: {} }))
+      .catch(() => setGuardReports({ list: [], summary: {} }));
 
   useEffect(() => {
     adminMonthlyReport()
@@ -73,10 +81,20 @@ export default function AdminReports() {
     adminAuditReport()
       .then((res) => setAudit(res.data))
       .catch(() => setAudit(null));
-    adminGuardReports()
-      .then((res) => setGuardReports(res.data || { list: [], summary: {} }))
-      .catch(() => setGuardReports({ list: [], summary: {} }));
+    loadGuardReports();
   }, []);
+
+  const openGuardDetail = (g) => { setGrTarget(g); setAckNote(''); };
+  const saveGuardAck = async () => {
+    if (!grTarget) return;
+    setSavingAck(true);
+    try {
+      await adminAckGuardReport(grTarget.report_id, { note: ackNote });
+      await loadGuardReports();
+      setGrTarget(null);
+    } catch { alert('Failed to acknowledge. Please try again.'); }
+    finally { setSavingAck(false); }
+  };
 
   const openResolve = (c) => {
     setResolveTarget(c);
@@ -113,9 +131,15 @@ export default function AdminReports() {
       const rows = (report?.table || []).map((m) => [m.fullLabel, m.visitors, m.deliveries, m.total]);
       run('monthly-report', 'Monthly', 'Monthly Report', header, rows, 'Visitor & delivery totals by month');
     } else if (view === 'complaints') {
-      const header = ['Category', 'Subject', 'Type', 'Filed By', 'Incident Date', 'Status', 'Resolution'];
-      const rows = (complaints?.list || []).map((c) => [c.category, c.subject, c.complaint_type, c.resident_name || '—', fmtDate(c.incident_date), c.status, c.resolution || '']);
-      run('complaints', 'Complaints', 'Complaints', header, rows, 'Resident-filed complaints & resolutions');
+      if (compSource === 'guard') {
+        const header = ['Guard', 'Category', 'Type of Concern', 'Location', 'Status', 'Date'];
+        const rows = (guardReports?.list || []).map((g) => [g.guard_name || '—', g.category, g.report_type, g.location || '—', g.status, g.created_at ? new Date(g.created_at).toLocaleString('en-US') : '']);
+        run('guard-complaints', 'Guard', 'Guard Complaints', header, rows, 'Guard-filed reports & acknowledgements');
+      } else {
+        const header = ['Category', 'Subject', 'Type', 'Filed By', 'Incident Date', 'Status', 'Resolution'];
+        const rows = (complaints?.list || []).map((c) => [c.category, c.subject, c.complaint_type, c.resident_name || '—', fmtDate(c.incident_date), c.status, c.resolution || '']);
+        run('complaints', 'Complaints', 'Resident Complaints', header, rows, 'Resident-filed complaints & resolutions');
+      }
     } else if (view === 'incident') {
       const header = ['Guard', 'Category', 'Type of Concern', 'Location', 'Description', 'Status', 'Date'];
       const rows = (guardReports?.list || []).map((g) => [g.guard_name || '—', g.category, g.report_type, g.location || '—', g.description || '', g.status, g.created_at ? new Date(g.created_at).toLocaleString('en-US') : '']);
@@ -259,11 +283,26 @@ export default function AdminReports() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="font-bold text-ink">Complaints</h3>
-                <p className="text-xs text-ink/60">Resident-filed complaints — acknowledge; resident marks resolved.</p>
+                <p className="text-xs text-ink/60">Resident complaints & guard-filed reports — acknowledge from here.</p>
               </div>
               <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
             </div>
 
+            {/* Toggle: Resident vs Guard complaints */}
+            <div className="flex gap-2 mb-5">
+              <button onClick={() => setCompSource('resident')}
+                      className="px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap"
+                      style={compSource === 'resident' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
+                Resident Complaints
+              </button>
+              <button onClick={() => setCompSource('guard')}
+                      className="px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap"
+                      style={compSource === 'guard' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
+                Guard Complaints
+              </button>
+            </div>
+
+            {compSource === 'resident' ? (<>
             <div className="grid grid-cols-4 gap-3 mb-4">
               {['Visitor', 'Guard', 'Security', 'HOA'].map((k) => (
                 <div key={k} className="rounded-2xl px-4 py-3 text-center" style={{ backgroundColor: CAT_COLOR[k].bg }}>
@@ -330,6 +369,81 @@ export default function AdminReports() {
                 })}
               </div>
             )}
+            </>) : (() => {
+              // ── GUARD COMPLAINTS (guard-filed reports) — click → detail pop-up + acknowledge ──
+              const GR_C = {
+                'Security Concern': { bg: '#F3C9C9', fg: '#9b2c2c' },
+                'Small Problem': { bg: '#F1D88A', fg: '#8a6d12' },
+                'Incident': { bg: '#D9C2E9', fg: '#5b2c86' },
+              };
+              const GR_S = {
+                Open: { bg: '#F1D88A', fg: '#8a6d12' },
+                Acknowledged: { bg: '#CFE3F3', fg: '#1a5fa8' },
+                Resolved: { bg: '#B4E4BE', fg: '#1e6b2e' },
+              };
+              const gq = compSearch.toLowerCase();
+              const glist = (guardReports?.list || [])
+                .filter((g) => compStatus === 'All' || g.status === compStatus)
+                .filter((g) => !gq || (g.report_type || '').toLowerCase().includes(gq)
+                  || (g.category || '').toLowerCase().includes(gq)
+                  || (g.guard_name || '').toLowerCase().includes(gq));
+              const gsum = guardReports?.summary?.byCategory || {};
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {['Security Concern', 'Small Problem', 'Incident'].map((k) => (
+                      <div key={k} className="rounded-2xl px-4 py-3 text-center" style={{ backgroundColor: GR_C[k].bg }}>
+                        <p className="text-2xl font-extrabold" style={{ color: GR_C[k].fg }}>{gsum[k] || 0}</p>
+                        <p className="text-[11px] font-semibold mt-0.5" style={{ color: GR_C[k].fg }}>{k}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center mb-4">
+                    <select value={compStatus} onChange={(e) => setCompStatus(e.target.value)}
+                            className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm text-ink outline-none">
+                      {['All', 'Open', 'Acknowledged', 'Resolved'].map((s) => <option key={s} value={s}>{s === 'All' ? 'All Status' : s}</option>)}
+                    </select>
+                    <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 flex-1 min-w-[180px]" style={{ backgroundColor: '#F5F2E9' }}>
+                      <Search size={18} className="text-ink/40" />
+                      <input value={compSearch} onChange={(e) => setCompSearch(e.target.value)}
+                             placeholder="Search type, category, guard..." className="flex-1 outline-none text-sm bg-transparent" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-2 mb-2">
+                    <span className="col-span-3 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>CATEGORY</span>
+                    <span className="col-span-4 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>TYPE OF CONCERN</span>
+                    <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>GUARD</span>
+                    <span className="col-span-1 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE</span>
+                    <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>STATUS</span>
+                  </div>
+                  {glist.length === 0 ? (
+                    <p className="text-center text-ink/50 py-10 text-sm">No guard complaints found.</p>
+                  ) : (
+                    <div className="max-h-[50vh] overflow-y-auto">
+                      {glist.map((g) => {
+                        const cc = GR_C[g.category] || { bg: '#eee', fg: '#555' };
+                        const sc = GR_S[g.status] || GR_S.Open;
+                        return (
+                          <button key={g.report_id} onClick={() => openGuardDetail(g)}
+                                  className="w-full text-left grid grid-cols-12 gap-2 px-3 py-3 border-b border-gray-100 text-sm items-center hover:bg-gray-50">
+                            <span className="col-span-3">
+                              <span className="text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{g.category}</span>
+                            </span>
+                            <span className="col-span-4 font-semibold text-ink truncate">{g.report_type}</span>
+                            <span className="col-span-2 text-ink/70 text-xs truncate">{g.guard_name || '—'}</span>
+                            <span className="col-span-1 text-ink/60 text-xs">{g.created_at ? fmtDate(g.created_at) : '—'}</span>
+                            <span className="col-span-2">
+                              <span className="text-[9px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: sc.bg, color: sc.fg }}>{g.status}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         );
       })()}
@@ -603,6 +717,72 @@ export default function AdminReports() {
                   <button onClick={saveResolve} disabled={savingResol}
                           className="px-6 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
                     {savingResol ? 'Saving…' : 'Acknowledge'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* GUARD COMPLAINT detail + acknowledge modal (same process as resident) */}
+      {grTarget && (() => {
+        const GR_C = {
+          'Security Concern': { bg: '#F3C9C9', fg: '#9b2c2c' },
+          'Small Problem': { bg: '#F1D88A', fg: '#8a6d12' },
+          'Incident': { bg: '#D9C2E9', fg: '#5b2c86' },
+        };
+        const g = grTarget;
+        const cc = GR_C[g.category] || { bg: '#eee', fg: '#555' };
+        const isOpen = g.status === 'Open';
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={() => setGrTarget(null)}>
+            <div className="bg-white rounded-3xl w-full max-w-lg p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setGrTarget(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
+
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{g.category}</span>
+                <span className="text-[10px] font-semibold px-2 py-1 rounded-full"
+                      style={g.status === 'Resolved' ? { backgroundColor: '#B4E4BE', color: '#1e6b2e' } : g.status === 'Acknowledged' ? { backgroundColor: '#CFE3F3', color: '#1a5fa8' } : { backgroundColor: '#F1D88A', color: '#8a6d12' }}>{g.status}</span>
+              </div>
+              <h2 className="text-lg font-extrabold text-ink">{g.report_type}</h2>
+              <p className="text-xs text-ink/60 mb-3">
+                Filed by {g.guard_name || '—'}{g.location ? ' · ' : ''}{g.location ? <span className="inline-flex items-center gap-0.5"><MapPin size={12} className="text-ink/40" /> {g.location}</span> : null} · {g.created_at ? new Date(g.created_at).toLocaleString('en-US') : ''}
+              </p>
+
+              {g.status === 'Resolved' && (
+                <div className="rounded-xl px-4 py-3 mb-4 flex items-center gap-2" style={{ backgroundColor: '#E3F5E9', color: '#1e6b2e' }}>
+                  <CheckCircle2 size={16} /> <span className="text-sm font-semibold">Marked as Resolved by the guard.</span>
+                </div>
+              )}
+
+              {g.description && (
+                <div className="rounded-xl px-4 py-3 mb-4" style={{ backgroundColor: '#F5F2E9' }}>
+                  <p className="text-[10px] font-semibold text-ink/50 mb-1">THREAD</p>
+                  <p className="text-sm text-ink whitespace-pre-wrap">{g.description}</p>
+                </div>
+              )}
+
+              {isOpen && (<>
+                <label className="block text-[10px] font-semibold text-ink/60 mb-1">ACKNOWLEDGEMENT / RESPONSE (nakikita ng guard)</label>
+                <textarea value={ackNote} onChange={(e) => setAckNote(e.target.value)} rows={3}
+                          placeholder="Optional note to the guard…"
+                          className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 resize-none mb-3" />
+                <div className="rounded-xl px-4 py-3 mb-5 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
+                  Saving will mark the report <span className="font-semibold">Acknowledged</span> and notify the guard.
+                  Only the guard can mark it <span className="font-semibold">Resolved</span>; kung hindi pa ayos, ire-resubmit nila ito sa thread.
+                </div>
+              </>)}
+              {g.status === 'Acknowledged' && (
+                <p className="text-xs text-ink/50 italic mb-4">Acknowledged. Waiting for the guard to mark it resolved.</p>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setGrTarget(null)} className="px-6 py-2 rounded-full text-sm font-medium text-ink border border-gray-300">Close</button>
+                {isOpen && (
+                  <button onClick={saveGuardAck} disabled={savingAck}
+                          className="px-6 py-2 rounded-full text-sm font-semibold text-white disabled:opacity-60 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+                    {savingAck ? 'Saving…' : 'Acknowledge'}
                   </button>
                 )}
               </div>

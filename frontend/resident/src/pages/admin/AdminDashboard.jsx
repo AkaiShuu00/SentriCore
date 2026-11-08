@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
-import { getAdminSummary, getAnnouncements, adminListComplaints } from '../../api';
+import { getAdminSummary, getAnnouncements, adminListComplaints, adminAuditReport, adminGuardReports } from '../../api';
 import {
   MapPin, LogIn, CalendarDays, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle,
 } from 'lucide-react';
@@ -42,25 +42,38 @@ export default function AdminDashboard() {
 
   // ── DB data ──
   const [stats, setStats] = useState({ activeVisitors: 0, todayEntries: 0, expectedToday: 0, activeGates: 0, total: 0 });
-  const [recent, setRecent] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [pendingComplaints, setPendingComplaints] = useState(0);
+  const [pendingComplaints, setPendingComplaints] = useState(0); // resident Pending + guard Open
   const [weeklyExpected, setWeeklyExpected] = useState([]);
+  const [recentAudit, setRecentAudit] = useState([]); // #3 — recent activity = audit (entries/exits/complaints/reports)
 
   useEffect(() => {
     getAdminSummary()
-      .then((res) => { setStats(res.data.stats || {}); setRecent(res.data.recent || []); setWeeklyExpected(res.data.weeklyExpected || []); })
+      .then((res) => { setStats(res.data.stats || {}); setWeeklyExpected(res.data.weeklyExpected || []); })
       .catch(() => {});
     getAnnouncements().then((res) => setAnnouncements(res.data || [])).catch(() => {});
-    adminListComplaints()
-      .then((res) => {
-        const list = res.data?.list || [];
-        setPendingComplaints(list.filter((c) => (c.status || 'Pending') === 'Pending').length);
-      })
-      .catch(() => setPendingComplaints(0));
+
+    // #3 — Recent Activity konektado sa Audit Trails (entries/exits + complaints + reports)
+    adminAuditReport()
+      .then((res) => setRecentAudit(res.data?.list || []))
+      .catch(() => setRecentAudit([]));
+
+    // #2 — Complaint Reports card = resident Pending + guard Open (unacknowledged)
+    Promise.all([
+      adminListComplaints().then((res) => res.data?.list || []).catch(() => []),
+      adminGuardReports().then((res) => res.data?.list || []).catch(() => []),
+    ]).then(([comps, greps]) => {
+      const pendRes = comps.filter((c) => (c.status || 'Pending') === 'Pending').length;
+      const openGuard = greps.filter((g) => (g.status || 'Open') === 'Open').length;
+      setPendingComplaints(pendRes + openGuard);
+    }).catch(() => setPendingComplaints(0));
   }, []);
 
   const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+  const roleColor = (r) => r === 'Guard' ? { bg: '#CFEDE4', fg: '#0F6E6E' }
+    : r === 'Resident' ? { bg: '#D9C2E9', fg: '#5b2c86' }
+    : r === 'Admin' ? { bg: '#F1D88A', fg: '#8a6d12' }
+    : { bg: '#eee', fg: '#555' };
 
   // ── FULL MONTH grid (#5 — buong buwan na agad ang nakikita) ──
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
@@ -130,18 +143,25 @@ export default function AdminDashboard() {
                       className="text-xs font-bold text-teal-700">View All ›</button>
             </div>
             <div className="space-y-2">
-              {recent.length === 0 ? (
+              {recentAudit.length === 0 ? (
                 <p className="text-center text-ink/50 py-6 text-sm">No recent activity yet.</p>
-              ) : recent.map((r) => (
-                <div key={r.id} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0">
-                  <div>
+              ) : recentAudit.slice(0, 8).map((r, i) => (
+                <div key={i} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0">
+                  <div className="min-w-0 pr-2">
                     <p className="text-sm font-semibold text-ink">
-                      {r.name} {r.status === 'Active' ? 'entered' : 'exited'} · {r.unit || ''}
+                      {r.action}
                     </p>
-                    <p className="text-[11px] text-ink/50">Guard: {r.guard}</p>
+                    <p className="text-[11px] text-ink/60 truncate">{r.details}</p>
+                    <p className="text-[11px] mt-1 flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 rounded-full font-bold"
+                            style={{ backgroundColor: roleColor(r.role).bg, color: roleColor(r.role).fg }}>
+                        {r.role}
+                      </span>
+                      <span className="text-ink/60 font-semibold">{r.actor}</span>
+                    </p>
                   </div>
                   <span className="text-[11px] text-ink/40 shrink-0">
-                    {fmtTime(r.status === 'Active' ? r.entry : (r.exit || r.entry))}
+                    {fmtTime(r.ts)}
                   </span>
                 </div>
               ))}
