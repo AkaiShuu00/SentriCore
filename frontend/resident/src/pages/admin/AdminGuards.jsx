@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import { useRef } from 'react';
-import { Settings, X, KeyRound, Trash2, Plus, User, Camera, FileDown, FileSpreadsheet } from 'lucide-react';
+import { Settings, X, KeyRound, Trash2, Plus, User, Camera, FileDown, FileSpreadsheet, Phone } from 'lucide-react';
 import {
   adminListGuards, adminAddGuard, adminUpdateGuard,
   adminAssignGate, adminResetGuardPassword, adminDeleteGuard,
@@ -91,7 +91,7 @@ export default function AdminGuards() {
                     <p className="font-bold text-ink text-base truncate">{g.fullName}</p>
                     <p className="text-sm text-ink/70 truncate">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
                     <p className="text-xs text-ink/45 truncate">{g.username}</p>
-                    {g.contact && <p className="text-xs text-ink/45 truncate">📞 {g.contact}</p>}
+                    {g.contact && <p className="text-xs text-ink/45 truncate inline-flex items-center gap-1"><Phone size={11} className="text-ink/40" /> {g.contact}</p>}
                   </div>
                   <button onClick={() => setEditModal({ ...g })} title="Edit"
                           className="w-10 h-10 rounded-full hover:bg-cream flex items-center justify-center text-ink shrink-0"><Settings size={18} /></button>

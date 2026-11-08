@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import { adminMonthlyReport, adminListComplaints, adminResolveComplaint, adminAuditReport, adminGuardReports, adminAckGuardReport } from '../../api';
-import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, Megaphone, ShieldAlert, Clock, FileDown, FileSpreadsheet, Search, X, CheckCircle2, MapPin, MessageSquare } from 'lucide-react';
 import { exportExcel, exportPDF } from '../../utils/exportUtils';
 
 const REPORT_CARDS = [
@@ -57,6 +57,7 @@ export default function AdminReports() {
   const [savingResol, setSavingResol] = useState(false);
 
   const [guardReports, setGuardReports] = useState({ list: [], summary: {} });
+  const [grThread, setGrThread] = useState(null); // report_id na naka-expand na thread
 
   const loadComplaints = () =>
     adminListComplaints()
@@ -373,28 +374,52 @@ export default function AdminReports() {
               <div className="max-h-[52vh] overflow-y-auto space-y-3">
                 {list.map((g) => {
                   const cc = GR_COLOR[g.category] || { bg: '#eee', fg: '#555' };
+                  const GR_STATUS = {
+                    Open: { bg: '#F1D88A', fg: '#8a6d12' },
+                    Acknowledged: { bg: '#CFE3F3', fg: '#1a5fa8' },
+                    Resolved: { bg: '#B4E4BE', fg: '#1e6b2e' },
+                  };
+                  const sc = GR_STATUS[g.status] || GR_STATUS.Open;
+                  const expanded = grThread === g.report_id;
                   return (
                     <div key={g.report_id} className="border border-gray-100 rounded-2xl p-4 shadow-sm">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: cc.bg, color: cc.fg }}>{g.category}</span>
-                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full"
-                              style={g.status === 'Acknowledged' ? { backgroundColor: '#B4E4BE', color: '#1e6b2e' } : { backgroundColor: '#F1D88A', color: '#8a6d12' }}>
-                          {g.status}
-                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: sc.bg, color: sc.fg }}>{g.status}</span>
                       </div>
                       <p className="font-semibold text-ink text-sm">{g.report_type}</p>
-                      <p className="text-xs text-ink/60 mt-0.5">
-                        By {g.guard_name || '—'}{g.location ? ` · 📍 ${g.location}` : ''} · {g.created_at ? new Date(g.created_at).toLocaleString('en-US') : ''}
+                      <p className="text-xs text-ink/60 mt-0.5 inline-flex items-center gap-1 flex-wrap">
+                        <span>By {g.guard_name || '—'}</span>
+                        {g.location && (<span className="inline-flex items-center gap-0.5"><span>·</span><MapPin size={12} className="text-ink/40" /> {g.location}</span>)}
+                        <span>· {g.created_at ? new Date(g.created_at).toLocaleString('en-US') : ''}</span>
                       </p>
-                      {g.description && <p className="text-xs text-ink/70 mt-1">{g.description}</p>}
-                      {g.status !== 'Acknowledged' && (
+
+                      <button onClick={() => setGrThread(expanded ? null : g.report_id)}
+                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700">
+                        <MessageSquare size={13} /> {expanded ? 'Hide thread' : 'View thread'}
+                      </button>
+                      {expanded && g.description && (
+                        <div className="rounded-xl px-3 py-2 mt-2" style={{ backgroundColor: '#F5F2E9' }}>
+                          <p className="text-xs text-ink whitespace-pre-wrap">{g.description}</p>
+                        </div>
+                      )}
+
+                      {g.status === 'Resolved' && (
+                        <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-green-700">
+                          <CheckCircle2 size={13} /> Marked resolved by the guard.
+                        </div>
+                      )}
+                      {g.status === 'Open' && (
                         <button onClick={async () => {
                                   try { await adminAckGuardReport(g.report_id); const r = await adminGuardReports(); setGuardReports(r.data || { list: [], summary: {} }); }
                                   catch { alert('Failed to acknowledge.'); }
                                 }}
-                                className="mt-3 text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-                          Mark Acknowledged
+                                className="mt-3 block text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+                          Acknowledge
                         </button>
+                      )}
+                      {g.status === 'Acknowledged' && (
+                        <p className="text-[11px] text-ink/50 mt-2 italic">Acknowledged. Waiting for the guard to mark it resolved.</p>
                       )}
                     </div>
                   );

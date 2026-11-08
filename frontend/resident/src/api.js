@@ -1,32 +1,24 @@
 import axios from 'axios';
 
 // Relative na base URL — tumutugma sa SignIn.jsx/PreRegister.jsx ('/api').
-// Gumagana ito sa laptop AT sa phone dahil dumadaan sa Vite proxy patungo sa backend.
-// (Kung wala kang Vite proxy, palitan ito ng iyong laptop IP, hal:
-//   const API = 'http://192.168.100.9:3000/api';  )
 const API = '/api';
 
-// Axios instance na may auto-attach ng token.
-// Ang 'ngrok-skip-browser-warning' ay para hindi ibalik ng ngrok-free ang HTML
-// warning page sa mga API call (na siyang dahilan ng "service unavailable" sa phone).
 const api = axios.create({
   baseURL: API,
   headers: { 'ngrok-skip-browser-warning': 'true' },
 });
 
 api.interceptors.request.use((config) => {
-  // sessionStorage (hindi localStorage) — pare-pareho sa buong app
   const token = sessionStorage.getItem('sentricore_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Kung expired/invalid ang token → balik sa signin
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 || err.response?.status === 403) {
-      // Optional: auto-logout kapag expired
+      // Optional: auto-logout kapag expired (naka-off para hindi biglang mag-logout)
       // sessionStorage.removeItem('sentricore_token');
       // window.location.href = '/signin';
     }
@@ -46,21 +38,21 @@ export const getMyProfile = () => api.get('/residents/me');
 // ── Guards (Contact Guard, resident side) ──
 export const getGuards = () => api.get('/guards/directory');
 
-// ── Guard's own profile (full DB row: photo, employee_id, phone, email, gate, status) ──
+// ── Guard's own profile ──
 export const getMyGuardProfile = () => api.get('/guards/me');
 
-// ── Guard shift (time-in/out) ──
+// ── Guard shift ──
 export const getMyShift = () => api.get('/guards/my-shift');
 export const endGuardShift = () => api.post('/guards/end-shift');
 export const adminGuardShifts = () => api.get('/guards/shifts');
 
-// ── Gate pickup (resident notifies gate → guard sees waiting) ──
+// ── Gate pickup ──
 export const notifyGatePickup = (data) => api.post('/pickups', data);
 export const getMyGatePickup = () => api.get('/pickups/mine');
 export const getGatePickups = () => api.get('/pickups');
 export const resolveGatePickup = (id) => api.put(`/pickups/${id}/done`);
 
-// ── Announcements (all logged-in) ──
+// ── Announcements ──
 export const getAnnouncements = () => api.get('/announcements');
 export const createAnnouncement = (data) => api.post('/announcements', data);
 export const deleteAnnouncement = (id) => api.delete(`/announcements/${id}`);
@@ -79,7 +71,7 @@ export const adminDeleteResident = (id) => api.delete(`/admin/residents/${id}`);
 export const adminListDeactivatedResidents = () => api.get('/admin/residents/deactivated');
 export const adminResidentTransactions = (id, params) => api.get(`/admin/residents/${id}/transactions`, { params });
 
-// ── Admin: own profile (name/phone/email/password) + public contact for guard ──
+// ── Admin: own profile + public contact for guard ──
 export const getMyAdminProfile = () => api.get('/admin/me');
 export const updateMyAdminProfile = (data) => api.put('/admin/me', data);
 export const getAdminContact = () => api.get('/admin/contact');
@@ -106,20 +98,21 @@ export const reopenComplaint = (id, data) => api.put(`/complaints/${id}/reopen`,
 export const adminListComplaints = (params) => api.get('/admin/complaints', { params });
 export const adminResolveComplaint = (id, data) => api.put(`/admin/complaints/${id}`, data);
 
-// ── Guard Reports (hiwalay sa exit note; papasok sa admin Incident Monitoring) ──
+// ── Guard Reports (resident-style flow: file → admin acknowledge → guard resolve/re-submit) ──
 export const createGuardReport = (data) => api.post('/guard-reports', data);
 export const getMyGuardReports = () => api.get('/guard-reports/mine');
+export const resolveGuardReport = (id) => api.put(`/guard-reports/${id}/resolve`);
+export const reopenGuardReport = (id, data) => api.put(`/guard-reports/${id}/reopen`, data);
 export const adminGuardReports = () => api.get('/admin/guard-reports');
-export const adminAckGuardReport = (id) => api.put(`/admin/guard-reports/${id}`);
+export const adminAckGuardReport = (id, data) => api.put(`/admin/guard-reports/${id}`, data);
 
 // ── Notifications ──
 export const getNotifications = () => api.get('/notifications');
 export const markNotificationRead = (id) => api.put(`/notifications/${id}/read`);
 export const markAllNotificationsRead = () => api.put('/notifications/read-all');
 
-// ── Blocklist (resident view) ──
+// ── Blocklist ──
 export const getMyBlocklist = () => api.get('/blocklist');
-// Guard: check kung ang pangalan ng bisita ay tumutugma sa blocklist
 export const checkBlocklist = (name) => api.get('/blocklist/check', { params: { name } });
 
 // ── Password ──
@@ -131,7 +124,6 @@ export const changePassword = (data) => api.post('/auth/change-password', data);
 export const matchVisitor = (params) => api.get('/entry/match', { params });
 export const getActiveVisitors = () => api.get('/entry/active');
 export const getHistory = () => api.get('/entry/history');
-// Arrival-grouped transactions (active + departed) para manatiling buo ang Linked Entry
 export const getArrivals = () => api.get('/entry/arrivals');
 export const createGroupEntry = (data) => api.post('/entry/group', data);
 export const recordExit = (id, data) => api.post(`/entry/${id}/exit`, data);
