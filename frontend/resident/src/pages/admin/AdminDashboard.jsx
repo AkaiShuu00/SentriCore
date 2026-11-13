@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import { getAdminSummary, getAnnouncements, adminListComplaints, adminAuditReport, adminGuardReports } from '../../api';
 import {
-  MapPin, LogIn, CalendarDays, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle,
+  MapPin, LogIn, CalendarDays, Flame, Droplet, Zap, Wrench, Users, Megaphone, MessageSquare, AlertTriangle, ShieldAlert,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -237,22 +237,42 @@ export default function AdminDashboard() {
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#F3C9C9' }}>
                 <AlertTriangle size={22} style={{ color: '#9b2c2c' }} />
               </div>
-              {pendingComplaints > 0 && (
+              {pendRes > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow">
-                  {pendingComplaints > 9 ? '9+' : pendingComplaints}
+                  {pendRes > 9 ? '9+' : pendRes}
                 </span>
               )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-extrabold text-ink">Complaint Reports</p>
               <p className="text-xs text-ink/60">
-                {(() => {
-                  if (pendingComplaints === 0) return 'No complaints reported';
-                  const plural = pendingComplaints > 1 ? 's' : '';
-                  const by = pendRes > 0 && pendGuard > 0 ? 'resident and guard'
-                    : pendGuard > 0 ? 'guard' : 'resident';
-                  return `${pendingComplaints} new complaint${plural} reported by ${by}`;
-                })()}
+                {pendRes === 0
+                  ? 'No complaints reported'
+                  : `${pendRes} new complaint${pendRes > 1 ? 's' : ''} reported by resident`}
+              </p>
+            </div>
+            <span className="text-ink/40 shrink-0">›</span>
+          </button>
+
+          {/* Incident Report — guard-filed reports; click → Incident Monitoring sa Reports tab */}
+          <button onClick={() => navigate('/admin-reports?view=incident')}
+                  className="w-full mt-4 bg-white rounded-3xl p-5 shadow-sm flex items-center gap-4 text-left active:scale-[0.99] transition">
+            <div className="relative shrink-0">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#D9C2E9' }}>
+                <ShieldAlert size={22} style={{ color: '#5b2c86' }} />
+              </div>
+              {pendGuard > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow">
+                  {pendGuard > 9 ? '9+' : pendGuard}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-extrabold text-ink">Incident Report</p>
+              <p className="text-xs text-ink/60">
+                {pendGuard === 0
+                  ? 'No incident reports filed'
+                  : `${pendGuard} new incident report${pendGuard > 1 ? 's' : ''} filed by guard`}
               </p>
             </div>
             <span className="text-ink/40 shrink-0">›</span>

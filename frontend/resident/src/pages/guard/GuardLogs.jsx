@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
-import { getHistory, getArrivals, getMyGuardProfile } from '../../api';
+import { getHistory, getArrivals, getMyGuardProfile, expireCheck } from '../../api';
 import { Shield, ClipboardList, LogOut, Ban, Search, Download, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
@@ -52,6 +52,9 @@ export default function GuardLogs() {
   const [records, setRecords] = useState([]);
   const [arrivals, setArrivals] = useState([]);   // arrival-grouped (active + departed) para sa Linked Entry
   const [loading, setLoading] = useState(true);
+
+  // I-markahan muna ang mga lumipas (>3 araw) bilang Expired bago kunin ang logs
+  useEffect(() => { expireCheck().catch(() => {}); }, []);
 
   // Linked Entry data — buo (active + departed) para hindi maging single ang naiwan
   useEffect(() => {

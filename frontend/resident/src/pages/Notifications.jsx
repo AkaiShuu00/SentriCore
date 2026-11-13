@@ -24,8 +24,8 @@ export default function Notifications() {
 
   // Saan dadalhin kapag niclick (admin side)
   const destFor = (type) =>
-    type === 'report' ? '/admin-reports?view=complaints&comp=guard'
-    : type === 'complaint' ? '/admin-reports?view=complaints&comp=resident'
+    type === 'report' ? '/admin-reports?view=incident'
+    : type === 'complaint' ? '/admin-reports?view=complaints'
     : null;
 
   const open = async (n) => {
