@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import { getGuards } from '../api';
-import { Search, Phone, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Phone, ShieldCheck, RefreshCw } from 'lucide-react';
+
+const DARK = '#0A4A4A';
 
 export default function ContactGuard() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
   const [guards, setGuards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     getGuards()
       .then((res) => setGuards(res.data || []))
@@ -19,7 +21,12 @@ export default function ContactGuard() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  // Real-time: i-refresh ang on/off duty status tuwing 20s (silent — walang loading flicker)
+  useEffect(() => {
+    load();
+    const id = setInterval(() => load(true), 20000);
+    return () => clearInterval(id);
+  }, []);
 
   const statusStyle = {
     'ON DUTY': { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
@@ -28,10 +35,7 @@ export default function ContactGuard() {
     'UNAVAILABLE': { backgroundColor: '#F3C9C9', color: '#8a2b2b' },
   };
 
-  // Search lang ang filter — tinanggal ang ON DUTY/ON BREAK/OFF DUTY/ALL chips
-  // (nakalagay naman per-guard ang status badge).
-  const filtered = guards
-    .filter((g) => (g.name || '').toLowerCase().includes(search.toLowerCase()));
+  const filtered = guards;
 
   const callGuard = (g) => {
     const number = (g.phone || '').replace(/[^\d+]/g, '');
@@ -41,29 +45,16 @@ export default function ContactGuard() {
 
   return (
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
-      {/* Header */}
-      <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => navigate('/home')}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
-        <h1 className="text-2xl font-extrabold text-white">Back to Home</h1>
-      </header>
+      <PageHeader title="Contact Guard" showBack onBack={() => navigate('/home')} />
 
-      <div className="px-4">
-        <h2 className="text-3xl font-extrabold text-ink text-center my-6">SECURITY GUARD LIST</h2>
-
-        {/* Search */}
-        <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow">
-          <Search size={18} className="text-ink/40" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-                 placeholder="Search guard name"
-                 className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
-        </div>
+      <div className="px-4 pt-4">
+        <h2 className="text-2xl font-extrabold text-center mb-4" style={{ color: DARK }}>SECURITY GUARD LIST</h2>
 
         {/* Guard list card */}
-        <div className="bg-white rounded-3xl p-5 shadow mt-4">
+        <div className="bg-white rounded-3xl p-5 shadow">
           <div className="flex items-center justify-between mb-3">
             <p className="text-ink/70">Select guard to contact</p>
-            <button onClick={load} className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700">
+            <button onClick={() => load()} className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700">
               <RefreshCw size={14} /> Refresh
             </button>
           </div>

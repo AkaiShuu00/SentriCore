@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import { createComplaint, getMyComplaints, residentResolveComplaint, reopenComplaint, deleteComplaint } from '../api';
 import { UserX, Shield, Siren, Building2, CheckCircle2, RotateCcw, X, MessageSquare, Trash2 } from 'lucide-react';
+
+const DARK = '#0A4A4A';
 
 const CATEGORIES = [
   { key: 'visitor', Icon: UserX, label: 'VISITOR COMPLAINT' },
@@ -111,16 +114,9 @@ export default function Complaints() {
 
   return (
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
-      <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => navigate('/home')}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
-        <h1 className="text-2xl font-extrabold text-white">Back to Home</h1>
-      </header>
+      <PageHeader title="Complaints" showBack onBack={() => navigate('/home')} />
 
-      <div className="px-4">
-        {/* #3 — pinaliit ang heading para hindi masyadong sumakop */}
-        <h2 className="text-xl font-extrabold text-ink text-center my-4 tracking-wide">Resident Complaints</h2>
-
+      <div className="px-4 pt-4">
         {/* Tabs */}
         <div className="flex gap-2 mb-4">
           <button onClick={() => setTab('new')}

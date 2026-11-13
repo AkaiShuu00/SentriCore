@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Home from './Home';
 import { CheckCircle2, User, Users, Truck } from 'lucide-react';
 
 const API = '/api';
@@ -469,8 +470,14 @@ export default function PreRegister() {
   const isDelivery = regType === 'Delivery';
 
   return (
-    /* dark scrim — clicking outside closes */
-    <div style={styles.overlay} onClick={handleClose}>
+    <>
+      {/* Home dashboard na nananatiling nakikita sa likod ng pop-up */}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+        <Home />
+      </div>
+
+      {/* dark scrim — clicking outside closes */}
+      <div style={styles.overlay} onClick={handleClose}>
       <div onClick={e => e.stopPropagation()}>
         {step === 1 && (
           <StepChooseType onSelect={handleSelectType} onClose={handleClose} />
@@ -537,7 +544,8 @@ export default function PreRegister() {
 
         {step === 4 && <StepSuccess count={savedCount} onDone={handleClose} />}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -549,39 +557,41 @@ function DeliveryIcon() { return <Truck size={40} color={COLORS.teal} strokeWidt
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = {
   overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 200,
-    backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+    position: 'fixed', inset: 0, background: 'rgba(10,30,30,0.32)', zIndex: 200,
+    backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: '24px 20px', fontFamily: "'Poppins', sans-serif",
+    padding: '24px 18px', fontFamily: "'Poppins', sans-serif",
   },
   modalCard: {
-    background: 'white', borderRadius: 24, padding: '28px 24px 24px',
-    width: '100%', maxWidth: 340, position: 'relative',
-    maxHeight: '88vh', overflowY: 'auto',
+    background: 'white', borderRadius: 26, padding: '30px 26px 26px',
+    width: '100%', maxWidth: 400, position: 'relative',
+    maxHeight: '90vh', overflowY: 'auto',
+    boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
   },
   backBtn: {
-    position: 'absolute', top: 16, left: 16, width: 32, height: 32,
-    borderRadius: '50%', border: '1.5px solid #ddd', background: 'white',
-    cursor: 'pointer', fontSize: 18, fontWeight: 700, color: COLORS.ink,
+    position: 'absolute', top: 18, left: 16, width: 34, height: 34,
+    border: 'none', background: 'transparent',
+    cursor: 'pointer', fontSize: 30, fontWeight: 700, color: COLORS.teal,
     display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+    padding: 0,
   },
   modalTitle: {
-    fontFamily: "'Poppins', sans-serif", fontWeight: 800, fontSize: 18,
-    color: COLORS.ink, textAlign: 'center', marginBottom: 4,
+    fontFamily: "'Poppins', sans-serif", fontWeight: 800, fontSize: 19,
+    color: '#0A4A4A', textAlign: 'center', marginBottom: 4, padding: '0 40px',
   },
   modalSubtitle: {
     fontFamily: "'Poppins', sans-serif", fontSize: 12, color: '#888',
     textAlign: 'center', marginBottom: 20,
   },
-  typeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 20 },
+  typeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 24 },
   typeTile: {
-    background: '#f0faf6', border: '1.5px solid #d0ede5', borderRadius: 16,
-    padding: '20px 12px', display: 'flex', flexDirection: 'column',
-    alignItems: 'center', gap: 10, cursor: 'pointer',
+    background: '#f0faf6', border: '1.5px solid #d0ede5', borderRadius: 18,
+    padding: '24px 12px', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', gap: 12, cursor: 'pointer',
     fontFamily: "'Poppins', sans-serif", transition: 'border-color .15s, background .15s',
   },
-  typeTileLabel: { fontSize: 11, fontWeight: 700, color: COLORS.ink, textAlign: 'center' },
-  fieldGroup: { marginBottom: 14 },
+  typeTileLabel: { fontSize: 12, fontWeight: 700, color: '#0A4A4A', textAlign: 'center' },
+  fieldGroup: { marginBottom: 18 },
   fieldLabel: {
     display: 'block', fontFamily: "'Poppins', sans-serif", fontSize: 13,
     fontWeight: 700, color: COLORS.ink, marginBottom: 6,
@@ -595,8 +605,8 @@ const styles = {
     fontFamily: "'Poppins', sans-serif", letterSpacing: '.5px',
   },
   input: {
-    width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #ddd',
-    fontFamily: "'Poppins', sans-serif", fontSize: 13, background: 'white',
+    width: '100%', padding: '13px 15px', borderRadius: 13, border: '1.5px solid #ddd',
+    fontFamily: "'Poppins', sans-serif", fontSize: 14, background: 'white',
     outline: 'none', boxSizing: 'border-box', color: COLORS.ink,
     minWidth: 0, maxWidth: '100%', display: 'block',
     WebkitAppearance: 'none', appearance: 'none',
@@ -622,33 +632,33 @@ const styles = {
     padding: '9px', cursor: 'pointer', fontSize: 12, color: '#888',
     fontFamily: "'Poppins', sans-serif", marginTop: 2,
   },
-  twoBtn: { display: 'flex', gap: 10, marginTop: 20 },
+  twoBtn: { display: 'flex', gap: 10, marginTop: 24 },
   btnBack: {
-    flex: 1, padding: '12px', borderRadius: 999, border: '1.5px solid #ddd',
+    flex: 1, padding: '13px 10px', borderRadius: 999, border: '1.5px solid #ddd',
     background: 'white', cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
-    fontSize: 13, fontWeight: 700, color: COLORS.ink,
+    fontSize: 13, fontWeight: 700, color: COLORS.ink, whiteSpace: 'nowrap',
   },
   btnConfirm: {
-    flex: 1, padding: '12px', borderRadius: 999, border: 'none',
+    flex: 1, padding: '13px 10px', borderRadius: 999, border: 'none',
     background: COLORS.teal, cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
-    fontSize: 13, fontWeight: 700, color: 'white',
+    fontSize: 13, fontWeight: 700, color: 'white', whiteSpace: 'nowrap',
   },
   btnCancel: {
-    flex: 1, padding: '12px', borderRadius: 999, border: '1.5px solid #ddd',
+    flex: 1, padding: '13px 10px', borderRadius: 999, border: '1.5px solid #ddd',
     background: 'white', cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
-    fontSize: 13, fontWeight: 700, color: COLORS.ink,
+    fontSize: 13, fontWeight: 700, color: COLORS.ink, whiteSpace: 'nowrap',
   },
   btnInk: {
-    flex: 1, padding: '12px', borderRadius: 999, border: 'none',
+    flex: 1.4, padding: '13px 10px', borderRadius: 999, border: 'none',
     background: COLORS.ink, cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
-    fontSize: 13, fontWeight: 700, color: 'white',
+    fontSize: 13, fontWeight: 700, color: 'white', whiteSpace: 'nowrap',
   },
   btnInkFull: {
     width: '100%', padding: '14px', borderRadius: 999, border: 'none',
     background: COLORS.ink, cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
     fontSize: 13, fontWeight: 700, color: 'white',
   },
-  summaryBox: { border: '1.5px solid #eee', borderRadius: 12, overflow: 'hidden', marginBottom: 4 },
-  summaryRow: { padding: '10px 14px', borderBottom: '1px solid #f0f0f0' },
-  summaryText: { fontFamily: "'Poppins', sans-serif", fontSize: 12, color: COLORS.ink },
+  summaryBox: { border: '1.5px solid #eee', borderRadius: 14, overflow: 'hidden', marginBottom: 4 },
+  summaryRow: { padding: '12px 16px', borderBottom: '1px solid #f0f0f0' },
+  summaryText: { fontFamily: "'Poppins', sans-serif", fontSize: 13, color: COLORS.ink, lineHeight: 1.5 },
 };

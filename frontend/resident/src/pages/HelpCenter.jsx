@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import { Search, Rocket, UserCog, Wrench, ShieldCheck, ChevronDown } from 'lucide-react';
 import { useT, LangToggle } from '../i18n';
+
+const DARK = '#0A4A4A';
 
 function TopicCard({ Icon, title, items }) {
   const [open, setOpen] = useState(false);
@@ -124,20 +127,11 @@ export default function HelpCenter() {
 
   return (
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
-      {/* Header */}
-      <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => navigate('/profile')}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-extrabold text-white">{t('Help Center', 'Sentro ng Tulong')}</h1>
-          <p className="text-white/70 text-sm">{t('Need assistance?', 'Kailangan ng tulong?')}</p>
-        </div>
-        <LangToggle />
-      </header>
+      <PageHeader title={t('Help Center', 'Sentro ng Tulong')} showBack onBack={() => navigate('/profile')} right={<LangToggle />} />
 
-      <div className="px-4 space-y-5 mt-5">
+      <div className="px-4 space-y-5 pt-4">
         <div className="bg-white rounded-3xl p-6 shadow">
-          <h2 className="text-2xl font-extrabold text-ink mb-4">{t('How can we help you?', 'Paano ka namin matutulungan?')}</h2>
+          <h2 className="text-xl font-extrabold mb-4" style={{ color: DARK }}>{t('How can we help you?', 'Paano ka namin matutulungan?')}</h2>
           <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-full px-5 py-3 shadow-sm mb-6">
             <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -145,7 +139,7 @@ export default function HelpCenter() {
                    className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
           </div>
 
-          <h3 className="text-xl font-extrabold text-ink mb-3">{t('Popular Topics', 'Mga Popular na Paksa')}</h3>
+          <h3 className="text-xl font-extrabold mb-3" style={{ color: DARK }}>{t('Popular Topics', 'Mga Popular na Paksa')}</h3>
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <p className="text-center text-ink/50 py-6 text-sm">{t('No help articles found.', 'Walang nahanap na help article.')}</p>

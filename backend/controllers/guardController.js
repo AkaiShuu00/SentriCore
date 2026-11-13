@@ -144,9 +144,11 @@ async function getGuardDirectory(req, res) {
        ORDER BY g.guard_id`
     );
     const dutyLabel = (s) => {
-      const v = String(s || '').toLowerCase();
+      const v = String(s || '').toLowerCase().trim();
       if (v.includes('break')) return 'ON BREAK';
-      if (v.includes('on')) return 'ON DUTY';
+      if (v.includes('off')) return 'OFF DUTY';
+      // 'Active' (naka-login / may bukas na shift) o 'On Duty' → ON DUTY (real-time)
+      if (v.includes('active') || v.includes('on')) return 'ON DUTY';
       return 'OFF DUTY';
     };
     const guards = rows.map((r) => ({
