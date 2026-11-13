@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import { changePassword, getMyProfile, forgotPassword, resetPassword } from '../api';
 import { ShieldCheck, Eye, EyeOff, Mail, X } from 'lucide-react';
 
@@ -98,16 +99,9 @@ export default function PasswordSecurity() {
 
   return (
     <div className="min-h-screen bg-cream max-w-md mx-auto">
-      <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => navigate('/profile')}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
-        <div>
-          <h1 className="text-2xl font-extrabold text-white">Password &amp; Security</h1>
-          <p className="text-white/70 text-sm">Change your account password</p>
-        </div>
-      </header>
+      <PageHeader title="Password and Security" showBack onBack={() => navigate('/profile')} />
 
-      <div className="px-6 py-6">
+      <div className="px-6 pt-5 pb-6">
         <div className="flex flex-col items-center mb-6">
           <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mb-2">
             <ShieldCheck size={30} className="text-teal-700" />

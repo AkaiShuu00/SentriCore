@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import { ShieldCheck, FileText, ChevronDown } from 'lucide-react';
 import { useT, LangToggle } from '../i18n';
+
+const DARK = '#0A4A4A';
 
 function DocCard({ Icon, title, body }) {
   const [open, setOpen] = useState(false);
@@ -81,19 +84,11 @@ export default function Terms() {
 
   return (
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
-      <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => navigate('/profile')}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-extrabold text-white">{t('Terms and Permissions', 'Mga Tuntunin at Pahintulot')}</h1>
-          <p className="text-white/70 text-sm">{t('View our terms of service and privacy policy', 'Tingnan ang aming tuntunin at patakaran sa privacy')}</p>
-        </div>
-        <LangToggle />
-      </header>
+      <PageHeader title={t('Terms and Permissions', 'Mga Tuntunin at Pahintulot')} showBack onBack={() => navigate('/profile')} right={<LangToggle />} />
 
-      <div className="px-4 mt-5 space-y-5">
+      <div className="px-4 pt-4 space-y-5">
         <div className="bg-white rounded-3xl p-6 shadow">
-          <h2 className="text-2xl font-extrabold text-ink mb-4">{t('Legal Documents', 'Mga Legal na Dokumento')}</h2>
+          <h2 className="text-xl font-extrabold mb-4" style={{ color: DARK }}>{t('Legal Documents', 'Mga Legal na Dokumento')}</h2>
           <div className="space-y-3">
             {DOCS.map((d) => (
               <DocCard key={d.key} Icon={d.Icon} title={d.title} body={d.body} />

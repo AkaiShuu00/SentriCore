@@ -1,21 +1,16 @@
 import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
+import PageHeader from '../components/PageHeader';
 import { getMyRegistrations } from '../api';
-import { User, Search, Archive } from 'lucide-react';
+import { Search, Archive } from 'lucide-react';
 
 const FILTERS = ['ALL', 'VISITORS', 'DELIVERIES'];
-
-// #4: parehong avatar mapping — para mag-reflect ang napiling icon sa nav
-const AVATARS = { male: '/avatars/male.png', female: '/avatars/female.png' };
+const DARK = '#0A4A4A';
 
 const fmtTime = (ts) =>
   ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
 
 export default function History() {
-  const user = JSON.parse(sessionStorage.getItem('sentricore_user') || '{}');
-  // #4: napiling avatar (galing Profile, naka-save sa localStorage)
-  const avatarChoice = (() => { try { return localStorage.getItem('sentricore_avatar') || 'default'; } catch { return 'default'; } })();
-  const avatarSrc = AVATARS[avatarChoice] || null;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [showCalendar, setShowCalendar] = useState(false);
@@ -71,9 +66,9 @@ export default function History() {
   };
 
   const statusBg = {
-    DEPARTED: { backgroundColor: '#F3C9C9', color: '#8a2b2b' },
+    DEPARTED: { backgroundColor: '#E5E7EB', color: '#6b7280' },
     EXPIRED: { backgroundColor: '#D9D9D9', color: '#555' },
-    ACTIVE: { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
+    ACTIVE: { backgroundColor: '#D6EAD9', color: '#1e6b2e' },
   };
 
   const monthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
@@ -99,23 +94,13 @@ export default function History() {
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto">
-      {/* Header */}
-      <header className="bg-ink px-5 py-6">
-        <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-1 pr-5 py-1 shadow">
-          {/* #4: ipakita ang napiling avatar (B&W default) */}
-          <div className="w-10 h-10 rounded-full bg-ink flex items-center justify-center overflow-hidden">
-            {avatarSrc
-              ? <img src={avatarSrc} alt={user.name || 'Resident'} className="w-full h-full object-cover" />
-              : <User size={20} className="text-white" />}
-          </div>
-          <span className="font-bold text-ink">{user.name || 'Resident'}</span>
-        </div>
-      </header>
+      {/* Gradient wave header (walang pangalan) */}
+      <PageHeader />
 
-      <div className="px-4">
+      <div className="px-4 -mt-4 relative">
         {/* Teal gradient summary card */}
-        <div className="rounded-3xl p-6 shadow-lg text-white mt-4"
-             style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
+        <div className="rounded-3xl p-6 shadow-lg text-white"
+             style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
           <p className="font-bold tracking-wide">{monthYear}</p>
           <h1 className="text-4xl font-extrabold mb-5">Visit History</h1>
           <div className="flex gap-2">

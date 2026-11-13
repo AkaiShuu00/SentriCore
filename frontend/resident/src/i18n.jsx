@@ -25,18 +25,39 @@ export function useT() {
   return useContext(LangContext);
 }
 
-// Reusable na toggle chip (EN / TL) — puwedeng ilagay sa kahit anong header o settings page.
+// SVG-icon na language switch na may dropdown (English / Tagalog).
+// Dinisenyo para sa teal header (puting icon). Pindutin → lalabas ang pagpipilian.
 export function LangToggle({ className = '' }) {
   const { lang, setLang } = useT();
+  const [open, setOpen] = useState(false);
+  const options = [['en', 'English'], ['tl', 'Tagalog']];
   return (
-    <div className={`inline-flex rounded-full bg-white shadow overflow-hidden text-[11px] font-bold ${className}`}>
-      {[['en', 'EN'], ['tl', 'TL']].map(([code, label]) => (
-        <button key={code} onClick={() => setLang(code)}
-                className={`px-3 py-1 transition ${lang === code ? 'text-white' : 'text-ink'}`}
-                style={lang === code ? { backgroundColor: '#0F6E6E' } : {}}>
-          {label}
-        </button>
-      ))}
+    <div className={`relative ${className}`}>
+      <button onClick={() => setOpen((o) => !o)} aria-label="Language"
+              className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center text-white">
+        {/* globe / languages icon */}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M2 12h20" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-12 z-50 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden w-36">
+            {options.map(([code, label]) => (
+              <button key={code} onClick={() => { setLang(code); setOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm font-semibold flex items-center justify-between hover:bg-gray-50"
+                      style={{ color: lang === code ? '#0F6E6E' : '#112D31' }}>
+                {label}
+                {lang === code && <span>✓</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

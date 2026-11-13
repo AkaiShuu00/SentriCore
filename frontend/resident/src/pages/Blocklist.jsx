@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import { getMyBlocklist } from '../api';
 import { useT, LangToggle } from '../i18n';
 import { Ban } from 'lucide-react';
 
-const ink = '#112D31';
+const DARK = '#0A4A4A';
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
 export default function Blocklist() {
@@ -22,16 +23,9 @@ export default function Blocklist() {
 
   return (
     <div className="min-h-screen bg-cream pb-10 max-w-md mx-auto">
-      <header className="px-5 py-6 flex items-center gap-4" style={{ backgroundColor: ink }}>
-        <button onClick={() => navigate('/profile')} className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl shrink-0" style={{ color: ink }}>‹</button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-extrabold text-white">{t('Blocklisted', 'Blocklist')}</h1>
-          <p className="text-white/70 text-sm">{t('People you reported and the admin approved', 'Mga taong inireport mo at inaprubahan ng admin')}</p>
-        </div>
-        <LangToggle />
-      </header>
+      <PageHeader title={t('Blocklisted', 'Blocklist')} showBack onBack={() => navigate('/profile')} right={<LangToggle />} />
 
-      <div className="px-4 py-5">
+      <div className="px-4 pt-4">
         {/* Reminder: blocklisting is done through complaints */}
         <div className="rounded-2xl px-4 py-3 mb-4 text-sm" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
           {t('To blocklist a visitor, file a ', 'Para i-blocklist ang isang bisita, magsumite ng ')}
@@ -45,7 +39,7 @@ export default function Blocklist() {
         ) : list.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 shadow-sm text-center">
             <div className="flex justify-center mb-2"><Ban size={30} className="text-ink/40" /></div>
-            <p className="font-semibold text-ink text-sm">{t('No one is on the blocklist', 'Walang nasa blocklist')}</p>
+            <p className="font-semibold text-sm" style={{ color: DARK }}>{t('No one is on the blocklist', 'Walang nasa blocklist')}</p>
             <p className="text-ink/60 text-xs mt-1">{t('Your approved blocklist requests will appear here.', 'Dito lalabas ang mga inaprubahang blocklist request mo.')}</p>
           </div>
         ) : (
@@ -54,7 +48,7 @@ export default function Blocklist() {
               <div key={b.block_id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
                 <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#F3C9C9' }}><Ban size={20} style={{ color: '#9b2c2c' }} /></div>
                 <div className="flex-1">
-                  <p className="font-bold text-ink text-sm">{b.person_name}</p>
+                  <p className="font-bold text-sm" style={{ color: DARK }}>{b.person_name}</p>
                   {b.reason && <p className="text-xs text-ink/60">{b.reason}</p>}
                   {b.added_at && <p className="text-[10px] text-ink/40 mt-0.5">{t('Added', 'Idinagdag')} {fmt(b.added_at)}</p>}
                 </div>

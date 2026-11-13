@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
+import PageHeader from '../components/PageHeader';
 import { getMyProfile, forgotPassword, resetPassword } from '../api';
-import { useT, LangToggle } from '../i18n';
+import { useT } from '../i18n';
 import { ShieldCheck, Ban, HelpCircle, MessageSquare, FileText, LogOut, KeyRound, Mail, CheckCircle2, X } from 'lucide-react';
+
+const DARK = '#0A4A4A';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -83,23 +86,21 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto">
-      {/* Minimal top bar — walang back button, walang title; language toggle lang */}
-      <div className="px-5 pt-5 flex justify-end">
-        <LangToggle />
-      </div>
+      {/* Gradient wave header (walang pangalan) */}
+      <PageHeader />
 
-      <div className="px-4">
+      <div className="px-4 -mt-4 relative">
         {/* ── Profile card (centered): logo + name + unit + contact ── */}
-        <div className="bg-white rounded-3xl shadow-lg mt-3 px-6 py-8 text-center">
+        <div className="bg-white rounded-3xl shadow-lg px-6 py-8 text-center">
           <img src="/logo.png" alt="SentriCore" className="w-24 h-24 object-contain mx-auto mb-4"
                style={{ filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.20))' }} />
-          <h2 className="text-2xl font-extrabold text-ink tracking-wide break-words">{name.toUpperCase()}</h2>
+          <h2 className="text-2xl font-extrabold tracking-wide break-words" style={{ color: DARK }}>{name.toUpperCase()}</h2>
           <p className="text-sm text-ink/70 mt-2 break-words">{address}</p>
           <p className="text-sm text-ink/70">{contact}</p>
         </div>
 
         {/* General Settings */}
-        <h3 className="text-xl font-extrabold text-ink mt-6 mb-3">{t('General Settings', 'Pangkalahatang Setting')}</h3>
+        <h3 className="text-xl font-extrabold mt-6 mb-3" style={{ color: DARK }}>{t('General Settings', 'Pangkalahatang Setting')}</h3>
         <div className="bg-white rounded-3xl p-2 shadow">
           {settings.map((s, i) => (
             <div key={i}>
