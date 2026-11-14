@@ -103,7 +103,7 @@ export default function History() {
         <div className="rounded-3xl p-6 shadow-lg text-white"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
           <p className="font-bold tracking-wide">{monthYear}</p>
-          <h1 className="text-4xl font-extrabold mb-5">Visit History</h1>
+          <h1 className="text-3xl font-extrabold mb-5">Visit History</h1>
           <div className="flex gap-2">
             {[
               { label: 'TOTAL', val: counts.TOTAL },
