@@ -17,7 +17,7 @@ export default function BottomNav({ active }) {
   // I-render sa document.body (portal) para hindi maapektuhan ng anumang
   // transformed na ancestor — tunay na naka-fixed sa ibaba, hindi lumulutang.
   const bar = (
-    <div className="fixed bottom-0 left-0 right-0 z-40" style={{ pointerEvents: 'none' }}>
+    <div className="z-40" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, pointerEvents: 'none' }}>
       <div className="mx-auto w-full max-w-md relative" style={{ pointerEvents: 'auto' }}>
         <nav
           className="w-full h-16 bg-white border-t border-gray-200 flex justify-around items-center"

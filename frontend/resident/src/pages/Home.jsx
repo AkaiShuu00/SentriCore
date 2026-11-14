@@ -157,7 +157,7 @@ export default function Home() {
 
         {/* ── Today's Schedule box ── */}
         <h3 className="text-lg font-extrabold mt-7 mb-3" style={{ color: DARK }}>{t("Today's Schedule", 'Iskedyul Ngayon')}</h3>
-        <div className="bg-white rounded-3xl p-4 shadow-lg mb-4">
+        <div className="bg-white rounded-3xl p-4 shadow-lg">
           {/* Lined calendar — scrollable lang (hindi nae-expand) */}
           <div className="flex items-center gap-2">
             <button onClick={() => scrollDays(-1)} className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">‹</button>
@@ -177,34 +177,37 @@ export default function Home() {
             </div>
             <button onClick={() => scrollDays(1)} className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">›</button>
           </div>
+        </div>
 
-          {/* Expected Today + Active Visitors — tally box AS IS, sa ilalim ng calendar */}
-          <div className="bg-white rounded-3xl shadow-lg mt-4 grid grid-cols-2">
-            <div className="p-5 text-center">
-              <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
-                <CalendarClock size={22} style={{ color: TEAL }} />
-              </div>
-              <p className="text-3xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
-              <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
+        {/* Expected Today + Active Visitors — tally box AS IS (may puwang sa calendar) */}
+        <div className="bg-white rounded-3xl shadow-lg mt-5 grid grid-cols-2">
+          <div className="p-5 text-center">
+            <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
+              <CalendarClock size={22} style={{ color: TEAL }} />
             </div>
-            <div className="p-5 text-center" style={{ borderLeft: '1px solid rgba(10,74,74,0.12)' }}>
-              <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
-                <Users size={22} style={{ color: TEAL }} />
-              </div>
-              <p className="text-3xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
-              <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
-            </div>
+            <p className="text-3xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
+            <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
           </div>
+          <div className="p-5 text-center" style={{ borderLeft: '1px solid rgba(10,74,74,0.12)' }}>
+            <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
+              <Users size={22} style={{ color: TEAL }} />
+            </div>
+            <p className="text-3xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
+            <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
+          </div>
+        </div>
 
+        {/* Search + toggle + list — bukod na card, maluwag ang spacing */}
+        <div className="bg-white rounded-3xl p-5 shadow-lg mt-5 mb-4">
           {/* Search */}
-          <div className="flex items-center gap-3 rounded-full px-5 py-2.5 mt-3" style={{ backgroundColor: '#F5F2E9' }}>
+          <div className="flex items-center gap-3 rounded-full px-5 py-3" style={{ backgroundColor: '#F5F2E9' }}>
             <Search size={18} className="text-ink/40" />
             <input value={schedSearch} onChange={(e) => setSchedSearch(e.target.value)} placeholder={t('Search name', 'Hanapin ang pangalan')}
                    className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent text-sm" />
           </div>
 
           {/* ACTIVE / EXPECTED toggle */}
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-4">
             {['EXPECTED', 'ACTIVE'].map((tb) => (
               <button key={tb} onClick={() => setListTab(tb)}
                       className="flex-1 py-2 rounded-full text-xs font-bold"
@@ -215,7 +218,7 @@ export default function Home() {
           </div>
 
           {/* Grouped list */}
-          <div className="max-h-[42vh] overflow-y-auto mt-3">
+          <div className="max-h-[42vh] overflow-y-auto mt-4">
             <GroupList registrations={dayRegs} which={listTab} search={schedSearch}
                        emptyText={listTab === 'ACTIVE' ? t('No active visitors.', 'Walang aktibong bisita.') : t('No expected visitors.', 'Walang inaasahang bisita.')} />
           </div>
