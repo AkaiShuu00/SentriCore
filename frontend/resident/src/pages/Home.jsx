@@ -179,21 +179,22 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Expected Today + Active Visitors — tally box AS IS (may puwang sa calendar) */}
-        <div className="bg-white rounded-3xl shadow-lg mt-5 grid grid-cols-2">
-          <div className="p-5 text-center">
-            <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
-              <CalendarClock size={22} style={{ color: TEAL }} />
+        {/* Expected Today + Active Visitors — teal gradient, mas malaki at mas kita */}
+        <div className="rounded-3xl shadow-lg mt-5 grid grid-cols-2 text-white"
+             style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
+          <div className="p-6 text-center">
+            <div className="w-14 h-14 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
+              <CalendarClock size={26} className="text-white" />
             </div>
-            <p className="text-3xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
-            <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
+            <p className="text-5xl font-extrabold leading-none mb-1">{expectedTodayCount}</p>
+            <p className="text-sm font-semibold text-white/90">{t('Expected Today', 'Inaasahan Ngayon')}</p>
           </div>
-          <div className="p-5 text-center" style={{ borderLeft: '1px solid rgba(10,74,74,0.12)' }}>
-            <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
-              <Users size={22} style={{ color: TEAL }} />
+          <div className="p-6 text-center" style={{ borderLeft: '1px solid rgba(255,255,255,0.18)' }}>
+            <div className="w-14 h-14 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
+              <Users size={26} className="text-white" />
             </div>
-            <p className="text-3xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
-            <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
+            <p className="text-5xl font-extrabold leading-none mb-1">{activeVisitorsCount}</p>
+            <p className="text-sm font-semibold text-white/90">{t('Active Visitors', 'Aktibong Bisita')}</p>
           </div>
         </div>
 
