@@ -75,6 +75,17 @@ export default function AdminAnnouncements() {
       setComposeTab('details');
       return;
     }
+    // End Date required — ito ang nagpapawala ng announcement sa residents/guards (auto-complete)
+    if (!form.endDate) {
+      alert('Please set an End Date. After this date, the announcement auto-hides from residents and guards and shows as "Completed" for admins. For a long-running notice, just pick a far end date.');
+      setComposeTab('privacy');
+      return;
+    }
+    if (form.startDate && form.endDate < form.startDate) {
+      alert('End Date cannot be earlier than the Start Date.');
+      setComposeTab('privacy');
+      return;
+    }
     setSaving(true);
     try {
       await createAnnouncement({
@@ -268,7 +279,7 @@ export default function AdminAnnouncements() {
                              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-ink mb-1">End Date</label>
+                      <label className="block text-sm font-bold text-ink mb-1">End Date <span className="text-red-600 font-normal">(required)</span></label>
                       <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })}
                              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" />
                     </div>

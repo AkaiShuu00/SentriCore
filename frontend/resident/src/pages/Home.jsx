@@ -141,25 +141,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* ── Split box: Expected Today + Active Visitors (white bg, dark teal) ── */}
-        <div className="bg-white rounded-3xl shadow-lg mt-4 grid grid-cols-2">
-          <div className="p-5 text-center">
-            <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
-              <CalendarClock size={22} style={{ color: TEAL }} />
-            </div>
-            <p className="text-3xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
-            <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
-          </div>
-          <div className="p-5 text-center" style={{ borderLeft: '1px solid rgba(10,74,74,0.12)' }}>
-            <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
-              <Users size={22} style={{ color: TEAL }} />
-            </div>
-            <p className="text-3xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
-            <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
-          </div>
-        </div>
-
-        {/* ── How Can We Help You? (3 quick actions, horizontal, white bg, dark teal) ── */}
+        {/* ── How Can We Help You? (3 quick actions) — ilalim ng Announcements ── */}
         <h3 className="text-lg font-extrabold mt-7 mb-3" style={{ color: DARK }}>{t('How Can We Help You?', 'Paano Ka Namin Matutulungan?')}</h3>
         <div className="grid grid-cols-3 gap-3">
           {quickActions.map((q) => (
@@ -196,15 +178,21 @@ export default function Home() {
             <button onClick={() => scrollDays(1)} className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">›</button>
           </div>
 
-          {/* Expected Today + Active Visitors (napiling araw) */}
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="rounded-2xl py-3 text-center" style={{ backgroundColor: '#F5F2E9' }}>
-              <p className="text-2xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
-              <p className="text-[11px] font-semibold" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
+          {/* Expected Today + Active Visitors — tally box AS IS, sa ilalim ng calendar */}
+          <div className="bg-white rounded-3xl shadow-lg mt-4 grid grid-cols-2">
+            <div className="p-5 text-center">
+              <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
+                <CalendarClock size={22} style={{ color: TEAL }} />
+              </div>
+              <p className="text-3xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
+              <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
             </div>
-            <div className="rounded-2xl py-3 text-center" style={{ backgroundColor: '#F5F2E9' }}>
-              <p className="text-2xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
-              <p className="text-[11px] font-semibold" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
+            <div className="p-5 text-center" style={{ borderLeft: '1px solid rgba(10,74,74,0.12)' }}>
+              <div className="w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,110,110,0.12)' }}>
+                <Users size={22} style={{ color: TEAL }} />
+              </div>
+              <p className="text-3xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
+              <p className="text-xs font-semibold mt-0.5" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
             </div>
           </div>
 

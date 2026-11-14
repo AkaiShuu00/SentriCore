@@ -16,10 +16,14 @@ async function getAnnouncements(req, res) {
     const where = [];
     const params = [];
 
-    if (role !== 'Admin') {
-      // Active window (kung may date columns)
-      if (has('start_date')) where.push(`(start_date IS NULL OR start_date <= CURDATE())`);
-      if (has('end_date'))   where.push(`(end_date IS NULL OR end_date >= CURDATE())`);
+    // Robust na admin check (case-insensitive) — admin lang ang nakakakita ng expired
+    const isAdmin = String(role).toLowerCase() === 'admin';
+
+    if (!isAdmin) {
+      // Active window (kung may date columns) — DATE() para tama kahit DATETIME ang column.
+      // Nawawala sa resident/guard kapag LAMPAS na ang end_date (kinabukasan ng end date).
+      if (has('start_date')) where.push(`(start_date IS NULL OR DATE(start_date) <= CURDATE())`);
+      if (has('end_date'))   where.push(`(end_date IS NULL OR DATE(end_date) >= CURDATE())`);
 
       // Audience (kung may recipients column)
       if (has('recipients')) {
