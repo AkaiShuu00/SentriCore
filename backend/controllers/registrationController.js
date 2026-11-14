@@ -49,11 +49,31 @@ async function createRegistration(req, res) {
 
     await conn.beginTransaction();
 
+    // ── Batch: mag-generate ng UNIQUE 3-digit batch number (100–999) ──
+    // Iniimbak sa `batch_name`. Siniseguro na walang katugma sa ibang registration
+    // kahit ibang resident ang nagparehistro.
+    const isBatch = String(registrationType).toLowerCase() === 'batch';
+    let batchNumber = null;
+    if (isBatch) {
+      const [used] = await conn.query(
+        `SELECT batch_name FROM VisitorRegistrations WHERE batch_name IS NOT NULL`
+      );
+      const taken = new Set(used.map((u) => String(u.batch_name).trim()));
+      const free = [];
+      for (let n = 100; n <= 999; n++) if (!taken.has(String(n))) free.push(n);
+      if (free.length > 0) {
+        batchNumber = String(free[Math.floor(Math.random() * free.length)]);
+      } else {
+        // Sobrang unlikely (900 na batch na buhay) — fallback na random 3-digit
+        batchNumber = String(100 + Math.floor(Math.random() * 900));
+      }
+    }
+
     const [reg] = await conn.query(
       `INSERT INTO VisitorRegistrations
         (resident_id, registration_type, batch_name, order_id, purpose, expected_date, status)
        VALUES (?, ?, ?, ?, ?, ?, 'Expected')`,
-      [residentId, registrationType, batchName || null, orderId || null, purpose || null, expectedDate]
+      [residentId, registrationType, isBatch ? batchNumber : (batchName || null), orderId || null, purpose || null, expectedDate]
     );
     const registrationId = reg.insertId;
 
@@ -69,6 +89,7 @@ async function createRegistration(req, res) {
       message: 'Registration created.',
       registrationId,
       visitorCount: effectiveNames.length,
+      batchNumber,   // null kung hindi batch
     });
   } catch (err) {
     await conn.rollback();

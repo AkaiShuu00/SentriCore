@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import PageHeader from '../components/PageHeader';
+import GroupList from '../components/GroupList';
 import { getMyRegistrations, updateRegistration, deleteRegistration } from '../api';
 import { Search, Inbox, Pencil, Trash2, X, CalendarDays, Maximize2 } from 'lucide-react';
 
@@ -89,10 +90,8 @@ export default function Schedule() {
 
   const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
 
-  const filtered = allRows
-    .filter((s) => s.expectedDate === selectedISO)
-    .filter((s) => filter === 'ALL' || s.status === filter)
-    .filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
+  // Registrations para sa napiling araw (grouped — batch = isang grupo)
+  const dayRegs = registrations.filter((r) => (r.expected_date || '').slice(0, 10) === selectedISO);
 
   const prettyDate = new Date(year, month, selectedDay).toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
@@ -225,49 +224,15 @@ export default function Schedule() {
               <div className="text-center py-10 text-ink/50">Loading your visitors…</div>
             ) : error ? (
               <div className="text-center py-10 text-red-600 text-sm">{error}</div>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-10">
-                <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
-                <p className="text-ink/60 font-semibold">No visitors on this day</p>
-                <p className="text-ink/40 text-sm mt-1">Pick another date or pre-register a visitor.</p>
-              </div>
             ) : (
-              <>
-                {filtered.map((s, i) => {
-                  const showManage = s.canManage && s.status === 'EXPECTED' && !shownManage.has(s.registrationId);
-                  if (showManage) shownManage.add(s.registrationId);
-                  return (
-                    <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="text-xs font-bold text-ink text-center w-16 shrink-0">-----</div>
-                        <div className="flex-1">
-                          <p className="font-bold" style={{ color: DARK }}>{s.name}</p>
-                          <p className="text-sm text-ink/60">{s.type}</p>
-                          <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
-                        </div>
-                        {filter === 'ALL' && (
-                          <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={statusStyle[s.status] || { backgroundColor: '#eee', color: '#666' }}>
-                            {s.status}
-                          </span>
-                        )}
-                      </div>
-                      {showManage && (
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                          <button onClick={() => setEditReg({ registrationId: s.registrationId, purpose: s.rawPurpose, expectedDate: s.expectedDate })}
-                                  className="flex-1 flex items-center justify-center gap-1 py-2 rounded-full text-xs font-bold text-teal-700 border border-teal-200 bg-teal-50">
-                            <Pencil size={14} /> Edit
-                          </button>
-                          <button onClick={() => setDelReg({ registrationId: s.registrationId, name: s.name })}
-                                  className="flex-1 flex items-center justify-center gap-1 py-2 rounded-full text-xs font-bold text-red-700 border border-red-200 bg-red-50">
-                            <Trash2 size={14} /> Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
-              </>
+              <GroupList
+                registrations={dayRegs}
+                which={filter}
+                search={search}
+                emptyText="No visitors on this day."
+                onEdit={(r) => setEditReg({ registrationId: r.registration_id, purpose: r.purpose || '', expectedDate: (r.expected_date || '').slice(0, 10) })}
+                onDelete={(r) => setDelReg({ registrationId: r.registration_id, name: r.registration_type === 'Batch' ? `Batch #${r.batch_name}` : (r.visitors?.[0]?.name || 'this registration') })}
+              />
             )}
           </div>
         </div>

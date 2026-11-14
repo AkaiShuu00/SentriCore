@@ -348,11 +348,14 @@ function StepBatchConfirm({ form, error, submitting, onCancel, onConfirmEntry })
 }
 
 // ─── Success Modal ───────────────────────────────────────────────────────────
-function StepSuccess({ count, onDone }) {
+function StepSuccess({ count, batch, onDone }) {
   return (
     <div style={{ ...styles.modalCard, textAlign: 'center' }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><CheckCircle2 size={52} color={COLORS.teal} /></div>
       <h2 style={{ ...styles.modalTitle, marginBottom: 8 }}>Pre-Registered!</h2>
+      {batch && (
+        <p style={{ fontSize: 14, fontWeight: 800, color: '#0A4A4A', marginBottom: 10 }}>Batch Number: {batch}</p>
+      )}
       <p style={{ fontSize: 13, color: '#777', lineHeight: 1.6, marginBottom: 24 }}>
         {count > 1
           ? `${count} visitors have been pre-registered successfully. The guard will be notified on the expected date.`
@@ -376,6 +379,7 @@ export default function PreRegister() {
   const [step, setStep]       = useState(1); // 1=type, 2=details, 3=confirm, 4=success
   const [regType, setRegType] = useState('');
   const [savedCount, setSavedCount] = useState(0);
+  const [savedBatch, setSavedBatch] = useState(null);
   const [form, setForm] = useState({ name: '', purpose: '', date: '', names: [''], orderId: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(''); // inline error (pumalit sa alert)
@@ -462,6 +466,7 @@ export default function PreRegister() {
       });
 
       setSavedCount(res.data.visitorCount || 1);
+      setSavedBatch(res.data.batchNumber || null);
       setStep(4);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save registration. Please try again.');
@@ -552,7 +557,7 @@ export default function PreRegister() {
           />
         )}
 
-        {step === 4 && <StepSuccess count={savedCount} onDone={handleClose} />}
+        {step === 4 && <StepSuccess count={savedCount} batch={savedBatch} onDone={handleClose} />}
       </div>
       </div>
     </>

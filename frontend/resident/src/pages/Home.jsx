@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import AnnouncementsModal from '../components/AnnouncementsModal';
+import GroupList from '../components/GroupList';
 import { getMyRegistrations, getAnnouncements, getNotifications, notifyGatePickup } from '../api';
 import { useT, LangToggle } from '../i18n';
-import { Bell, Megaphone, CalendarClock, Users, Phone, MessageSquareWarning, DoorOpen } from 'lucide-react';
+import { Bell, Megaphone, CalendarClock, Users, Phone, MessageSquareWarning, DoorOpen, Search } from 'lucide-react';
 
 const DARK = '#0A4A4A';   // dark teal (font)
 const TEAL = '#0F6E6E';
@@ -31,23 +32,26 @@ export default function Home() {
   }, []);
 
   const today = new Date();
-  const isoToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const [selectedDay, setSelectedDay] = useState(today.getDate());
+  const [listTab, setListTab] = useState('EXPECTED'); // ACTIVE | EXPECTED
+  const [schedSearch, setSchedSearch] = useState('');
+  const selectedISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
 
-  // I-flatten ang registrations → isang row bawat visitor
-  const allRows = registrations.flatMap((r) => {
-    const isDelivery = r.registration_type === 'Delivery';
-    const expDate = (r.expected_date || '').slice(0, 10);
-    const vlist = r.visitors && r.visitors.length
-      ? r.visitors
-      : [{ name: isDelivery ? 'Delivery Rider' : '—', status: r.status || 'Expected' }];
-    return vlist.map((v) => ({
-      status: (typeof v === 'string' ? (r.status || 'Expected') : v.status).toUpperCase(),
-      expectedDate: expDate,
-    }));
-  });
-  const todayRows = allRows.filter((s) => s.expectedDate === isoToday);
-  const activeVisitorsCount = todayRows.filter((s) => s.status === 'ACTIVE').length;
-  const expectedTodayCount = todayRows.filter((s) => s.status === 'EXPECTED').length;
+  // Day strip (scrollable, hindi nae-expand)
+  const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthDays = [];
+  for (let i = 1; i <= daysInMonth; i++) monthDays.push({ dayNum: i, dayLabel: DAY_LABELS[new Date(year, month, i).getDay()] });
+  const scrollDays = (dir) => { const el = document.getElementById('home-day-scroll'); if (el) el.scrollBy({ left: dir * 150, behavior: 'smooth' }); };
+  useEffect(() => { const el = document.getElementById('home-today-cell'); if (el) el.scrollIntoView({ inline: 'start', block: 'nearest' }); }, [registrations.length]);
+
+  // Registrations para sa napiling araw
+  const dayRegs = registrations.filter((r) => (r.expected_date || '').slice(0, 10) === selectedISO);
+  const countBy = (st) => dayRegs.reduce((n, r) => n + (r.visitors || []).filter((v) => v.status === st).length, 0);
+  const activeVisitorsCount = countBy('Active');
+  const expectedTodayCount = countBy('Expected');
 
   // Quick actions (3) — horizontal
   const quickActions = [
@@ -167,6 +171,66 @@ export default function Home() {
               <span className="text-xs font-bold text-center leading-tight" style={{ color: DARK }}>{q.label}</span>
             </button>
           ))}
+        </div>
+
+        {/* ── Today's Schedule box ── */}
+        <h3 className="text-lg font-extrabold mt-7 mb-3" style={{ color: DARK }}>{t("Today's Schedule", 'Iskedyul Ngayon')}</h3>
+        <div className="bg-white rounded-3xl p-4 shadow-lg mb-4">
+          {/* Lined calendar — scrollable lang (hindi nae-expand) */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => scrollDays(-1)} className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">‹</button>
+            <div id="home-day-scroll" className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
+              {monthDays.map((d) => {
+                const isActive = d.dayNum === selectedDay;
+                const isToday = d.dayNum === today.getDate();
+                return (
+                  <button key={d.dayNum} id={isToday ? 'home-today-cell' : undefined} onClick={() => setSelectedDay(d.dayNum)}
+                          className={`flex flex-col items-center rounded-2xl px-3 py-2 min-w-[56px] shadow-sm shrink-0 ${isActive ? 'text-white' : 'text-ink'} ${!isActive && !isToday ? 'bg-white border border-gray-100' : ''}`}
+                          style={isActive ? { backgroundColor: TEAL } : isToday ? { backgroundColor: '#CFE3DF' } : {}}>
+                    <span className="text-[10px] font-semibold">{d.dayLabel}</span>
+                    <span className="text-xl font-extrabold">{d.dayNum}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => scrollDays(1)} className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">›</button>
+          </div>
+
+          {/* Expected Today + Active Visitors (napiling araw) */}
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="rounded-2xl py-3 text-center" style={{ backgroundColor: '#F5F2E9' }}>
+              <p className="text-2xl font-extrabold" style={{ color: DARK }}>{expectedTodayCount}</p>
+              <p className="text-[11px] font-semibold" style={{ color: DARK }}>{t('Expected Today', 'Inaasahan Ngayon')}</p>
+            </div>
+            <div className="rounded-2xl py-3 text-center" style={{ backgroundColor: '#F5F2E9' }}>
+              <p className="text-2xl font-extrabold" style={{ color: DARK }}>{activeVisitorsCount}</p>
+              <p className="text-[11px] font-semibold" style={{ color: DARK }}>{t('Active Visitors', 'Aktibong Bisita')}</p>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="flex items-center gap-3 rounded-full px-5 py-2.5 mt-3" style={{ backgroundColor: '#F5F2E9' }}>
+            <Search size={18} className="text-ink/40" />
+            <input value={schedSearch} onChange={(e) => setSchedSearch(e.target.value)} placeholder={t('Search name', 'Hanapin ang pangalan')}
+                   className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent text-sm" />
+          </div>
+
+          {/* ACTIVE / EXPECTED toggle */}
+          <div className="flex gap-2 mt-3">
+            {['EXPECTED', 'ACTIVE'].map((tb) => (
+              <button key={tb} onClick={() => setListTab(tb)}
+                      className="flex-1 py-2 rounded-full text-xs font-bold"
+                      style={listTab === tb ? { backgroundColor: TEAL, color: '#fff' } : { backgroundColor: '#fff', color: DARK, border: '1px solid #e5e7eb' }}>
+                {tb}
+              </button>
+            ))}
+          </div>
+
+          {/* Grouped list */}
+          <div className="max-h-[42vh] overflow-y-auto mt-3">
+            <GroupList registrations={dayRegs} which={listTab} search={schedSearch}
+                       emptyText={listTab === 'ACTIVE' ? t('No active visitors.', 'Walang aktibong bisita.') : t('No expected visitors.', 'Walang inaasahang bisita.')} />
+          </div>
         </div>
       </div>
 
