@@ -1,9 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Home, CalendarClock, History, User, Plus } from 'lucide-react';
 
 export default function BottomNav({ active }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const items = [
     { key: 'home', Icon: Home, label: 'Home', path: '/home' },
@@ -40,9 +41,9 @@ export default function BottomNav({ active }) {
           )}
         </nav>
 
-        {/* Center floating + button */}
+        {/* Center floating + button — dinadala ang kasalukuyang tab para makita sa likod ng Pre-Register */}
         <button
-          onClick={() => navigate('/pre-register')}
+          onClick={() => navigate('/pre-register', { state: { from: location.pathname } })}
           className="absolute left-1/2 -translate-x-1/2 -top-6 w-14 h-14 rounded-full bg-ink text-white shadow-lg flex items-center justify-center"
         >
           <Plus size={28} />

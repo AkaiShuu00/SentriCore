@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import PageHeader from '../components/PageHeader';
 import { getMyRegistrations } from '../api';
-import { Search, Archive } from 'lucide-react';
+import { Search, Archive, CalendarDays } from 'lucide-react';
 
 const FILTERS = ['ALL', 'VISITORS', 'DELIVERIES'];
 const DARK = '#0A4A4A';
@@ -44,6 +44,7 @@ export default function History() {
                 ? new Date(dateISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                 : '—',
               time: timeStr,
+              departed: tOut ? new Date(tOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
               name: typeof v === 'string' ? v : v.name,
               kind: isDelivery ? 'Delivery' : 'Visitor',
               plate: (typeof v === 'string' ? '' : (v.plate_number || '')),
@@ -97,7 +98,7 @@ export default function History() {
       {/* Gradient wave header (walang pangalan) */}
       <PageHeader />
 
-      <div className="px-4 -mt-4 relative">
+      <div className="px-4 pt-3 relative">
         {/* Teal gradient summary card */}
         <div className="rounded-3xl p-6 shadow-lg text-white"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
@@ -109,91 +110,87 @@ export default function History() {
               { label: 'VISITORS', val: counts.VISITORS },
               { label: 'DELIVERIES', val: counts.DELIVERIES },
             ].map((s) => (
-              <div key={s.label} className="flex-1 bg-black/15 rounded-2xl py-3 text-center">
-                <p className="text-2xl font-extrabold">{s.val}</p>
-                <p className="text-[10px] font-semibold">{s.label}</p>
+              <div key={s.label} className="flex-1 bg-white rounded-2xl py-3 text-center">
+                <p className="text-2xl font-extrabold" style={{ color: DARK }}>{s.val}</p>
+                <p className="text-[10px] font-semibold" style={{ color: DARK }}>{s.label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Search + date range */}
-        <div className="flex gap-2 mt-4">
-          <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow flex-1">
-            <Search size={18} className="text-ink/40" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)}
-                   placeholder="Search name"
-                   className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent w-full" />
-          </div>
-          <div className="relative">
-            <button onClick={() => setShowCalendar(!showCalendar)}
-                    className="flex items-center gap-1 bg-white rounded-full px-3 py-3 shadow text-sm font-semibold text-ink whitespace-nowrap h-full">
-                {fromDate && toDate ? `${fmtShort(fromDate)} - ${fmtShort(toDate)}` : 'Select Date' } ▾
-            </button>
-            {showCalendar && (
-              <div className="absolute right-0 top-14 bg-white rounded-2xl shadow-lg p-4 z-30 w-64 border border-gray-100">
-                <label className="block text-xs font-bold text-ink mb-1">From</label>
-                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                       className="w-full border border-gray-300 rounded-xl px-3 py-2 mb-3 text-sm" />
-                <label className="block text-xs font-bold text-ink mb-1">To</label>
-                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                       className="w-full border border-gray-300 rounded-xl px-3 py-2 mb-3 text-sm" />
-                <div className="flex gap-2">
-                  <button onClick={() => { setFromDate(''); setToDate(''); }}
-                          className="flex-1 text-sm py-2 rounded-xl border border-gray-300 font-semibold text-ink">
-                    Clear
-                  </button>
-                  <button onClick={() => setShowCalendar(false)}
-                          className="flex-1 text-sm py-2 rounded-xl text-white font-semibold"
-                          style={{ backgroundColor: '#0F6E6E' }}>
-                    Apply
-                  </button>
+        {/* ── Isang elevated box: search+date → filters → table ── */}
+        <div className="bg-white rounded-3xl p-4 shadow mt-4 mb-4">
+          {/* Search + date (calendar icon) */}
+          <div className="flex gap-2">
+            <div className="flex items-center gap-2 rounded-full px-4 py-3 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
+              <Search size={18} className="text-ink/40" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                     placeholder="Search name"
+                     className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent w-full" />
+            </div>
+            <div className="relative">
+              <button onClick={() => setShowCalendar(!showCalendar)}
+                      aria-label="Select date"
+                      className="flex items-center justify-center rounded-full px-4 shadow-sm h-full"
+                      style={{ backgroundColor: fromDate && toDate ? '#0F6E6E' : '#F5F2E9' }}>
+                <CalendarDays size={20} style={{ color: fromDate && toDate ? '#fff' : '#0F6E6E' }} />
+              </button>
+              {showCalendar && (
+                <div className="absolute right-0 top-14 bg-white rounded-2xl shadow-lg p-4 z-30 w-64 border border-gray-100">
+                  <label className="block text-xs font-bold text-ink mb-1">From</label>
+                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+                         className="w-full border border-gray-300 rounded-xl px-3 py-2 mb-3 text-sm" />
+                  <label className="block text-xs font-bold text-ink mb-1">To</label>
+                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+                         className="w-full border border-gray-300 rounded-xl px-3 py-2 mb-3 text-sm" />
+                  <div className="flex gap-2">
+                    <button onClick={() => { setFromDate(''); setToDate(''); }}
+                            className="flex-1 text-sm py-2 rounded-xl border border-gray-300 font-semibold text-ink">Clear</button>
+                    <button onClick={() => setShowCalendar(false)}
+                            className="flex-1 text-sm py-2 rounded-xl text-white font-semibold" style={{ backgroundColor: '#0F6E6E' }}>Apply</button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Filter chips */}
-        <div className="flex gap-2 mt-4 justify-center">
-          {FILTERS.map((f) => (
-            <button key={f} onClick={() => setFilter(f)}
-                    className={`px-5 py-2 rounded-full text-sm font-bold shadow ${filter === f ? 'text-white' : 'bg-white text-ink'}`}
-                    style={filter === f ? { backgroundColor: '#0F6E6E' } : {}}>
-              {f}
-            </button>
-          ))}
-        </div>
+          {/* Filter chips */}
+          <div className="flex gap-2 mt-3 justify-center">
+            {FILTERS.map((f) => (
+              <button key={f} onClick={() => setFilter(f)}
+                      className={`px-5 py-2 rounded-full text-sm font-bold ${filter === f ? 'text-white' : 'bg-white border border-gray-200 text-ink'}`}
+                      style={filter === f ? { backgroundColor: '#0F6E6E' } : {}}>
+                {f}
+              </button>
+            ))}
+          </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-3xl shadow mt-4 overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-4 gap-1 bg-gray-100 px-3 py-3 text-center">
-            <span className="text-xs font-bold text-ink">Date & Time</span>
-            <span className="text-xs font-bold text-ink">Details</span>
-            <span className="text-xs font-bold text-ink">Status</span>
-            <span className="text-xs font-bold text-ink">Pass Number</span>
+          <div className="grid grid-cols-4 gap-1 rounded-xl px-3 py-2.5 text-center mt-3" style={{ backgroundColor: '#F5F2E9' }}>
+            <span className="text-xs font-bold" style={{ color: DARK }}>Date & Time</span>
+            <span className="text-xs font-bold" style={{ color: DARK }}>Details</span>
+            <span className="text-xs font-bold" style={{ color: DARK }}>Status</span>
+            <span className="text-xs font-bold" style={{ color: DARK }}>Pass No.</span>
           </div>
 
-          {/* Rows */}
-          <div className="max-h-[50vh] overflow-y-auto">
+          {/* Rows — scrollable */}
+          <div className="max-h-[44vh] overflow-y-auto">
             {loading ? (
               <div className="text-center py-10 text-ink/50">Loading history…</div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-10 px-4">
                 <div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
                 <p className="text-ink/60 font-semibold">No visit history yet</p>
-                <p className="text-ink/40 text-sm mt-1">
-                  Completed visits will appear here once your visitors have checked in and out.
-                </p>
+                <p className="text-ink/40 text-sm mt-1">Completed visits will appear here once your visitors have checked in and out.</p>
               </div>
             ) : (
               filtered.map((r, i) => (
-                <div key={i} className="grid grid-cols-4 gap-1 px-3 py-4 border-b border-gray-200 items-center">
-                  {/* Date & Time */}
+                <div key={i} className="grid grid-cols-4 gap-1 px-2 py-4 border-b border-gray-100 items-center">
+                  {/* Date & Time (+ departed date) */}
                   <div className="text-[10px] text-ink">
                     <p className="font-bold">{r.date}</p>
                     {r.time && <p className="text-ink/60 whitespace-pre-line">{r.time}</p>}
+                    {r.departed && <p className="text-[9px] font-semibold mt-0.5" style={{ color: '#0F6E6E' }}>Departed: {r.departed}</p>}
                   </div>
                   {/* Details */}
                   <div className="text-[10px] text-ink">
@@ -203,11 +200,9 @@ export default function History() {
                   </div>
                   {/* Status */}
                   <div className="text-center">
-                    <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={statusBg[r.status]}>
-                      {r.status}
-                    </span>
+                    <span className="text-[9px] font-bold px-2 py-1 rounded-full" style={statusBg[r.status]}>{r.status}</span>
                   </div>
-                  {/* Entry ID */}
+                  {/* Pass No. */}
                   <div className="text-[10px] font-bold text-ink text-center">{r.entryId || '—'}</div>
                 </div>
               ))

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import PageHeader from '../components/PageHeader';
 import { getMyRegistrations, updateRegistration, deleteRegistration } from '../api';
-import { Search, Inbox, Pencil, Trash2, X, CalendarDays } from 'lucide-react';
+import { Search, Inbox, Pencil, Trash2, X, CalendarDays, Maximize2 } from 'lucide-react';
 
 const FILTERS = ['ALL', 'ACTIVE', 'EXPECTED'];
 const DARK = '#0A4A4A';
@@ -12,6 +12,7 @@ export default function Schedule() {
   const [filter, setFilter] = useState('ALL');
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState(today.getDate());
+  const [showMonth, setShowMonth] = useState(false); // expand → buong buwan na kalendaryo
 
   // ── Real data from DB ──
   const [registrations, setRegistrations] = useState([]);
@@ -136,28 +137,35 @@ export default function Schedule() {
       {/* Gradient wave header (walang pangalan) */}
       <PageHeader />
 
-      <div className="px-4 -mt-4 relative">
+      <div className="px-4 pt-3 relative">
         {/* Summary card */}
         <div className="rounded-3xl p-6 shadow-lg text-white"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
           <p className="font-bold tracking-wide">{monthYear.toUpperCase()}</p>
-          <h1 className="text-3xl font-extrabold mb-5">Expected Visitors</h1>
+          <h1 className="text-3xl font-extrabold mb-5">Visitors Schedule</h1>
           <div className="flex gap-2">
             {[
               { label: 'ALL', val: counts.ALL },
               { label: 'ACTIVE', val: counts.ACTIVE },
               { label: 'EXPECTED', val: counts.EXPECTED },
             ].map((s) => (
-              <div key={s.label} className="flex-1 bg-black/15 rounded-2xl py-3 text-center">
-                <p className="text-2xl font-extrabold">{s.val}</p>
-                <p className="text-[10px] font-semibold">{s.label}</p>
+              <div key={s.label} className="flex-1 bg-white rounded-2xl py-3 text-center">
+                <p className="text-2xl font-extrabold" style={{ color: DARK }}>{s.val}</p>
+                <p className="text-[10px] font-semibold" style={{ color: DARK }}>{s.label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Day calendar */}
+        {/* Day calendar (may expand → buong buwan) */}
         <div className="bg-white rounded-3xl p-4 shadow mt-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-bold" style={{ color: DARK }}>{monthYear}</p>
+            <button onClick={() => setShowMonth(true)} aria-label="Expand calendar"
+                    className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: '#0F6E6E' }}>
+              <Maximize2 size={14} /> Expand
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={() => scrollDates(-1)}
                     className="w-8 h-8 rounded-full bg-cream shadow flex items-center justify-center text-ink shrink-0">‹</button>
@@ -166,7 +174,7 @@ export default function Schedule() {
                 const isActive = d.dayNum === selectedDay;
                 const isToday = d.dayNum === today.getDate();
                 const style = isActive ? { backgroundColor: '#0F6E6E' }
-                  : isToday ? { backgroundColor: '#F1D88A' } : {};
+                  : isToday ? { backgroundColor: '#CFE3DF' } : {};
                 return (
                   <button key={d.dayNum} id={isToday ? 'sched-today-cell' : undefined}
                           onClick={() => setSelectedDay(d.dayNum)}
@@ -183,82 +191,116 @@ export default function Schedule() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="flex items-center gap-3 bg-white rounded-full px-5 py-3 shadow mt-4">
-          <Search size={18} className="text-ink/40" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-                 placeholder="Search name"
-                 className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
-        </div>
+        {/* ── Isang box: search → filters → date → scrollable results ── */}
+        <div className="bg-white rounded-3xl p-4 shadow mt-4 mb-4">
+          {/* Search */}
+          <div className="flex items-center gap-3 rounded-full px-5 py-3" style={{ backgroundColor: '#F5F2E9' }}>
+            <Search size={18} className="text-ink/40" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)}
+                   placeholder="Search name"
+                   className="flex-1 outline-none text-ink placeholder-ink/40 bg-transparent" />
+          </div>
 
-        {/* Filter chips */}
-        <div className="flex gap-2 mt-4 justify-center">
-          {FILTERS.map((f) => (
-            <button key={f} onClick={() => setFilter(f)}
-                    className={`px-5 py-2 rounded-full text-sm font-bold shadow ${filter === f ? 'text-white' : 'bg-white text-ink'}`}
-                    style={filter === f ? { backgroundColor: '#0F6E6E' } : {}}>
-              {f}
-            </button>
-          ))}
-        </div>
+          {/* Filter chips */}
+          <div className="flex gap-2 mt-3 justify-center">
+            {FILTERS.map((f) => (
+              <button key={f} onClick={() => setFilter(f)}
+                      className={`px-5 py-2 rounded-full text-sm font-bold ${filter === f ? 'text-white' : 'bg-white border border-gray-200 text-ink'}`}
+                      style={filter === f ? { backgroundColor: '#0F6E6E' } : {}}>
+                {f}
+              </button>
+            ))}
+          </div>
 
-        {/* Selected day label */}
-        <p className="text-sm font-semibold text-ink/70 mt-4 mb-2">{prettyDate}</p>
+          {/* Centered date pill (may bg) */}
+          <div className="flex justify-center mt-3 mb-1">
+            <span className="px-4 py-1.5 rounded-full text-sm font-bold" style={{ backgroundColor: '#DCECE9', color: DARK }}>
+              {prettyDate}
+            </span>
+          </div>
 
-        {/* List */}
-        <div className="bg-white rounded-3xl p-4 shadow mb-4">
-          {loading ? (
-            <div className="text-center py-10 text-ink/50">Loading your visitors…</div>
-          ) : error ? (
-            <div className="text-center py-10 text-red-600 text-sm">{error}</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-10">
-              <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
-              <p className="text-ink/60 font-semibold">No visitors on this day</p>
-              <p className="text-ink/40 text-sm mt-1">Pick another date or pre-register a visitor.</p>
-            </div>
-          ) : (
-            <>
-              {filtered.map((s, i) => {
-                // Ipakita ang Edit/Delete isang beses lang bawat registration (at kung canManage)
-                const showManage = s.canManage && s.status === 'EXPECTED' && !shownManage.has(s.registrationId);
-                if (showManage) shownManage.add(s.registrationId);
-                return (
-                  <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="text-xs font-bold text-ink text-center w-16 shrink-0">-----</div>
-                      <div className="flex-1">
-                        <p className="font-bold text-ink">{s.name}</p>
-                        <p className="text-sm text-ink/60">{s.type}</p>
-                        <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
+          {/* Scrollable results — ito lang ang gumagalaw kapag iniscroll */}
+          <div className="max-h-[42vh] overflow-y-auto pt-2">
+            {loading ? (
+              <div className="text-center py-10 text-ink/50">Loading your visitors…</div>
+            ) : error ? (
+              <div className="text-center py-10 text-red-600 text-sm">{error}</div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="flex justify-center mb-2"><Inbox size={36} className="text-ink/40" /></div>
+                <p className="text-ink/60 font-semibold">No visitors on this day</p>
+                <p className="text-ink/40 text-sm mt-1">Pick another date or pre-register a visitor.</p>
+              </div>
+            ) : (
+              <>
+                {filtered.map((s, i) => {
+                  const showManage = s.canManage && s.status === 'EXPECTED' && !shownManage.has(s.registrationId);
+                  if (showManage) shownManage.add(s.registrationId);
+                  return (
+                    <div key={i} className="border border-gray-200 rounded-2xl p-4 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs font-bold text-ink text-center w-16 shrink-0">-----</div>
+                        <div className="flex-1">
+                          <p className="font-bold" style={{ color: DARK }}>{s.name}</p>
+                          <p className="text-sm text-ink/60">{s.type}</p>
+                          <p className="text-sm text-ink/60">Purpose: {s.purpose}</p>
+                        </div>
+                        {filter === 'ALL' && (
+                          <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={statusStyle[s.status] || { backgroundColor: '#eee', color: '#666' }}>
+                            {s.status}
+                          </span>
+                        )}
                       </div>
-                      {filter === 'ALL' && (
-                        <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={statusStyle[s.status] || { backgroundColor: '#eee', color: '#666' }}>
-                          {s.status}
-                        </span>
+                      {showManage && (
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                          <button onClick={() => setEditReg({ registrationId: s.registrationId, purpose: s.rawPurpose, expectedDate: s.expectedDate })}
+                                  className="flex-1 flex items-center justify-center gap-1 py-2 rounded-full text-xs font-bold text-teal-700 border border-teal-200 bg-teal-50">
+                            <Pencil size={14} /> Edit
+                          </button>
+                          <button onClick={() => setDelReg({ registrationId: s.registrationId, name: s.name })}
+                                  className="flex-1 flex items-center justify-center gap-1 py-2 rounded-full text-xs font-bold text-red-700 border border-red-200 bg-red-50">
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </div>
                       )}
                     </div>
-                    {/* #1: Edit (date+purpose) + Delete — Expected lang */}
-                    {showManage && (
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                        <button onClick={() => setEditReg({ registrationId: s.registrationId, purpose: s.rawPurpose, expectedDate: s.expectedDate })}
-                                className="flex-1 flex items-center justify-center gap-1 py-2 rounded-full text-xs font-bold text-teal-700 border border-teal-200 bg-teal-50">
-                          <Pencil size={14} /> Edit
-                        </button>
-                        <button onClick={() => setDelReg({ registrationId: s.registrationId, name: s.name })}
-                                className="flex-1 flex items-center justify-center gap-1 py-2 rounded-full text-xs font-bold text-red-700 border border-red-200 bg-red-50">
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
-            </>
-          )}
+                  );
+                })}
+                <p className="text-center text-ink/50 text-sm py-2">--- Nothing follows ---</p>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Month expand modal — buong buwan na kalendaryo */}
+      {showMonth && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => setShowMonth(false)}>
+          <div className="bg-white rounded-3xl p-5 w-full max-w-sm relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowMonth(false)} className="absolute top-4 right-4 text-ink/50"><X size={20} /></button>
+            <h3 className="text-lg font-extrabold mb-4 text-center" style={{ color: DARK }}>{monthYear}</h3>
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {DAY_LABELS.map((d) => (
+                <div key={d} className="text-center text-[10px] font-bold text-ink/50 py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: new Date(year, month, 1).getDay() }).map((_, i) => <div key={`b${i}`} />)}
+              {monthDays.map((d) => {
+                const isActive = d.dayNum === selectedDay;
+                const isToday = d.dayNum === today.getDate();
+                return (
+                  <button key={d.dayNum} onClick={() => { setSelectedDay(d.dayNum); setShowMonth(false); }}
+                          className={`aspect-square rounded-xl text-sm font-bold flex items-center justify-center ${isActive ? 'text-white' : 'text-ink'}`}
+                          style={isActive ? { backgroundColor: '#0F6E6E' } : isToday ? { backgroundColor: '#CFE3DF' } : { backgroundColor: '#F5F2E9' }}>
+                    {d.dayNum}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal (date + purpose lang) */}
       {editReg && (

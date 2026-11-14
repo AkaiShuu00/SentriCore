@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Home from './Home';
+import Schedule from './Schedule';
+import History from './History';
+import Profile from './Profile';
 import { CheckCircle2, User, Users, Truck } from 'lucide-react';
 
 const API = '/api';
@@ -363,6 +366,13 @@ function StepSuccess({ count, onDone }) {
 // ─── Root Component ──────────────────────────────────────────────────────────
 export default function PreRegister() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Kung saang tab galing bago pinindot ang Pre-Register → yun ang background
+  const from = location.state?.from || '/home';
+  const Bg = from.startsWith('/schedule') ? Schedule
+    : from.startsWith('/history') ? History
+    : from.startsWith('/profile') ? Profile
+    : Home;
   const [step, setStep]       = useState(1); // 1=type, 2=details, 3=confirm, 4=success
   const [regType, setRegType] = useState('');
   const [savedCount, setSavedCount] = useState(0);
@@ -471,9 +481,9 @@ export default function PreRegister() {
 
   return (
     <>
-      {/* Home dashboard na nananatiling nakikita sa likod ng pop-up */}
+      {/* Ang tab na pinanggalingan — nananatiling nakikita sa likod ng pop-up */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-        <Home />
+        <Bg />
       </div>
 
       {/* dark scrim — clicking outside closes */}
