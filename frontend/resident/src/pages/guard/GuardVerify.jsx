@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import PageHeader from '../../components/PageHeader';
+import GuardHome from './GuardHome';
 import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist, getExpectedDeliveries, getAdminContact } from '../../api';
-import { User, Truck, Camera, Search, RefreshCw, ShieldAlert, Phone } from 'lucide-react';
+import { User, Truck, Camera, Search, RefreshCw, ShieldAlert, Phone, CheckCircle2, LogOut } from 'lucide-react';
+
+const LIGHT_TEAL = '#CDE7DE';
 
 const teal = '#0F6E6E';
 // Relative base URL — goes through ngrok/Vite proxy → backend → OCR.
@@ -88,6 +92,7 @@ export default function GuardVerify() {
   const [driverName, setDriverName] = useState(DEFAULT_DRIVER_NAME);
   const [ocrError, setOcrError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [successData, setSuccessData] = useState(null);  // approved entry/exit pop-up
   const [exitNote, setExitNote] = useState('');                 // optional exit note (1 of 4 choices)
   const [exitAdditionalNote, setExitAdditionalNote] = useState(''); // optional free-text
   const [showBackConfirm, setShowBackConfirm] = useState(false);    // #6: confirm back kapag may na-scan na
@@ -697,16 +702,11 @@ export default function GuardVerify() {
     try {
       if (isExit) {
         await saveExit();
-        alert(`Exit approved for ${total} visitor${total > 1 ? 's' : ''}! Time-out logged. ✅`);
+        setSuccessData({ isExit: true, total, passes: [] });
       } else {
         const passes = await saveArrival();
-        const passLines = (passes || []).map((p) => `• ${p.visitorName}: ${p.passNumber}`).join('\n');
-        alert(
-          `Entry approved for ${total} visitor${total > 1 ? 's' : ''}! Time-in logged. ✅` +
-          (passLines ? `\n\nVisitor Pass:\n${passLines}` : '')
-        );
+        setSuccessData({ isExit: false, total, passes: passes || [] });
       }
-      navigate('/guard-home');
     } catch (err) {
       alert(err.message || 'Failed to save. Please try again.');
     } finally {
@@ -739,7 +739,10 @@ export default function GuardVerify() {
   // ── Modal steps (choose / vehicle) ──
   if (step === 'choose' || step === 'vehicle') {
     return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={close}>
+      <>
+      {/* Home screen na nananatiling nakikita sa likod ng modal */}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}><GuardHome /></div>
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6" style={{ backdropFilter: 'blur(2px)' }} onClick={close}>
         <div className="bg-white rounded-3xl p-6 w-full max-w-sm relative" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => (step === 'vehicle' ? setStep('choose') : close())}
                   className="absolute top-4 left-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-ink font-bold">‹</button>
@@ -868,18 +871,16 @@ export default function GuardVerify() {
           )}
         </div>
       </div>
+      </>
     );
   }
 
   // ── Full-screen steps ──
   return (
     <div className="min-h-screen bg-cream max-w-md mx-auto">
-      <header className="bg-ink px-5 py-5 flex items-center gap-3">
-        <button onClick={handleBack} className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-ink font-bold">‹</button>
-        <span className="text-white font-bold text-lg">Back</span>
-      </header>
+      <PageHeader showBack onBack={handleBack} />
 
-      <div className="px-6 py-8">
+      <div className="px-6 pt-5 pb-8">
         {/* SCAN ID */}
         {step === 'scan' && (
           <div className="bg-white rounded-3xl p-6 shadow">
@@ -920,17 +921,17 @@ export default function GuardVerify() {
               <div className="flex gap-2">
                 <button onClick={() => fileRef.current?.click()}
                         className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                  UPLOAD PHOTO OF ID
+                  UPLOAD PHOTO
                 </button>
                 {isExit ? (
                   <button onClick={() => { stopCamera(); loadActive(); setActiveSearch(''); setStep('exitSelect'); }}
                           className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                    SELECT FROM INSIDE LIST
+                    ACTIVE VISITORS
                   </button>
                 ) : (!isDriverFlow) ? (
                   <button onClick={() => { stopCamera(); loadRegistered(); setRegSearch(''); setStep('visitorSearch'); }}
-                          className="flex-1 py-3 rounded-full text-sm font-semibold text-white whitespace-nowrap" style={{ backgroundColor: '#112D31' }}>
-                    Registered Visitors
+                          className="flex-1 py-3 rounded-full text-xs font-bold text-white whitespace-nowrap" style={{ backgroundColor: '#112D31' }}>
+                    REGISTERED VISITORS
                   </button>
                 ) : (
                   <button onClick={() => { stopCamera(); setStep('reading'); }}
@@ -940,10 +941,17 @@ export default function GuardVerify() {
                 )}
               </div>
 
-              <button onClick={() => { stopCamera(); if (isExit) { loadActive(); setActiveSearch(''); setStep('exitSelect'); } else { handleBack(); } }}
-                      className="self-center px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
-                {isExit ? 'MANUAL SEARCH' : 'BACK'}
-              </button>
+              {isExit ? (
+                <button onClick={() => { stopCamera(); loadActive(); setActiveSearch(''); setStep('exitSelect'); }}
+                        className="self-center px-6 py-2.5 rounded-full text-sm font-bold text-ink shadow-md w-48" style={{ backgroundColor: LIGHT_TEAL }}>
+                  MANUAL SEARCH
+                </button>
+              ) : (
+                <button onClick={() => { stopCamera(); handleBack(); }}
+                        className="self-center px-6 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                  BACK
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1052,17 +1060,13 @@ export default function GuardVerify() {
 
             <div className="flex flex-col items-center gap-2">
               <button onClick={() => loadRegistered()}
-                      className="w-60 py-2 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm inline-flex items-center justify-center gap-2">
+                      className="w-60 py-2.5 rounded-xl text-sm font-bold text-ink bg-white shadow-md inline-flex items-center justify-center gap-2">
                 <RefreshCw size={16} /> REFRESH LIST
               </button>
-              <p className="text-xs font-semibold text-ink/60 mt-1">Not listed?</p>
+              <p className="text-xs font-semibold text-ink/60 mt-1">Is the visitor not on the list?</p>
               <button onClick={() => setStep('residentList')}
-                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink border border-gray-300 bg-white shadow-sm">
+                      className="w-60 py-3 rounded-xl text-sm font-bold text-ink shadow-md" style={{ backgroundColor: LIGHT_TEAL }}>
                 Contact Resident
-              </button>
-              <button onClick={() => setStep('scan')}
-                      className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
-                BACK TO SCAN
               </button>
             </div>
           </div>
@@ -1274,7 +1278,7 @@ export default function GuardVerify() {
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
                   <button onClick={() => { if (isExit) { setStep('exitSelect'); } else { loadRegistered(); setRegSearch(''); setStep('visitorSearch'); } }}
-                          className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-ink bg-white border border-gray-200 shadow-sm">
                     MANUAL SEARCH
                   </button>
                   {!isExit && blockInfo?.blocked ? (
@@ -1289,10 +1293,12 @@ export default function GuardVerify() {
                     </button>
                   )}
                 </div>
-                <button onClick={() => setStep('scan')}
-                        className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
-                  RETRY
-                </button>
+                {isExit && (
+                  <button onClick={() => setStep('scan')}
+                          className="px-8 py-2.5 rounded-full text-sm font-bold text-ink bg-white border border-gray-200 shadow-sm w-40">
+                    RETRY
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -1302,7 +1308,7 @@ export default function GuardVerify() {
         {step === 'additional' && (
           <div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-1">
-              {isExit ? 'VISITORS EXITING TOGETHER'
+              {isExit ? 'ACTIVE VISITORS'
                 : (entryInfo.regType || '').toLowerCase() === 'batch' ? 'SAME-BATCH VISITORS'
                 : 'EXPECTED VISITORS'}
             </h2>
@@ -1346,11 +1352,11 @@ export default function GuardVerify() {
 
             <div className="flex gap-3 justify-center mb-8">
               <button onClick={() => { setSelectedCompanions([]); setStep('confirmed'); }}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">
+                      className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-200 bg-white shadow-md">
                 SKIP
               </button>
               <button onClick={() => setStep('confirmed')}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
+                      className="px-8 py-3 rounded-full text-sm font-bold text-white shadow-md" style={{ backgroundColor: '#112D31' }}>
                 PROCEED
               </button>
             </div>
@@ -1734,7 +1740,7 @@ export default function GuardVerify() {
                   : (passMap[(c.name || '').toUpperCase()] || '');
                 const driverPass = passMap[(entryInfo.driver || '').toUpperCase()] || '';
                 return (
-                <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+                <div key={i} className="bg-white rounded-2xl border border-gray-200 shadow-lg divide-y divide-gray-100">
                   {[
                     ...(entryInfo.driver ? [['Driver Name', entryInfo.driver]] : []),
                     ...(!isExit && entryInfo.driver && i === 0 ? [['Driver Pass', driverPass]] : []),
@@ -1753,21 +1759,6 @@ export default function GuardVerify() {
               })}
             </div>
 
-            {/* NOTE: Tinanggal ang exit-note selector dito. Ang report ni guard
-                (Security Concern / Small Problem / Incident) ay hiwalay na sa
-                Guard Report page (/guard-report). */}
-            {isExit && (
-              <div className="rounded-2xl px-4 py-3 mb-5 flex items-center justify-between gap-3" style={{ backgroundColor: '#FBE9E7' }}>
-                <p className="text-[11px] text-ink/70">
-                  May naobserbahan ba? Mag-file ng hiwalay na report (security concern, small problem, o incident).
-                </p>
-                <button type="button" onClick={() => navigate('/guard-report')}
-                        className="shrink-0 text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#9b2c2c' }}>
-                  File a Report
-                </button>
-              </div>
-            )}
-
             <div className="rounded-xl px-4 py-3 text-center text-xs font-medium mb-5"
                  style={{ backgroundColor: '#DCF3E4', color: '#1e6b2e' }}>
               {isExit
@@ -1776,10 +1767,12 @@ export default function GuardVerify() {
             </div>
 
             <div className="flex gap-3 justify-center">
-              <button onClick={() => setStep('matched')}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">BACK</button>
+              {!isExit && (
+                <button onClick={() => setStep('matched')}
+                        className="px-8 py-3 rounded-full text-sm font-bold text-ink bg-white border border-gray-200 shadow-md">BACK</button>
+              )}
               <button onClick={handleApprove} disabled={submitting}
-                      className="px-8 py-3 rounded-full text-sm font-bold text-white disabled:opacity-60" style={{ backgroundColor: '#112D31' }}>
+                      className={`${isExit ? 'w-full' : 'px-8'} py-3 rounded-full text-sm font-bold text-white disabled:opacity-60 shadow-md`} style={{ backgroundColor: '#112D31' }}>
                 {submitting ? 'SAVING...' : (isExit ? 'APPROVE EXIT' : 'APPROVE ENTRY')}
               </button>
             </div>
@@ -1849,6 +1842,44 @@ export default function GuardVerify() {
               <button onClick={() => { alert('No answer from resident.'); navigate('/guard-home'); }}
                       className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300">NO ANSWER</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPROVED ENTRY / EXIT pop-up (bg = screen sa likod) */}
+      {successData && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center px-6" style={{ backdropFilter: 'blur(2px)' }}>
+          <div className="bg-white rounded-3xl p-7 w-full max-w-sm text-center shadow-2xl">
+            <div className="flex justify-center mb-3">
+              {successData.isExit
+                ? <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E6EEF7' }}><LogOut size={34} style={{ color: '#1a5fa8' }} /></div>
+                : <CheckCircle2 size={56} style={{ color: '#0F6E6E' }} />}
+            </div>
+            <h2 className="text-2xl font-extrabold mb-2" style={{ color: '#0A4A4A' }}>
+              {successData.isExit ? 'APPROVED EXIT' : 'APPROVED ENTRY'}
+            </h2>
+            <p className="text-sm text-ink/70 mb-4">
+              {successData.isExit
+                ? `Exit approved for ${successData.total} visitor${successData.total > 1 ? 's' : ''}! Time-out logged.`
+                : `Entry approved for ${successData.total} visitor${successData.total > 1 ? 's' : ''}! Time-in logged.`}
+            </p>
+
+            {!successData.isExit && successData.passes.length > 0 && (
+              <div className="rounded-2xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
+                <p className="text-xs font-bold mb-2" style={{ color: '#0A4A4A' }}>Visitor Pass:</p>
+                {successData.passes.map((p, i) => (
+                  <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-black/5' : ''}>
+                    <p className="text-sm text-ink"><span className="font-bold">Name:</span> {p.visitorName}</p>
+                    <p className="text-sm text-ink"><span className="font-bold">Visitor Pass Number:</span> {p.passNumber}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={() => { setSuccessData(null); navigate('/guard-home'); }}
+                    className="w-full py-3 rounded-full text-sm font-extrabold shadow-md" style={{ backgroundColor: LIGHT_TEAL, color: '#0A4A4A' }}>
+              OKAY
+            </button>
           </div>
         </div>
       )}

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
+import PageHeader from '../../components/PageHeader';
 import { getMyShift, getMyGuardProfile, endGuardShift } from '../../api';
-import { Shield, Building2, CalendarDays, DoorOpen, LogOut, Phone } from 'lucide-react';
+import { Shield, Building2, CalendarDays, DoorOpen, LogOut, Phone, CircleDot } from 'lucide-react';
 
 const dutyColor = (label) =>
   label === 'ON DUTY' ? '#1e8e3e' : label === 'ON BREAK' ? '#b8901f' : '#8a2b2b';
@@ -111,37 +112,20 @@ export default function GuardProfile() {
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
-      {/* Header */}
-      <header className="bg-ink px-5 py-6 flex items-center justify-between">
-        <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center p-1">
-          <img src="/logo.png" alt="SentriCore" className="w-full h-full object-contain" />
-        </div>
-        <div className="inline-flex items-center gap-3 bg-cream rounded-full pl-5 pr-1 py-1 shadow">
-          <span className="font-bold text-ink">{user.name || 'Guard'}</span>
-          <div className="w-10 h-10 rounded-full bg-teal-200 flex items-center justify-center overflow-hidden">
-            {guard.photo
-              ? <img src={guard.photo} alt={guard.name} className="w-full h-full object-cover" />
-              : <Shield size={20} className="text-ink" />}
-          </div>
-        </div>
-      </header>
+      {/* Gradient wave header (walang logo at pangalan) */}
+      <PageHeader />
 
-      <div className="px-5">
-        {/* Title */}
-        <h1 className="text-2xl font-extrabold text-ink mt-6">GUARD PROFILE</h1>
-        <p className="text-ink/60 mt-1 mb-4">View your profile, shift details, and assignments</p>
-
-        {/* Profile card */}
+      <div className="px-5 -mt-4 relative">
+        {/* Profile card — teal gradient */}
         <div className="rounded-3xl p-5 shadow-lg text-white"
-             style={{ background: 'linear-gradient(135deg, #0F5E5E 0%, #7FB0AE 100%)' }}>
+             style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
           <div className="flex gap-4">
             <div className="flex flex-col items-center shrink-0">
-              <div className="w-20 h-20 rounded-full bg-yellow-200 flex items-center justify-center border-2 border-white/40 overflow-hidden">
+              <div className="w-20 h-20 rounded-full bg-white/15 flex items-center justify-center border-2 border-white/40 overflow-hidden">
                 {guard.photo
                   ? <img src={guard.photo} alt={guard.name} className="w-full h-full object-cover" />
-                  : <Shield size={38} className="text-ink" />}
+                  : <Shield size={38} className="text-white" />}
               </div>
-              <span className="mt-2 text-[11px] font-bold px-3 py-1 rounded-full bg-teal-300 text-ink">{guard.duty}</span>
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-extrabold break-words">{guard.name.toUpperCase()}</h2>
@@ -153,39 +137,32 @@ export default function GuardProfile() {
           </div>
         </div>
 
-        {/* Assignment card */}
-        <div className="bg-white rounded-3xl p-5 shadow mt-4 flex">
-          <div className="flex-1 pr-2">
-            <p className="text-xs font-bold text-ink mb-2">Assigned Gate</p>
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center"><Building2 size={20} className="text-ink" /></div>
-              <div>
-                <p className="font-bold text-ink text-sm">{assignment.gate}</p>
-                <p className="text-xs text-ink/60">{assignment.gateSub}</p>
-              </div>
-            </div>
+        {/* Assignment card — 3 na centered na column (Gate / Shift / Status) */}
+        <div className="bg-white rounded-3xl p-5 shadow-lg mt-4 grid grid-cols-3 text-center">
+          <div className="px-1">
+            <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-2"><Building2 size={20} className="text-ink" /></div>
+            <p className="text-[11px] font-bold text-ink/60">Assigned Gate</p>
+            <p className="font-bold text-ink text-sm leading-tight mt-0.5">{assignment.gate}</p>
+            <p className="text-[11px] text-ink/60">{assignment.gateSub}</p>
           </div>
-          <div className="border-l border-gray-200" />
-          <div className="flex-1 px-2">
-            <p className="text-xs font-bold text-ink mb-2">Current Shift</p>
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center"><CalendarDays size={20} className="text-ink" /></div>
-              <div className="min-w-0">
-                <p className="font-bold text-ink text-sm break-words">{shiftLabel}</p>
-                <p className="text-xs text-ink/60">Assigned shift</p>
-              </div>
-            </div>
+          <div className="px-1" style={{ borderLeft: '1px solid #eee', borderRight: '1px solid #eee' }}>
+            <div className="w-11 h-11 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-2"><CalendarDays size={20} className="text-ink" /></div>
+            <p className="text-[11px] font-bold text-ink/60">Assigned Shift</p>
+            <p className="font-bold text-ink text-sm leading-tight mt-0.5 break-words">{shiftLabel}</p>
           </div>
-          <div className="border-l border-gray-200" />
-          <div className="flex-1 pl-2">
-            <p className="text-xs font-bold text-ink mb-2">Shift Status</p>
-            <p className="font-extrabold text-sm" style={{ color: dutyColor(assignment.shiftStatus) }}>{assignment.shiftStatus}</p>
-            <p className="text-xs text-ink/60 mt-1">{onDuty ? `Ends in ${remainingLabel}` : (hasShift ? 'Not on duty now' : '—')}</p>
+          <div className="px-1">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-2"
+                 style={{ backgroundColor: onDuty ? '#D6EAD9' : '#FBE0E0' }}>
+              <CircleDot size={20} style={{ color: onDuty ? '#1e8e3e' : '#8a2b2b' }} />
+            </div>
+            <p className="text-[11px] font-bold text-ink/60">Status</p>
+            <p className="font-extrabold text-sm mt-0.5" style={{ color: onDuty ? '#1e8e3e' : '#8a2b2b' }}>{duty}</p>
+            <p className="text-[11px] text-ink/60 mt-0.5">{onDuty ? `Ends in ${remainingLabel}` : (hasShift ? 'Not on duty now' : '—')}</p>
           </div>
         </div>
 
-        {/* End shift banner — clickable LANG kapag tapos na ang oras ng shift */}
-        <div className="rounded-2xl p-4 mt-4 flex items-center gap-3" style={{ backgroundColor: '#FBE0E0' }}>
+        {/* End shift banner — elevated */}
+        <div className="rounded-2xl p-4 mt-4 flex items-center gap-3 shadow-lg" style={{ backgroundColor: '#FBE0E0' }}>
           <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0"><DoorOpen size={20} className="text-ink" /></div>
           <div className="flex-1">
             <p className="font-bold text-ink text-sm">End your shift when your scheduled time is done.</p>
@@ -204,7 +181,7 @@ export default function GuardProfile() {
 
         {/* Log out — sign out lang, HINDI time-out (nananatiling On Duty) */}
         <button onClick={() => setShowLogout(true)}
-                className="w-full mt-4 mb-4 rounded-2xl p-4 flex items-center gap-3 bg-white shadow active:scale-[0.99] transition">
+                className="w-full mt-4 mb-4 rounded-2xl p-4 flex items-center gap-3 bg-white shadow-lg active:scale-[0.99] transition">
           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><LogOut size={20} className="text-ink" /></div>
           <div className="flex-1 text-left">
             <p className="font-bold text-ink text-sm">Log Out</p>

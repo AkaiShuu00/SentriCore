@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GuardBottomNav from '../../components/GuardBottomNav';
+import PageHeader from '../../components/PageHeader';
 import { createGuardReport, getMyGuardReports, resolveGuardReport, reopenGuardReport, deleteGuardReport } from '../../api';
 import { ShieldAlert, AlertTriangle, Siren, MapPin, CheckCircle2, RotateCcw, MessageSquare, X, Trash2 } from 'lucide-react';
 
@@ -127,14 +128,10 @@ export default function GuardReports() {
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto">
-      <header className="bg-ink px-5 py-6 flex items-center gap-4">
-        <button onClick={() => navigate('/guard-home')}
-                className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-xl text-ink shrink-0">‹</button>
-        <h1 className="text-2xl font-extrabold text-white">Guard Report</h1>
-      </header>
+      <PageHeader title="Guard Report" showBack onBack={() => navigate('/guard-home')} />
 
-      <div className="px-4">
-        <div className="flex gap-2 mt-5 mb-4">
+      <div className="px-4 pt-4">
+        <div className="flex gap-2 mb-4">
           <button onClick={() => setTab('new')}
                   className="flex-1 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap"
                   style={tab === 'new' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31' }}>
