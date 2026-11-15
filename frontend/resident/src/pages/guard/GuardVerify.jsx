@@ -1139,7 +1139,7 @@ export default function GuardVerify() {
                 <label className="block text-[10px] font-bold text-ink/60 mb-1">
                   {isDelivery ? 'DELIVERY RIDER NAME (editable)' : "DRIVER NAME (editable)"}
                 </label>
-                <input value={driverName} onChange={(e) => setDriverName(e.target.value)}
+                <input value={driverName} onChange={(e) => setDriverName((e.target.value || "").toUpperCase())}
                        placeholder="Type the name"
                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600" />
               </div>
@@ -1224,7 +1224,7 @@ export default function GuardVerify() {
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-3">
                 <label className="block text-[10px] font-bold text-ink/60 mb-1">SCANNED NAME (editable)</label>
                 <div className="flex gap-2">
-                  <input value={scannedName} onChange={(e) => setScannedName(e.target.value)}
+                  <input value={scannedName} onChange={(e) => setScannedName((e.target.value || "").toUpperCase())}
                          placeholder="Type the full name"
                          className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600" />
                   {!isExit && (
@@ -1325,6 +1325,23 @@ export default function GuardVerify() {
 
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <div className="max-h-[45vh] overflow-y-auto space-y-2">
+                {/* Scanned ID — naka-select na at hindi na kailangang piliin */}
+                {entryInfo.visitor && (
+                  <div className="w-full rounded-2xl p-3 border-2 flex items-center justify-between gap-2 shadow-sm"
+                       style={{ borderColor: '#2f6b34', backgroundColor: '#F3FAF5' }}>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-ink text-sm truncate">{entryInfo.visitor}</p>
+                        <span className="text-[8px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#D6EAD9', color: '#1e6b2e' }}>SCANNED ID</span>
+                      </div>
+                      <p className="text-xs text-ink/60 truncate">{entryInfo.resident} | {entryInfo.address}</p>
+                      <p className="text-xs text-ink/60">Purpose: {entryInfo.purpose || 'N/A'}</p>
+                    </div>
+                    <span className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center" style={{ backgroundColor: '#2f6b34' }}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    </span>
+                  </div>
+                )}
                 {additionalPool.length === 0 ? (
                   <p className="text-center text-ink/50 py-6 text-sm">
                     {isExit ? 'No other active visitors.' : 'No other visitors to add.'}
@@ -1650,20 +1667,18 @@ export default function GuardVerify() {
                       className="text-white font-bold text-[11px] px-4 py-2 rounded-full" style={{ backgroundColor: '#C0392B' }}>CALL</button>
             </div>
             <h2 className="text-2xl font-extrabold text-ink text-center mb-4">RESIDENT LIST</h2>
-            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow mb-3">
-              <Search size={18} className="text-ink/40" />
-              <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
-                     placeholder="Search resident name or street"
-                     className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40" />
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
-              {blocks.map((b) => (
-                <button key={b} onClick={() => setBlockFilter(b)}
-                        className={`px-4 py-2 rounded-full text-xs font-bold shadow shrink-0 ${blockFilter === b ? 'text-white' : 'bg-white text-ink'}`}
-                        style={blockFilter === b ? { backgroundColor: '#0F6E6E' } : {}}>
-                  {b === 'All' ? 'All Areas' : b}
-                </button>
-              ))}
+            <div className="flex gap-2 mb-3">
+              <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow flex-1 min-w-0">
+                <Search size={18} className="text-ink/40" />
+                <input value={residentSearch} onChange={(e) => setResidentSearch(e.target.value)}
+                       placeholder="Search resident name or street"
+                       className="flex-1 outline-none bg-transparent text-ink placeholder-ink/40 w-full" />
+              </div>
+              {/* Area dropdown (per area) */}
+              <select value={blockFilter} onChange={(e) => setBlockFilter(e.target.value)}
+                      className="bg-white rounded-full px-3 py-3 shadow text-xs font-bold text-ink outline-none shrink-0">
+                {blocks.map((b) => <option key={b} value={b}>{b === 'All' ? 'All Areas' : b}</option>)}
+              </select>
             </div>
             <div className="bg-white rounded-3xl p-4 shadow mb-4">
               <p className="text-sm font-semibold text-ink/70 mb-3">Select resident to contact</p>
@@ -1694,12 +1709,21 @@ export default function GuardVerify() {
         {step === 'unlisted' && (
           <div>
             <h2 className="text-xl font-extrabold text-ink text-center mb-4">UNLISTED VISITOR INFORMATION</h2>
+
+            {/* Visitor Name — editable, blank by default, auto ALL CAPS */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-3">
+              <label className="block text-[10px] font-bold text-ink/60 mb-1">VISITOR NAME (type the name)</label>
+              <input value={scannedName} onChange={(e) => setScannedName((e.target.value || '').toUpperCase())}
+                     placeholder="FULL NAME OF VISITOR"
+                     className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600 uppercase" />
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
               {[
                 ['Registration Type', 'Single'],
                 ['Resident Name', contactedResident?.name || ''],
                 ['Address', contactedResident?.address || ''],
-                ['Visitor Name', scannedName],
+                ['Purpose', 'Unlisted Visit'],
               ].map(([label, val]) => (
                 <div key={label} className="px-4 py-3">
                   <span className="text-xs text-ink"><span className="font-bold">{label}:</span> {val}</span>
@@ -1710,11 +1734,12 @@ export default function GuardVerify() {
               <button onClick={() => setStep('residentList')}
                       className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">BACK</button>
               <button onClick={() => {
+                        if (!scannedName.trim()) { alert('Please type the visitor name.'); return; }
                         setEntryInfo({
                           passId: '', category: 'SINGLE', regType: 'Single',
                           resident: contactedResident?.name || '', address: contactedResident?.address || '',
-                          residentId: contactedResident?.residentId || null, visitor: scannedName,
-                          purpose: 'Unlisted visit', expectedDate: '',
+                          residentId: contactedResident?.residentId || null, visitor: scannedName.trim().toUpperCase(),
+                          purpose: 'Unlisted Visit', expectedDate: '',
                         });
                         setSelectedCompanions([]);
                         setStep('confirmed');

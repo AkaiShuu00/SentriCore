@@ -127,13 +127,13 @@ export default function GuardLogs() {
     const a = document.createElement('a'); a.href = url; a.download = 'sentricore-history-logs.csv'; a.click(); URL.revokeObjectURL(url);
   };
 
-  const iconBtn = 'flex items-center justify-center rounded-full w-12 shrink-0 shadow-sm';
+  const iconBtn = 'flex items-center justify-center rounded-full w-12 h-12 shrink-0 shadow-sm';
 
   return (
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       <PageHeader />
 
-      <div className="px-4 -mt-4 relative">
+      <div className="px-4 pt-3 relative">
         {/* Summary — teal gradient, white number boxes */}
         <div className="rounded-3xl p-6 shadow-lg text-white"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
@@ -169,7 +169,7 @@ export default function GuardLogs() {
             </div>
             {/* Sort */}
             <div className="relative shrink-0">
-              <button onClick={() => setSortOpen(!sortOpen)} aria-label="Sort" className={iconBtn + ' h-full'} style={{ backgroundColor: '#F5F2E9' }}>
+              <button onClick={() => setSortOpen(!sortOpen)} aria-label="Sort" className={iconBtn} style={{ backgroundColor: '#F5F2E9' }}>
                 <ArrowDownUp size={18} style={{ color: TEAL }} />
               </button>
               {sortOpen && (
@@ -184,7 +184,7 @@ export default function GuardLogs() {
             </div>
             {/* Calendar / date filter */}
             <div className="relative shrink-0">
-              <button onClick={() => setShowCal(!showCal)} aria-label="Date" className={iconBtn + ' h-full'}
+              <button onClick={() => setShowCal(!showCal)} aria-label="Date" className={iconBtn}
                       style={{ backgroundColor: fromDate || toDate ? TEAL : '#F5F2E9' }}>
                 <CalendarDays size={18} style={{ color: fromDate || toDate ? '#fff' : TEAL }} />
               </button>
@@ -202,7 +202,7 @@ export default function GuardLogs() {
               )}
             </div>
             {/* Export */}
-            <button onClick={exportCSV} aria-label="Export" className={iconBtn + ' h-full'} style={{ backgroundColor: '#F5F2E9' }}>
+            <button onClick={exportCSV} aria-label="Export" className={iconBtn} style={{ backgroundColor: '#F5F2E9' }}>
               <Download size={18} style={{ color: TEAL }} />
             </button>
           </div>

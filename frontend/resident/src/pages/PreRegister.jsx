@@ -392,12 +392,17 @@ export default function PreRegister() {
     setStep(2);
   };
 
-  const handleChange = (field, val) => { setError(''); setForm(p => ({ ...p, [field]: val })); };
+  const handleChange = (field, val) => {
+    setError('');
+    // Pangalan ng bisita → automatic ALL CAPS (tugma sa naka-all-caps na scan ng ID)
+    const v = field === 'name' ? (val || '').toUpperCase() : val;
+    setForm(p => ({ ...p, [field]: v }));
+  };
 
-  // Batch name handlers
+  // Batch name handlers — all caps din
   const updateName = (idx, val) => { setError(''); setForm(p => {
     const names = [...p.names];
-    names[idx] = val;
+    names[idx] = (val || '').toUpperCase();
     return { ...p, names };
   }); };
   const addName = () => setForm(p => ({ ...p, names: [...p.names, ''] }));

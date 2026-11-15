@@ -135,7 +135,7 @@ export default function GuardSchedule() {
     <div className="min-h-screen bg-cream pb-28 max-w-md mx-auto relative">
       <PageHeader />
 
-      <div className="px-4 -mt-4 relative">
+      <div className="px-4 pt-3 relative">
         {/* Summary — teal gradient, white boxes, teal font */}
         <div className="rounded-3xl p-6 shadow-lg text-white"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>

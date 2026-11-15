@@ -117,9 +117,9 @@ export default function GuardProfile() {
 
       <div className="px-5 -mt-4 relative">
         {/* Profile card — teal gradient */}
-        <div className="rounded-3xl p-5 shadow-lg text-white"
+        <div className="rounded-3xl p-6 shadow-lg text-white mt-2"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4">
             <div className="flex flex-col items-center shrink-0">
               <div className="w-20 h-20 rounded-full bg-white/15 flex items-center justify-center border-2 border-white/40 overflow-hidden">
                 {guard.photo
