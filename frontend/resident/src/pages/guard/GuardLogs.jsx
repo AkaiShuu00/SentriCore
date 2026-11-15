@@ -328,7 +328,7 @@ export default function GuardLogs() {
                         {g.arrivals.map((a, ai) => (
                           <div key={'a' + ai} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
                             <div className="px-3 py-1.5 text-[10px] font-extrabold text-white" style={{ backgroundColor: '#1e6b2e' }}>
-                              ARRIVAL {ai + 1} · {fmtFullDate(a.when)} · {a.members.length} sabay pumasok
+                              ARRIVAL {ai + 1} - {fmtFullDate(a.when)} - {a.members.length} visitor{a.members.length === 1 ? '' : 's'}
                             </div>
                             <div className="divide-y divide-gray-100">
                               {a.members.map((r, i) => <BatchMemberRow key={i} r={r} />)}
@@ -339,7 +339,7 @@ export default function GuardLogs() {
                         {g.departures.map((d, di) => (
                           <div key={'d' + di} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
                             <div className="px-3 py-1.5 text-[10px] font-extrabold text-white" style={{ backgroundColor: '#8a2b2b' }}>
-                              DEPARTED {di + 1} · {fmtFullDate(d.when)} · {d.members.length} sabay lumabas
+                              DEPARTED {di + 1} - {fmtFullDate(d.when)} - {d.members.length} visitor{d.members.length === 1 ? '' : 's'}
                             </div>
                             <div className="divide-y divide-gray-100">
                               {d.members.map((r, i) => <BatchMemberRow key={i} r={r} />)}

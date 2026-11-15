@@ -51,13 +51,20 @@ export default function GuardHome() {
   const [showContact, setShowContact] = useState(false);
   const [residents, setResidents] = useState([]);
   const [residentSearch, setResidentSearch] = useState('');
+  const [callResult, setCallResult] = useState(null); // tinawagang resident → CALL RESULT pop-up
   const openContact = () => {
     setResidentSearch(''); setShowContact(true);
     getResidentsForGuard().then((res) => setResidents((res.data || []).map((r) => ({
       residentId: r.resident_id, name: r.full_name, address: r.unit_address, contact: r.contact_number || r.phone_number || '',
     })))).catch(() => setResidents([]));
   };
-  const callResident = (r) => { const num = String(r.contact || '').replace(/[^\d+]/g, ''); if (!num) { alert('This resident has no contact number.'); return; } window.location.href = `tel:${num}`; };
+  const callResident = (r) => {
+    const num = String(r.contact || '').replace(/[^\d+]/g, '');
+    if (num) window.location.href = `tel:${num}`;
+    else alert('This resident has no contact number.');
+    setShowContact(false);
+    setCallResult(r);  // ipakita ang CALL RESULT pagkatapos tumawag
+  };
 
   const [announcements, setAnnouncements] = useState([]);
   const [schedule, setSchedule] = useState([]);
@@ -306,6 +313,34 @@ export default function GuardHome() {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CALL RESULT — pagkatapos tumawag sa resident */}
+      {callResult && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-6" onClick={() => setCallResult(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setCallResult(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
+            <h2 className="text-base font-extrabold text-ink text-center mt-2 mb-4">CALL RESULT</h2>
+            <div className="border border-gray-200 rounded-xl p-3 mb-2">
+              <p className="font-bold text-ink text-sm">{callResult.name}</p>
+              <p className="text-xs text-ink/60">Address: {callResult.address}</p>
+              <p className="text-xs text-ink/60">Contact: {callResult.contact || '—'}</p>
+            </div>
+            <p className="text-[11px] text-ink/60 text-center mb-4 px-2">
+              Kung pinapapasok ng resident ang bisita, i-register bilang walk-in (active). Kung hindi, bumalik sa home.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                        const r = callResult;
+                        setCallResult(null);
+                        navigate(`/guard-verify?unlisted=1&rid=${r.residentId || ''}&rn=${encodeURIComponent(r.name || '')}&ra=${encodeURIComponent(r.address || '')}&rc=${encodeURIComponent(r.contact || '')}`);
+                      }}
+                      className="w-full py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>REGISTER VISITOR</button>
+              <button onClick={() => setCallResult(null)}
+                      className="w-full py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">GO BACK HOME</button>
             </div>
           </div>
         </div>

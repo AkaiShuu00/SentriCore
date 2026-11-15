@@ -113,6 +113,22 @@ export default function GuardVerify() {
   const [blockInfo, setBlockInfo] = useState(null);             // { blocked, matches } for the scanned visitor
   const [blockNote, setBlockNote] = useState('');               // note when the guard confirms it is a different person
 
+  // Galing sa Contact Resident sa Guard Dashboard → "REGISTER VISITOR":
+  // diretso sa UNLISTED visitor step, naka-preset na ang tinawagang resident.
+  useEffect(() => {
+    if (searchParams.get('unlisted') === '1') {
+      setContactedResident({
+        residentId: searchParams.get('rid') || null,
+        name: searchParams.get('rn') || '',
+        address: searchParams.get('ra') || '',
+        contact: searchParams.get('rc') || '',
+      });
+      setScannedName('');
+      setStep('unlisted');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const token = () => sessionStorage.getItem('sentricore_token');  // Header so ngrok-free does not return the HTML warning page on API calls.
   const NGROK = { 'ngrok-skip-browser-warning': 'true' };
   const authHeaders = (extra = {}) => ({ Authorization: `Bearer ${token()}`, ...NGROK, ...extra });
