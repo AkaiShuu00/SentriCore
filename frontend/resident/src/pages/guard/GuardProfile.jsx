@@ -115,7 +115,7 @@ export default function GuardProfile() {
       {/* Gradient wave header (walang logo at pangalan) */}
       <PageHeader />
 
-      <div className="px-5 -mt-4 relative">
+      <div className="px-5 pt-3 relative">
         {/* Profile card — teal gradient */}
         <div className="rounded-3xl p-6 shadow-lg text-white mt-2"
              style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>

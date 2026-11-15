@@ -934,9 +934,9 @@ export default function GuardVerify() {
                     REGISTERED VISITORS
                   </button>
                 ) : (
-                  <button onClick={() => { stopCamera(); setStep('reading'); }}
+                  <button onClick={() => { stopCamera(); setOcrError(''); setStep('matched'); }}
                           className="flex-1 py-3 rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#112D31' }}>
-                    TYPE INFO MANUALLY
+                    TYPE MANUALLY
                   </button>
                 )}
               </div>
@@ -1134,8 +1134,10 @@ export default function GuardVerify() {
             <div>
               <h2 className="text-xl font-extrabold text-ink text-center mb-4">DRIVER INFORMATION</h2>
 
+              {/* Isang elevated box: registration type → retry */}
+              <div className="bg-white rounded-3xl shadow-lg p-4">
               {/* Editable driver/rider name — para sa manual entry o pag-ayos ng OCR */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-3">
+              <div className="rounded-2xl border border-gray-200 p-3 mb-3">
                 <label className="block text-[10px] font-bold text-ink/60 mb-1">
                   {isDelivery ? 'DELIVERY RIDER NAME (editable)' : "DRIVER NAME (editable)"}
                 </label>
@@ -1144,7 +1146,7 @@ export default function GuardVerify() {
                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-teal-600" />
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100 mb-5">
+              <div className="rounded-2xl border border-gray-200 divide-y divide-gray-100 mb-4">
                 {(isDelivery
                   ? [
                       ['Registration Type', 'Delivery'],
@@ -1173,7 +1175,7 @@ export default function GuardVerify() {
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-2 w-full">
                   <button onClick={() => setStep('residentList')}
-                          className="flex-1 py-3 rounded-full text-sm font-bold text-ink border border-gray-300">
+                          className="flex-1 py-3 rounded-full text-sm font-bold text-ink bg-white border border-gray-300 shadow-sm">
                     MANUAL SEARCH
                   </button>
                   <button onClick={() => {
@@ -1209,9 +1211,10 @@ export default function GuardVerify() {
                   </button>
                 </div>
                 <button onClick={() => setStep('scan')}
-                        className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300 w-40">
+                        className="px-8 py-2 rounded-full text-sm font-bold text-ink bg-white border border-gray-300 shadow-sm w-40">
                   RETRY
                 </button>
+              </div>
               </div>
             </div>
           ) : (
@@ -1852,20 +1855,19 @@ export default function GuardVerify() {
             <button onClick={() => setShowCallResult(false)}
                     className="absolute top-4 left-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-ink font-bold">‹</button>
             <h2 className="text-base font-extrabold text-ink text-center mt-2 mb-4">CALL RESULT</h2>
-            <div className="border border-gray-200 rounded-xl p-3 mb-4">
+            <div className="border border-gray-200 rounded-xl p-3 mb-2">
               <p className="font-bold text-ink text-sm">{contactedResident.name}</p>
               <p className="text-xs text-ink/60">Address: {contactedResident.address}</p>
-              <p className="text-xs text-ink/60 italic mt-1">Visitor Verification Status: (choose below)</p>
+              <p className="text-xs text-ink/60">Contact: {contactedResident.contact}</p>
             </div>
-            <div className="flex gap-2 mb-2">
-              <button onClick={() => { alert('Entry denied by resident — noted in records.'); navigate('/guard-home'); }}
-                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>DENY ENTRY</button>
+            <p className="text-[11px] text-ink/60 text-center mb-4 px-2">
+              Kung pinapapasok ng resident ang bisita, i-register bilang walk-in (active). Kung hindi, bumalik sa home.
+            </p>
+            <div className="flex flex-col gap-2">
               <button onClick={() => { setShowCallResult(false); setStep('unlisted'); }}
-                      className="flex-1 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#1a5fa8' }}>APPROVE ENTRY</button>
-            </div>
-            <div className="flex justify-center">
-              <button onClick={() => { alert('No answer from resident.'); navigate('/guard-home'); }}
-                      className="px-8 py-2 rounded-full text-sm font-bold text-ink border border-gray-300">NO ANSWER</button>
+                      className="w-full py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>REGISTER VISITOR</button>
+              <button onClick={() => { setShowCallResult(false); navigate('/guard-home'); }}
+                      className="w-full py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">GO BACK HOME</button>
             </div>
           </div>
         </div>

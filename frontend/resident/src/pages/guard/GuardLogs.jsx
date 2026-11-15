@@ -13,6 +13,7 @@ const statusBg = {
   EXPIRED:  { backgroundColor: '#D9D9D9', color: '#555' },
 };
 const fmtTime = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-----';
+const fmtFullDate = (ts) => ts ? new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '-----';
 const toLocalISO = (ts) => {
   if (!ts) return '';
   const s = String(ts);
@@ -29,6 +30,18 @@ const localMinuteKey = (ts) => {
   return `${toLocalISO(ts)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+function BatchMemberRow({ r }) {
+  return (
+    <div className="grid grid-cols-5 gap-1 px-2 py-3 items-center">
+      <div className="text-[9px] text-ink"><p className="font-bold">{r.date}</p><p className="text-ink/60">{r.time}</p></div>
+      <div className="text-[9px] text-ink"><p className="font-bold">{r.name}</p><p className="text-ink/60">{r.kind}</p>{r.plate && <p className="text-ink/60">Plate {r.plate}</p>}</div>
+      <div className="text-[9px] text-ink text-center"><p className="font-bold truncate">{r.resident}</p><p className="text-ink/60 truncate">{r.address}</p></div>
+      <div className="text-center"><span className="text-[8px] font-bold px-2 py-1 rounded-full" style={statusBg[r.status]}>{r.status}</span></div>
+      <div className="text-[9px] font-bold text-ink text-center">{r.entryId}</div>
+    </div>
+  );
+}
+
 export default function GuardLogs() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
@@ -38,6 +51,7 @@ export default function GuardLogs() {
   const [sortOpen, setSortOpen] = useState(false);
   const [sortBy, setSortBy] = useState('Newest first');
   const [linkMode, setLinkMode] = useState('ENTRY');
+  const [openBatch, setOpenBatch] = useState(null);
 
   const [records, setRecords] = useState([]);
   const [arrivals, setArrivals] = useState([]);
@@ -48,6 +62,7 @@ export default function GuardLogs() {
     getArrivals().then((res) => setArrivals((res.data || []).map((t) => ({
       name: t.visitor_name, kind: t.visitor_type || 'Visitor', resident: t.resident_name || '', address: t.unit_address || '',
       status: (t.status || 'Active').toUpperCase(), entryId: t.pass_number || `VST ${t.transaction_id || '—'}`,
+      type: (t.registration_type || 'Single').toUpperCase(),
       arrivalId: t.arrival_id || null, entryTime: t.entry_time || null, exitTime: t.exit_time || null,
       time: `${fmtTime(t.entry_time)} to ${t.exit_time ? fmtTime(t.exit_time) : '-----'}`, dateISO: toLocalISO(t.entry_time),
     })))).catch(() => setArrivals([]));
@@ -65,6 +80,8 @@ export default function GuardLogs() {
           name: t.visitor_name, kind: t.visitor_type || 'Visitor', plate: t.plate_number || '',
           resident: t.resident_name || '', address: t.unit_address || '', status: st,
           entryId: t.pass_number || `${prefix} ${t.transaction_id || '—'}`, type,
+          batchName: t.batch_name || '',
+          purpose: t.purpose || '',
           arrivalId: t.arrival_id || null, linked: !!t.arrival_id, entryTime: t.entry_time || null, exitTime: t.exit_time || null,
         };
       }));
@@ -96,7 +113,8 @@ export default function GuardLogs() {
   const buildLinkedGroups = () => {
     const map = new Map();
     if (linkMode === 'ENTRY') {
-      arrivals.forEach((r) => { if (!r.arrivalId) return; const k = 'A' + r.arrivalId; if (!map.has(k)) map.set(k, { key: k, when: r.entryTime, members: [] }); map.get(k).members.push(r); });
+      // Linked = pang-SINGLE visitors lang (hindi kasama ang batch)
+      arrivals.filter((r) => r.type !== 'BATCH').forEach((r) => { if (!r.arrivalId) return; const k = 'A' + r.arrivalId; if (!map.has(k)) map.set(k, { key: k, when: r.entryTime, members: [] }); map.get(k).members.push(r); });
       let groups = Array.from(map.values()).filter((g) => g.members.length >= 2);
       const q = search.toLowerCase();
       groups = groups.filter((g) => g.members.some((r) => {
@@ -109,13 +127,46 @@ export default function GuardLogs() {
       groups.sort((a, b) => (sortBy === 'Oldest first' ? new Date(a.when) - new Date(b.when) : new Date(b.when) - new Date(a.when)));
       return groups;
     }
-    filtered.forEach((r) => { if (r.status !== 'DEPARTED' || !r.exitTime) return; const k = localMinuteKey(r.exitTime); if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] }); map.get(k).members.push(r); });
+    filtered.filter((r) => r.type !== 'BATCH').forEach((r) => { if (r.status !== 'DEPARTED' || !r.exitTime) return; const k = localMinuteKey(r.exitTime); if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] }); map.get(k).members.push(r); });
     let groups = Array.from(map.values()).filter((g) => g.members.length >= 2);
     groups.forEach((g) => { g.activeCount = 0; });
     groups.sort((a, b) => (sortBy === 'Oldest first' ? new Date(a.when) - new Date(b.when) : new Date(b.when) - new Date(a.when)));
     return groups;
   };
   const linkedGroups = filter === 'LINKED' ? buildLinkedGroups() : [];
+
+  // BATCH view — pagsama-samahin ang mga magkakabatch, may batch number
+  const buildBatchGroups = () => {
+    const map = new Map();
+    filtered.forEach((r) => {
+      const k = r.batchName ? 'B' + r.batchName : 'R' + r.entryId;
+      if (!map.has(k)) map.set(k, { key: k, batchNo: r.batchName || '—', members: [] });
+      map.get(k).members.push(r);
+    });
+    const groups = Array.from(map.values());
+    groups.forEach((g) => {
+      g.when = g.members.reduce((mx, m) => Math.max(mx, new Date(m.entryTime || m.dateISO || 0).getTime() || 0), 0);
+      // Arrivals: grupo ayon sa arrival_id (sino ang sabay pumasok)
+      const aMap = new Map();
+      g.members.filter((m) => m.entryTime).forEach((m) => {
+        const ak = m.arrivalId ? 'A' + m.arrivalId : 'S' + m.entryId;
+        if (!aMap.has(ak)) aMap.set(ak, { when: m.entryTime, members: [] });
+        aMap.get(ak).members.push(m);
+      });
+      g.arrivals = Array.from(aMap.values()).sort((a, b) => new Date(a.when) - new Date(b.when));
+      // Departures: grupo ayon sa exit minute (sino ang sabay lumabas)
+      const dMap = new Map();
+      g.members.filter((m) => m.status === 'DEPARTED' && m.exitTime).forEach((m) => {
+        const dk = localMinuteKey(m.exitTime);
+        if (!dMap.has(dk)) dMap.set(dk, { when: m.exitTime, members: [] });
+        dMap.get(dk).members.push(m);
+      });
+      g.departures = Array.from(dMap.values()).sort((a, b) => new Date(a.when) - new Date(b.when));
+    });
+    groups.sort((a, b) => (sortBy === 'Oldest first' ? a.when - b.when : b.when - a.when));
+    return groups;
+  };
+  const batchGroups = filter === 'BATCH' ? buildBatchGroups() : [];
 
   const exportCSV = () => {
     if (filtered.length === 0) { alert('No records to export.'); return; }
@@ -239,6 +290,8 @@ export default function GuardLogs() {
                       <div key={i} className="flex items-center justify-between px-4 py-2.5 gap-2">
                         <div className="min-w-0"><p className="font-bold text-ink text-sm truncate">{r.name}</p>
                           <p className="text-[11px] text-ink/60 truncate">{r.kind} · {r.resident}</p>
+                          <p className="text-[10px] text-ink/70">Pumasok: {fmtFullDate(r.entryTime)}</p>
+                          <p className="text-[10px] text-ink/70">Lumabas: {fmtFullDate(r.exitTime)}</p>
                           <p className="text-[11px] text-ink/50">{r.time}</p></div>
                         <div className="text-right shrink-0"><p className="text-[11px] font-bold text-ink">{r.entryId}</p>
                           <span className="text-[8px] font-bold px-2 py-1 rounded-full inline-block mt-1" style={statusBg[r.status]}>{r.status}</span></div>
@@ -247,6 +300,60 @@ export default function GuardLogs() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : filter === 'BATCH' ? (
+            <div className="mt-3 max-h-[52vh] overflow-y-auto space-y-3">
+              {loading ? (<div className="text-center py-10 text-ink/50">Loading…</div>)
+              : batchGroups.length === 0 ? (
+                <div className="text-center py-10"><div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div>
+                  <p className="text-ink/60 font-semibold">No batch records found</p></div>
+              ) : batchGroups.map((g) => {
+                const isOpen = openBatch === g.key;
+                const activeCount = g.members.filter((m) => m.status === 'ACTIVE').length;
+                return (
+                  <div key={g.key} className="rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                    <button onClick={() => setOpenBatch(isOpen ? null : g.key)}
+                            className="w-full flex items-center justify-between px-4 py-3"
+                            style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-white" style={{ color: DARK }}>BATCH #{g.batchNo}</span>
+                        <span className="text-xs font-bold text-white/90 truncate">{g.members[0]?.resident}</span>
+                      </div>
+                      <span className="text-[11px] font-bold text-white shrink-0">{g.members.length} visitors ▾</span>
+                    </button>
+
+                    {isOpen && (
+                      <div className="p-3 space-y-3" style={{ backgroundColor: '#F7F5EE' }}>
+                        {/* ARRIVALS — sino ang sabay pumasok */}
+                        {g.arrivals.map((a, ai) => (
+                          <div key={'a' + ai} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
+                            <div className="px-3 py-1.5 text-[10px] font-extrabold text-white" style={{ backgroundColor: '#1e6b2e' }}>
+                              ARRIVAL {ai + 1} · {fmtFullDate(a.when)} · {a.members.length} sabay pumasok
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {a.members.map((r, i) => <BatchMemberRow key={i} r={r} />)}
+                            </div>
+                          </div>
+                        ))}
+                        {/* DEPARTURES — sino ang sabay lumabas */}
+                        {g.departures.map((d, di) => (
+                          <div key={'d' + di} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
+                            <div className="px-3 py-1.5 text-[10px] font-extrabold text-white" style={{ backgroundColor: '#8a2b2b' }}>
+                              DEPARTED {di + 1} · {fmtFullDate(d.when)} · {d.members.length} sabay lumabas
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {d.members.map((r, i) => <BatchMemberRow key={i} r={r} />)}
+                            </div>
+                          </div>
+                        ))}
+                        {activeCount > 0 && (
+                          <p className="text-[10px] text-ink/60 text-center">{activeCount} nasa loob pa (active)</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="mt-3">

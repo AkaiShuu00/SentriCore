@@ -60,7 +60,7 @@ async function matchVisitor(req, res) {
        FROM VisitorRegistrations r
        JOIN Residents res ON res.resident_id = r.resident_id
        JOIN VisitorRegistrationDetails d ON d.registration_id = r.registration_id
-       WHERE r.status = 'Expected' AND DATE(r.expected_date) >= CURDATE()`
+       WHERE r.status = 'Expected' AND DATE(r.expected_date) >= CURDATE() - INTERVAL 3 DAY`
     );
 
     const candidates = [];
@@ -191,7 +191,7 @@ async function getHistory(req, res) {
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
               t.arrival_id, t.exit_note, t.exit_additional_note,
-              res.full_name AS resident_name, res.unit_address, vr.registration_type
+              res.full_name AS resident_name, res.unit_address, vr.registration_type, vr.batch_name
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
        LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
@@ -216,11 +216,12 @@ async function getHistory(req, res) {
       resident_name: t.resident_name,
       unit_address: t.unit_address,
       registration_type: t.registration_type,
+      batch_name: t.batch_name,
     }));
 
     // 2) EXPIRED registrations (hindi pumasok, lumipas ang date) — isang row bawat visitor
     const [expRows] = await pool.query(
-      `SELECT r.registration_id, r.registration_type, r.purpose, r.expected_date,
+      `SELECT r.registration_id, r.registration_type, r.batch_name, r.purpose, r.expected_date,
               res.full_name AS resident_name, res.unit_address, d.visitor_name
        FROM VisitorRegistrations r
        JOIN Residents res ON res.resident_id = r.resident_id
@@ -246,6 +247,7 @@ async function getHistory(req, res) {
       resident_name: r.resident_name,
       unit_address: r.unit_address,
       registration_type: r.registration_type,
+      batch_name: r.batch_name,
     }));
 
     res.json([...completed, ...expired]);
@@ -298,7 +300,7 @@ async function getAllLogs(req, res) {
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose,
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
-              t.exit_note, t.exit_additional_note,
+              t.arrival_id, t.exit_note, t.exit_additional_note,
               res.full_name AS resident_name, res.unit_address,
               vr.registration_type, g.full_name AS guard_name
        FROM VisitorTransactions t
@@ -456,7 +458,7 @@ async function getCompanions(req, res) {
          JOIN VisitorRegistrationDetails d ON d.registration_id = r.registration_id
          JOIN Residents res ON res.resident_id = r.resident_id
          WHERE r.registration_type = 'Single' AND r.status = 'Expected'
-           AND DATE(r.expected_date) >= CURDATE()`
+           AND DATE(r.expected_date) >= CURDATE() - INTERVAL 3 DAY`
       );
       return res.json(rows.map((m) => ({ name: m.visitor_name, registrationId: m.registration_id, residentId: m.resident_id,
                                          resident: m.resident_name, address: m.unit_address, purpose: m.purpose })));
@@ -476,7 +478,7 @@ async function getSchedule(req, res) {
        FROM VisitorRegistrations r
        JOIN Residents res ON res.resident_id = r.resident_id
        WHERE r.status = 'Active'
-          OR (r.status = 'Expected' AND DATE(r.expected_date) >= CURDATE())
+          OR (r.status = 'Expected' AND DATE(r.expected_date) >= CURDATE() - INTERVAL 3 DAY)
           OR (r.status = 'Departed' AND EXISTS (
                 SELECT 1 FROM VisitorTransactions vt
                 WHERE vt.registration_id = r.registration_id
@@ -581,7 +583,7 @@ async function expireOld(req, res) {
   try {
     const [result] = await pool.query(
       `UPDATE VisitorRegistrations SET status = 'Expired'
-       WHERE status = 'Expected' AND DATE(expected_date) < CURDATE()`
+       WHERE status = 'Expected' AND DATE(expected_date) < CURDATE() - INTERVAL 3 DAY`
     );
     res.json({ message: 'Expired registrations updated.', count: result.affectedRows });
   } catch (err) {
