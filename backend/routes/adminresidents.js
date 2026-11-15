@@ -23,4 +23,4 @@ module.exports = router;
 
 // ⚠️ Sa server.js / index.js (dapat naka-mount sa /api/admin):
 //   const adminResidentRoutes = require('./routes/adminResidents');
-//   app.use('/api/admin', adminResidentRoutes);
+//   app.use('/api/admin', adminResidentRoutes);a

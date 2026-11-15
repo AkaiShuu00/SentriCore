@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, X, FileDown, FileSpreadsheet } from 'lucide-react';
+import { Search, X, FileDown, FileSpreadsheet, Archive, Calendar, ArrowUpDown } from 'lucide-react';
 import { getAllVisitorLogs, expireCheck } from '../../api';
 import { exportExcel, exportPDF, exportRecordPDF } from '../../utils/exportUtils';
 
@@ -10,25 +10,40 @@ const statusBg = {
   Departed:  { backgroundColor: '#F3C9C9', color: '#8a2b2b' },
   Expired:   { backgroundColor: '#D9D9D9', color: '#555' },
 };
-
-// #1 — Tinanggal ang "Driver"; Visitors + Delivery na lang.
-const TYPES = ['All Types', 'Visitor', 'Delivery'];
 const STATUSES = ['All Status', 'Active', 'Departed'];
+const TABS = ['ALL', 'SINGLE', 'BATCH', 'LINKED', 'DELIVERY'];
 
 const fmt = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-----';
+const fmtFullDate = (ts) => ts ? new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '-----';
+const toLocalISO = (ts) => { if (!ts) return ''; const d = new Date(ts); if (isNaN(d)) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const minuteKey = (ts) => { if (!ts) return ''; const d = new Date(ts); if (isNaN(d)) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+
+function BatchMemberRow({ l, onClick }) {
+  return (
+    <button onClick={onClick} className="w-full grid grid-cols-5 gap-1 px-3 py-3 items-center text-left hover:bg-cream/40">
+      <div className="text-[10px] text-ink"><p className="font-bold">{fmtFullDate(l.entryTime)}</p><p className="text-ink/60">{fmt(l.entryTime)}</p></div>
+      <div className="text-[10px] text-ink"><p className="font-bold truncate">{l.visitor}</p><p className="text-ink/60">{l.type}</p></div>
+      <div className="text-[10px] text-ink text-center"><p className="font-bold truncate">{l.resident}</p><p className="text-ink/60 truncate">{l.unit}</p></div>
+      <div className="text-center"><span className="text-[9px] font-semibold px-2 py-1 rounded-full" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span></div>
+      <div className="text-[10px] font-bold text-ink text-center">{l.pass}</div>
+    </button>
+  );
+}
 
 export default function AdminVisitorLogs() {
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All Types');
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const [dateFilter, setDateFilter] = useState('');
+  const [sortAZ, setSortAZ] = useState(false);
+  const [tab, setTab] = useState('ALL');
+  const [linkMode, setLinkMode] = useState('ENTRY');
+  const [openBatch, setOpenBatch] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [linkView, setLinkView] = useState('none'); // none | entry | exit
 
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Markahan muna ang lumipas (>3 araw) bilang Expired, tapos kunin ang logs
     expireCheck().catch(() => {}).finally(() => {
       getAllVisitorLogs()
         .then((res) => setLogs((res.data || []).map((t) => ({
@@ -45,46 +60,82 @@ export default function AdminVisitorLogs() {
           pass: t.pass_number || `P-${t.transaction_id}`,
           purpose: t.purpose || '—',
           regType: t.registration_type || 'Single',
+          batchName: t.batch_name || '',
           plate: t.plate_number || '',
           kind: (t.visitor_type || 'Visitor').toLowerCase(),
-          // Linked info (para sa Linked Entry/Exit grouping)
           arrivalId: t.arrival_id || null,
           entryTime: t.entry_time || null,
           exitTime: t.exit_time || null,
+          dateISO: toLocalISO(t.entry_time || t.exit_time),
         }))))
         .catch(() => setLogs([]))
         .finally(() => setLoading(false));
     });
   }, []);
 
-  const filtered = logs
-    .filter((l) => typeFilter === 'All Types' || l.type === typeFilter)
+  const isBatch = (l) => String(l.regType) === 'Batch';
+  const isDelivery = (l) => l.type === 'Delivery' || String(l.regType) === 'Delivery';
+  const isSingle = (l) => !isBatch(l) && !isDelivery(l);
+
+  // Base filter (search + status + date) — applied sa lahat ng tab
+  let base = logs
     .filter((l) => statusFilter === 'All Status' || l.status === statusFilter)
     .filter((l) => {
       const q = search.toLowerCase();
       return !q || l.visitor.toLowerCase().includes(q) || l.pass.toLowerCase().includes(q) || l.resident.toLowerCase().includes(q);
+    })
+    .filter((l) => !dateFilter || l.dateISO === dateFilter);
+  if (sortAZ) base = [...base].sort((a, b) => a.visitor.localeCompare(b.visitor));
+
+  // Flat lists per tab
+  const flat = tab === 'SINGLE' ? base.filter(isSingle)
+             : tab === 'DELIVERY' ? base.filter(isDelivery)
+             : base; // ALL
+
+  // BATCH groups (admin: lahat ng batch), guard-style arrival/departed
+  const buildBatchGroups = () => {
+    const map = new Map();
+    base.filter(isBatch).forEach((l) => {
+      const k = l.batchName ? 'B' + l.batchName : 'R' + l.id;
+      if (!map.has(k)) map.set(k, { key: k, batchNo: l.batchName || '—', members: [] });
+      map.get(k).members.push(l);
     });
-
-  const modalTitle = { visitor: 'Visitor Details', delivery: 'Delivery Details' };
-
-  // #3 — LINKED grouping (admin): ENTRY = iisang arrival_id; EXIT = iisang petsa+oras ng exit (hanggang minuto)
-  const minuteKey = (ts) => {
-    if (!ts) return '';
-    const d = new Date(ts);
-    if (isNaN(d)) return '';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const groups = Array.from(map.values());
+    groups.forEach((g) => {
+      g.when = g.members.reduce((mx, m) => Math.max(mx, new Date(m.entryTime || 0).getTime() || 0), 0);
+      const aMap = new Map();
+      g.members.filter((m) => m.entryTime).forEach((m) => {
+        const ak = m.arrivalId ? 'A' + m.arrivalId : 'S' + m.id;
+        if (!aMap.has(ak)) aMap.set(ak, { when: m.entryTime, members: [] });
+        aMap.get(ak).members.push(m);
+      });
+      g.arrivals = Array.from(aMap.values()).sort((a, b) => new Date(a.when) - new Date(b.when));
+      const dMap = new Map();
+      g.members.filter((m) => m.rawStatus === 'Completed' && m.exitTime).forEach((m) => {
+        const dk = minuteKey(m.exitTime);
+        if (!dMap.has(dk)) dMap.set(dk, { when: m.exitTime, members: [] });
+        dMap.get(dk).members.push(m);
+      });
+      g.departures = Array.from(dMap.values()).sort((a, b) => new Date(a.when) - new Date(b.when));
+      g.activeCount = g.members.filter((m) => m.rawStatus === 'Active').length;
+    });
+    groups.sort((a, b) => b.when - a.when);
+    return groups;
   };
+  const batchGroups = tab === 'BATCH' ? buildBatchGroups() : [];
+
+  // LINKED groups (single visitors lang) — Entry by arrival, Exit by exit minute
   const buildLinked = () => {
     const map = new Map();
-    if (linkView === 'entry') {
-      filtered.forEach((l) => {
+    if (linkMode === 'ENTRY') {
+      base.filter((l) => !isBatch(l)).forEach((l) => {
         if (!l.arrivalId) return;
         const k = 'A' + l.arrivalId;
         if (!map.has(k)) map.set(k, { key: k, when: l.entryTime, members: [] });
         map.get(k).members.push(l);
       });
-    } else if (linkView === 'exit') {
-      filtered.forEach((l) => {
+    } else {
+      base.filter((l) => !isBatch(l)).forEach((l) => {
         if (l.rawStatus !== 'Completed' || !l.exitTime) return;
         const k = minuteKey(l.exitTime);
         if (!map.has(k)) map.set(k, { key: k, when: l.exitTime, members: [] });
@@ -99,38 +150,33 @@ export default function AdminVisitorLogs() {
     groups.sort((a, b) => new Date(b.when) - new Date(a.when));
     return groups;
   };
-  const linkedGroups = linkView !== 'none' ? buildLinked() : [];
+  const linkedGroups = tab === 'LINKED' ? buildLinked() : [];
 
-  // #2 — Working exports (shared template)
-  const EXPORT_HEADER = ['Visitor', 'Type', 'Resident', 'Unit', 'Entry', 'Exit', 'Status', 'Guard', 'Pass'];
-  const exportRows = () => filtered.map((l) => [l.visitor, l.type, l.resident, l.unit, l.entry, l.exit, l.status, l.guard, l.pass]);
+  const modalTitle = { visitor: 'Visitor Details', delivery: 'Delivery Details' };
+
+  // Export — SAKOP ang lahat na nasa current filter (all/single/batch/linked/delivery)
+  const EXPORT_HEADER = ['Visitor', 'Type', 'Reg Type', 'Batch', 'Resident', 'Unit', 'Entry', 'Exit', 'Status', 'Guard', 'Pass'];
+  const exportRows = () => base.map((l) => [l.visitor, l.type, l.regType, l.batchName || '—', l.resident, l.unit, l.entry, l.exit, l.status, l.guard, l.pass]);
   const doExcel = () => exportExcel('visitor-logs', 'Visitor Logs', EXPORT_HEADER, exportRows());
-  const doPDF = () => exportPDF('Visitor Logs', EXPORT_HEADER, exportRows(), { subtitle: 'Complete visitor transaction history' });
+  const doPDF = () => exportPDF('Visitor Logs', EXPORT_HEADER, exportRows(), { subtitle: 'All / Single / Batch / Linked / Delivery' });
 
-  // #1 — Solo visitor "record" → sariling PDF (hindi buong table)
   const doRecordPDF = (l) => {
     if (!l) return;
     const fields = [
-      ['Name', l.visitor],
-      ['Pass No.', l.pass],
+      ['Name', l.visitor], ['Pass No.', l.pass],
       [l.kind === 'delivery' ? 'Delivery Type' : 'Visitor Type', l.type],
-      ['Guard', l.guard],
-      ['Resident Name', l.resident],
-      ['Resident Address', l.unit],
-      ['Purpose', l.purpose],
-      ['Entry', l.entry],
-      ['Exit', l.exit],
-      ['Status', l.status],
+      ['Guard', l.guard], ['Resident Name', l.resident], ['Resident Address', l.unit],
+      ['Purpose', l.purpose], ['Entry', l.entry], ['Exit', l.exit], ['Status', l.status],
       ['Mode of Arrival', l.plate ? 'Private Vehicle' : 'Non-Motorized'],
-      ['Plate Number', l.plate || 'Non-Motorized'],
-      ['Registration Type', l.regType],
+      ['Plate Number', l.plate || 'Non-Motorized'], ['Registration Type', l.regType],
     ];
     exportRecordPDF('Visitor Record', fields, { subtitle: `${l.visitor} · ${l.pass}`, filename: `visitor-record-${l.pass}` });
   };
 
+  const FLAT_TABS = ['ALL', 'SINGLE', 'DELIVERY'];
+
   return (
     <AdminLayout>
-      {/* Title + actions */}
       <div className="flex items-end justify-between mb-5">
         <div>
           <h1 className="text-3xl font-extrabold text-teal-800">Visitor Logs</h1>
@@ -143,61 +189,61 @@ export default function AdminVisitorLogs() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4">
-        {/* Filters — may search bar para mabilis hanapin ang bisita */}
-        <div className="flex gap-2 mb-4">
+        {/* Filters — search + sort + date + All Status (fixed sizes, di gumagalaw) */}
+        <div className="flex items-center gap-2 mb-4">
           <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-1" style={{ backgroundColor: '#F5F2E9' }}>
             <Search size={18} className="text-ink/40" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search visitor, resident, pass..."
                    className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
           </div>
-          <input type="date" className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm text-ink outline-none" />
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
-            {TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
+          <button onClick={() => setSortAZ((v) => !v)} title="Sort A–Z"
+                  className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${sortAZ ? 'text-white' : 'bg-white border border-gray-200 text-ink'}`}
+                  style={sortAZ ? { backgroundColor: '#0F6E6E' } : {}}><ArrowUpDown size={18} /></button>
+          <label className="w-11 h-11 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0 cursor-pointer relative" title="Filter by date">
+            <Calendar size={18} className="text-ink" />
+            <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+          </label>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
+                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none shrink-0 w-36 text-center">
             {STATUSES.map((s) => <option key={s}>{s}</option>)}
           </select>
-          <select className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-medium text-ink outline-none">
-            <option>All Gates</option><option>Gate 1</option><option>Gate 2</option>
-          </select>
         </div>
 
-        {/* #3 — View mode: All / Linked Entry / Linked Exit */}
-        <div className="flex gap-2 mb-4">
-          {[
-            { key: 'none', label: 'All Logs' },
-            { key: 'entry', label: 'Linked Entry' },
-            { key: 'exit', label: 'Linked Exit' },
-          ].map((m) => (
-            <button key={m.key} onClick={() => setLinkView(m.key)}
-                    className="px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap"
-                    style={linkView === m.key ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
-              {m.label}
+        {/* Tabs: ALL / SINGLE / BATCH / LINKED / DELIVERY (even sizes) */}
+        <div className="grid grid-cols-5 gap-2 mb-4">
+          {TABS.map((t) => (
+            <button key={t} onClick={() => { setTab(t); setOpenBatch(null); }}
+                    className="py-2 rounded-full text-xs font-bold text-center"
+                    style={tab === t ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
+              {t}
             </button>
           ))}
-          {linkView !== 'none' && (
-            <span className="text-[11px] text-ink/50 self-center ml-1">
-              {linkView === 'entry' ? 'Magkasabay na PUMASOK (iisang arrival).' : 'Magkasabay na LUMABAS (iisang oras ng exit).'}
-            </span>
-          )}
         </div>
 
-        {/* Table (All Logs) */}
-        {linkView === 'none' && (<>
-        <div className="grid grid-cols-8 gap-2 px-3 py-2 text-xs font-semibold text-ink/60 border-b border-gray-200">
-          <span>Visitor Name</span><span>Type</span><span>Resident</span>
-          <span>Entry</span><span>Exit</span><span className="text-center">Status</span>
-          <span>Guard</span><span>Visitor Pass</span>
-        </div>
-        <div className="max-h-[58vh] overflow-y-auto">
-          {loading ? (
-            <p className="text-center text-ink/50 py-10 text-sm">Loading logs…</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-center text-ink/50 py-10 text-sm">No logs found.</p>
-          ) : (
-            filtered.map((l) => (
+        {/* LINKED sub-filter (same sa guard) */}
+        {tab === 'LINKED' && (
+          <div className="flex gap-2 mb-4">
+            {['ENTRY', 'EXIT'].map((m) => (
+              <button key={m} onClick={() => setLinkMode(m)}
+                      className="px-5 py-1.5 rounded-full text-xs font-bold"
+                      style={linkMode === m ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
+                LINKED {m}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* FLAT table (ALL / SINGLE / DELIVERY) */}
+        {FLAT_TABS.includes(tab) && (<>
+          <div className="grid grid-cols-8 gap-2 px-3 py-2 text-xs font-semibold text-ink/60 border-b border-gray-200">
+            <span>Visitor Name</span><span>Type</span><span>Resident</span>
+            <span>Entry</span><span>Exit</span><span className="text-center">Status</span>
+            <span>Guard</span><span>Visitor Pass</span>
+          </div>
+          <div className="max-h-[52vh] overflow-y-auto">
+            {loading ? (<p className="text-center text-ink/50 py-10 text-sm">Loading logs…</p>)
+            : flat.length === 0 ? (<p className="text-center text-ink/50 py-10 text-sm">No logs found.</p>)
+            : flat.map((l) => (
               <button key={l.id} onClick={() => setDetail(l)}
                       className="w-full grid grid-cols-8 gap-2 px-3 py-2.5 border-b border-gray-100 text-xs text-ink items-center text-left hover:bg-cream/40">
                 <span className="font-medium truncate">{l.visitor}</span>
@@ -205,59 +251,91 @@ export default function AdminVisitorLogs() {
                 <span className="text-ink/70 truncate">{l.resident}</span>
                 <span className="text-ink/60">{l.entry}</span>
                 <span className="text-ink/60">{l.exit}</span>
-                <span className="text-center">
-                  <span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span>
-                </span>
+                <span className="text-center"><span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span></span>
                 <span className="text-ink/70">{l.guard}</span>
                 <span className="font-semibold">{l.pass}</span>
               </button>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
         </>)}
 
-        {/* Linked grouped view (Entry/Exit) */}
-        {linkView !== 'none' && (
-          <div className="max-h-[62vh] overflow-y-auto space-y-3">
-            {loading ? (
-              <p className="text-center text-ink/50 py-10 text-sm">Loading logs…</p>
-            ) : linkedGroups.length === 0 ? (
-              <p className="text-center text-ink/50 py-10 text-sm">No linked {linkView === 'entry' ? 'entries' : 'exits'} found. Groups of 2+ who {linkView === 'entry' ? 'entered' : 'exited'} together appear here.</p>
-            ) : (
-              linkedGroups.map((g) => (
-                <div key={g.key} className="rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5" style={{ backgroundColor: '#E8F0EE' }}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ backgroundColor: '#0F6E6E' }}>
-                        LINKED {linkView === 'entry' ? 'ENTRY' : 'EXIT'}
-                      </span>
-                      <span className="text-xs font-bold text-ink">
-                        {g.members.length} people{linkView === 'entry' ? ` · ${g.activeCount} active` : ''}
-                      </span>
+        {/* BATCH grouped (guard-style) */}
+        {tab === 'BATCH' && (
+          <div className="max-h-[56vh] overflow-y-auto space-y-3">
+            {loading ? (<p className="text-center text-ink/50 py-10 text-sm">Loading…</p>)
+            : batchGroups.length === 0 ? (
+              <div className="text-center py-10"><div className="flex justify-center mb-2"><Archive size={36} className="text-ink/40" /></div><p className="text-ink/60 font-semibold">No batch records found</p></div>
+            ) : batchGroups.map((g) => {
+              const isOpen = openBatch === g.key;
+              return (
+                <div key={g.key} className="rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                  <button onClick={() => setOpenBatch(isOpen ? null : g.key)} className="w-full flex items-center justify-between px-4 py-3"
+                          style={{ background: 'linear-gradient(135deg, #0F6E6E 0%, #0A4A4A 100%)' }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-white" style={{ color: '#0A4A4A' }}>BATCH #{g.batchNo}</span>
+                      <span className="text-xs font-bold text-white/90 truncate">{g.members[0]?.resident}</span>
                     </div>
-                    <span className="text-[11px] text-ink/60">
-                      {g.when ? new Date(g.when).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-gray-100">
-                    {g.members.map((l) => (
-                      <button key={l.id} onClick={() => setDetail(l)}
-                              className="w-full flex items-center justify-between px-4 py-2.5 gap-2 text-left hover:bg-cream/40">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-ink text-sm truncate">{l.visitor}</p>
-                          <p className="text-[11px] text-ink/60 truncate">{l.type} · {l.resident} · {l.unit}</p>
-                          <p className="text-[11px] text-ink/50">{l.entry} → {l.exit}</p>
+                    <span className="text-[11px] font-bold text-white shrink-0">{g.members.length} visitors ▾</span>
+                  </button>
+                  {isOpen && (
+                    <div className="p-3 space-y-3" style={{ backgroundColor: '#F7F5EE' }}>
+                      {g.arrivals.map((a, ai) => (
+                        <div key={'a' + ai} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
+                          <div className="px-3 py-1.5 text-[10px] font-extrabold text-white" style={{ backgroundColor: '#1e6b2e' }}>
+                            ARRIVAL {ai + 1} - {fmtFullDate(a.when)} - {a.members.length} visitor{a.members.length === 1 ? '' : 's'}
+                          </div>
+                          <div className="divide-y divide-gray-100">{a.members.map((l) => <BatchMemberRow key={l.id} l={l} onClick={() => setDetail(l)} />)}</div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[11px] font-bold text-ink">{l.pass}</p>
-                          <span className="text-[9px] font-semibold px-2 py-1 rounded-full inline-block mt-1" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span>
+                      ))}
+                      {g.departures.map((d, di) => (
+                        <div key={'d' + di} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
+                          <div className="px-3 py-1.5 text-[10px] font-extrabold text-white" style={{ backgroundColor: '#8a2b2b' }}>
+                            DEPARTED {di + 1} - {fmtFullDate(d.when)} - {d.members.length} visitor{d.members.length === 1 ? '' : 's'}
+                          </div>
+                          <div className="divide-y divide-gray-100">{d.members.map((l) => <BatchMemberRow key={l.id} l={l} onClick={() => setDetail(l)} />)}</div>
                         </div>
-                      </button>
-                    ))}
-                  </div>
+                      ))}
+                      {g.activeCount > 0 && <p className="text-[10px] text-ink/60 text-center">{g.activeCount} nasa loob pa (active)</p>}
+                    </div>
+                  )}
                 </div>
-              ))
-            )}
+              );
+            })}
+          </div>
+        )}
+
+        {/* LINKED grouped */}
+        {tab === 'LINKED' && (
+          <div className="max-h-[56vh] overflow-y-auto space-y-3">
+            {loading ? (<p className="text-center text-ink/50 py-10 text-sm">Loading…</p>)
+            : linkedGroups.length === 0 ? (
+              <p className="text-center text-ink/50 py-10 text-sm">No linked {linkMode === 'ENTRY' ? 'entries' : 'exits'} found. Groups of 2+ who {linkMode === 'ENTRY' ? 'entered' : 'exited'} together appear here.</p>
+            ) : linkedGroups.map((g) => (
+              <div key={g.key} className="rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5" style={{ backgroundColor: '#E8F0EE' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold px-2 py-1 rounded-full text-white" style={{ backgroundColor: '#0F6E6E' }}>LINKED {linkMode}</span>
+                    <span className="text-xs font-bold text-ink">{g.members.length} people{linkMode === 'ENTRY' ? ` · ${g.activeCount} active` : ''}</span>
+                  </div>
+                  <span className="text-[11px] text-ink/60">{g.when ? fmt(g.when) : '—'}</span>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {g.members.map((l) => (
+                    <button key={l.id} onClick={() => setDetail(l)} className="w-full flex items-center justify-between px-4 py-2.5 gap-2 text-left hover:bg-cream/40">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-ink text-sm truncate">{l.visitor}</p>
+                        <p className="text-[11px] text-ink/60 truncate">{l.type} · {l.resident} · {l.unit}</p>
+                        <p className="text-[11px] text-ink/50">Pumasok: {fmtFullDate(l.entryTime)} · Lumabas: {fmtFullDate(l.exitTime)}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[11px] font-bold text-ink">{l.pass}</p>
+                        <span className="text-[9px] font-semibold px-2 py-1 rounded-full inline-block mt-1" style={statusBg[l.rawStatus] || statusBg.Expired}>{l.status}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -268,30 +346,22 @@ export default function AdminVisitorLogs() {
           <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setDetail(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
             <h2 className="text-2xl font-extrabold text-teal-800 mb-5">{modalTitle[detail.kind] || 'Visitor Details'}</h2>
-
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-5">
               {[
-                ['Name', detail.visitor],
-                ['Pass No.', detail.pass],
+                ['Name', detail.visitor], ['Pass No.', detail.pass],
                 [detail.kind === 'delivery' ? 'Delivery' : 'Visitor Type', detail.type],
-                ['Guard', detail.guard],
-                ['Resident Name', detail.resident],
-                ['Resident Address', detail.unit],
-                ['Entry', detail.entry],
-                ['Exit', detail.exit],
+                ['Guard', detail.guard], ['Resident Name', detail.resident], ['Resident Address', detail.unit],
+                ['Entry', detail.entry], ['Exit', detail.exit],
                 ['Mode of Arrival', detail.plate ? 'Private Vehicle' : 'Non-Motorized'],
                 ['Registration Type', detail.regType],
               ].map(([label, val]) => (
-                <div key={label} className="bg-cream rounded-xl px-3 py-2" style={{ backgroundColor: '#F5F2E9' }}>
+                <div key={label} className="rounded-xl px-3 py-2" style={{ backgroundColor: '#F5F2E9' }}>
                   <p className="text-[10px] font-semibold text-ink/40">{label}</p>
                   <p className="text-sm text-teal-800 font-medium">{val || '—'}</p>
                 </div>
               ))}
             </div>
-
-            <button onClick={() => doRecordPDF(detail)} className="w-full text-white font-semibold py-3 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-              Download Record
-            </button>
+            <button onClick={() => doRecordPDF(detail)} className="w-full text-white font-semibold py-3 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>Download Record</button>
           </div>
         </div>
       )}

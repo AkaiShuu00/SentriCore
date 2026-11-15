@@ -1,21 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { useRef } from 'react';
-import { Settings, X, KeyRound, Trash2, Plus, User, Camera, FileDown, FileSpreadsheet, Phone } from 'lucide-react';
+import { Settings, X, KeyRound, Trash2, Plus, User, Camera, FileDown, FileSpreadsheet, Phone, Mail, Clock, ClipboardList, ChevronLeft } from 'lucide-react';
 import {
   adminListGuards, adminAddGuard, adminUpdateGuard,
-  adminAssignGate, adminResetGuardPassword, adminDeleteGuard,
+  adminResetGuardPassword, adminDeleteGuard, adminGuardShifts, getAllVisitorLogs,
 } from '../../api';
 import { exportExcel, exportPDF } from '../../utils/exportUtils';
+import VisitorLogsPanel from './components/VisitorLogsPanel';
 
-const GATE_LABEL = (id) => (id ? `GATE ${String(id).toUpperCase()}` : 'UNASSIGNED');
+const fmtDT = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+const fmtLog = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-----';
+const toLocalISO = (ts) => { if (!ts) return ''; const d = new Date(ts); if (isNaN(d)) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 function Avatar({ src, size = 40 }) {
   return (
-    <div className="rounded-full bg-teal-100 flex items-center justify-center overflow-hidden shrink-0"
-         style={{ width: size, height: size }}>
-      {src ? <img src={src} alt="" className="w-full h-full object-cover" />
-           : <User size={Math.round(size * 0.5)} className="text-ink" />}
+    <div className="rounded-full bg-teal-100 flex items-center justify-center overflow-hidden shrink-0" style={{ width: size, height: size }}>
+      {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : <User size={Math.round(size * 0.5)} className="text-ink" />}
     </div>
   );
 }
@@ -41,98 +41,68 @@ const fileToSquare = (file, max = 320) =>
 export default function AdminGuards() {
   const [guards, setGuards] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [showAdd, setShowAdd] = useState(false);
   const [editModal, setEditModal] = useState(null);
   const [credModal, setCredModal] = useState(null);
-  const [assignModal, setAssignModal] = useState(null);
+  const [detail, setDetail] = useState(null); // guard detail screen
 
   const load = () => {
     setLoading(true);
-    adminListGuards()
-      .then((res) => setGuards(res.data || []))
-      .catch(() => setGuards([]))
-      .finally(() => setLoading(false));
+    adminListGuards().then((res) => setGuards(res.data || [])).catch(() => setGuards([])).finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
-  const gateIds = Array.from(new Set(guards.map((g) => g.gateId).filter((x) => x != null)));
-  if (gateIds.length === 0) gateIds.push('1');
-  gateIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
-  const hasUnassigned = guards.some((g) => g.gateId == null);
-
-  const EXPORT_HEADER = ['Full Name', 'Username', 'Gate', 'Shift', 'Contact'];
-  const exportRows = () => guards.map((g) => [g.fullName, g.username, g.gate || GATE_LABEL(g.gateId), (g.shift && g.shift !== '—') ? g.shift : 'No shift set', g.contact || '—']);
+  const EXPORT_HEADER = ['Full Name', 'Username', 'Shift', 'Contact', 'Email'];
+  const exportRows = () => guards.map((g) => [g.fullName, g.username, (g.shift && g.shift !== '—') ? g.shift : 'No shift set', g.contact || '—', g.email || '—']);
   const doExcel = () => exportExcel('guard-roster', 'Guards', EXPORT_HEADER, exportRows());
-  const doPDF = () => exportPDF('Guard Roster', EXPORT_HEADER, exportRows(), { subtitle: 'Gate assignments, shifts, and guard accounts' });
-
-  // #2 — Mas MALAKI at HORIZONTAL na layout (occupied ang space)
-  const GateCard = ({ gateId }) => {
-    const list = guards.filter((g) => String(g.gateId ?? '') === String(gateId ?? ''));
-    return (
-      <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: '#EFEBDD' }}>
-          <span className="font-extrabold text-ink text-lg">{GATE_LABEL(gateId)}</span>
-          <button onClick={() => setAssignModal({ gateId })}
-                  className="flex items-center gap-1 text-white text-sm font-medium px-4 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-            <Plus size={16} /> Assign Guard
-          </button>
-        </div>
-        <div className="p-5">
-          {list.length === 0 ? (
-            <p className="text-center text-ink/40 py-10 text-sm">No guards assigned to this gate.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {list.map((g) => (
-                <div key={g.guardId}
-                     className="flex items-center gap-4 rounded-2xl border border-gray-100 shadow-sm p-4 bg-white">
-                  <Avatar src={g.photo} size={60} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-ink text-base truncate">{g.fullName}</p>
-                    <p className="text-sm text-ink/70 truncate">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
-                    <p className="text-xs text-ink/45 truncate">{g.username}</p>
-                    {g.contact && <p className="text-xs text-ink/45 truncate inline-flex items-center gap-1"><Phone size={11} className="text-ink/40" /> {g.contact}</p>}
-                  </div>
-                  <button onClick={() => setEditModal({ ...g })} title="Edit"
-                          className="w-10 h-10 rounded-full hover:bg-cream flex items-center justify-center text-ink shrink-0"><Settings size={18} /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const doPDF = () => exportPDF('Guard Roster', EXPORT_HEADER, exportRows(), { subtitle: 'Shifts and guard accounts' });
 
   return (
     <AdminLayout>
-      <div className="flex items-end justify-between mb-5">
-        <div>
-          <h1 className="text-3xl font-extrabold text-teal-800">Guards</h1>
-          <p className="text-sm text-ink/60">Gate assignments, shifts, and guard accounts.</p>
+      {/* Guard detail screen */}
+      {detail ? (
+        <GuardDetail guard={detail} onBack={() => setDetail(null)} onEdit={() => { const g = detail; setDetail(null); setEditModal({ ...g }); }} />
+      ) : (<>
+        <div className="flex items-end justify-between mb-5">
+          <div>
+            <h1 className="text-3xl font-extrabold text-teal-800">Guards</h1>
+            <p className="text-sm text-ink/60">Shifts, time records, and guard accounts.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={doPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
+            <button onClick={doExcel} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileSpreadsheet size={16} /> Export Excel</button>
+            <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+              <Plus size={16} /> Add Guard
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={doPDF} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileDown size={16} /> Export PDF</button>
-          <button onClick={doExcel} className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm text-sm font-medium text-ink whitespace-nowrap"><FileSpreadsheet size={16} /> Export Excel</button>
-          <button onClick={() => setShowAdd(true)}
-                  className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-medium whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-            <Plus size={16} /> Add Guard
-          </button>
-        </div>
-      </div>
 
-      {loading ? (
-        <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
-      ) : (
-        <div className="space-y-6">
-          {gateIds.map((id) => <GateCard key={id} gateId={id} />)}
-          {hasUnassigned && <GateCard gateId={null} />}
-        </div>
-      )}
+        {loading ? (
+          <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
+        ) : guards.length === 0 ? (
+          <p className="text-center text-ink/50 py-10 text-sm">No guards yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {guards.map((g) => (
+              <button key={g.guardId} onClick={() => setDetail(g)}
+                      className="flex items-center gap-4 rounded-2xl border border-gray-100 shadow-sm p-4 bg-white text-left hover:shadow-md transition">
+                <Avatar src={g.photo} size={60} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-ink text-base truncate">{g.fullName}</p>
+                  <p className="text-sm text-ink/70 truncate">{g.shift && g.shift !== '—' ? g.shift : 'No shift set'}</p>
+                  <p className="text-xs text-ink/45 truncate">{g.username}</p>
+                  {g.contact && <p className="text-xs text-ink/45 truncate inline-flex items-center gap-1"><Phone size={11} className="text-ink/40" /> {g.contact}</p>}
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); setEditModal({ ...g }); }} title="Edit"
+                        className="w-10 h-10 rounded-full hover:bg-cream flex items-center justify-center text-ink shrink-0"><Settings size={18} /></button>
+              </button>
+            ))}
+          </div>
+        )}
+      </>)}
 
       {/* Add Guard */}
-      {showAdd && <GuardForm title="Add Guard"
-        onClose={() => setShowAdd(false)}
+      {showAdd && <GuardForm title="Add Guard" onClose={() => setShowAdd(false)}
         onSubmit={async (data) => {
           try { const res = await adminAddGuard(data); setShowAdd(false); setCredModal(res.data.credentials); load(); }
           catch (err) { alert(err.response?.data?.message || 'Failed to add guard.'); }
@@ -156,32 +126,6 @@ export default function AdminGuards() {
           catch (err) { alert(err.response?.data?.message || 'Failed to update.'); }
         }} />}
 
-      {/* Assign gate modal */}
-      {assignModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setAssignModal(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setAssignModal(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
-            <h2 className="text-xl font-extrabold text-ink mb-1">Assign to {GATE_LABEL(assignModal.gateId)}</h2>
-            <p className="text-xs text-ink/60 mb-4">Piliin ang guard na ilalagay sa gate na ito.</p>
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {guards.length === 0 ? (
-                <p className="text-center text-ink/50 py-6 text-sm">No guards yet.</p>
-              ) : guards.map((g) => (
-                <button key={g.guardId}
-                        onClick={async () => {
-                          try { await adminAssignGate(g.guardId, assignModal.gateId); setAssignModal(null); load(); }
-                          catch (err) { alert(err.response?.data?.message || 'Failed to assign.'); }
-                        }}
-                        className="w-full text-left rounded-xl p-3 border border-gray-200 hover:border-teal-500 flex items-center justify-between">
-                  <span className="font-medium text-ink text-sm">{g.fullName}</span>
-                  <span className="text-xs text-ink/50">Currently: {g.gate}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Credentials modal */}
       {credModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setCredModal(null)}>
@@ -195,10 +139,7 @@ export default function AdminGuards() {
               <p className="text-xs font-semibold text-ink/50">Temporary Password</p>
               <p className="text-base font-bold text-teal-800">{credModal.password}</p>
             </div>
-            <button onClick={() => {
-                      navigator.clipboard?.writeText(`Username: ${credModal.username}\nPassword: ${credModal.password}`);
-                      setCredModal(null);
-                    }}
+            <button onClick={() => { navigator.clipboard?.writeText(`Username: ${credModal.username}\nPassword: ${credModal.password}`); setCredModal(null); }}
                     className="w-full text-white font-semibold py-3 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>Copy & Close</button>
           </div>
         </div>
@@ -207,14 +148,149 @@ export default function AdminGuards() {
   );
 }
 
-// ── Reusable Add/Edit form ──
+// ── Guard detail screen: header + Time Records / History Logs ──
+function GuardDetail({ guard, onBack, onEdit }) {
+  const [tab, setTab] = useState('time'); // time | logs
+  const [shifts, setShifts] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      adminGuardShifts().then((r) => (r.data || []).filter((s) => String(s.guard_id) === String(guard.guardId))).catch(() => []),
+      getAllVisitorLogs().then((r) => (r.data || []).filter((t) => String(t.guard_id) === String(guard.guardId))).catch(() => []),
+    ]).then(([sh, lg]) => {
+      setShifts(sh);
+      setLogs(lg.map((t) => ({
+        id: t.transaction_id, visitor: t.visitor_name, type: t.visitor_type || 'Visitor',
+        resident: t.resident_name || '', unit: t.unit_address || '',
+        entry: fmtLog(t.entry_time), exit: fmtLog(t.exit_time),
+        status: t.status === 'Completed' ? 'Departed' : t.status, rawStatus: t.status,
+        pass: t.pass_number || `P-${t.transaction_id}`, purpose: t.purpose || '—',
+        regType: t.registration_type || 'Single', batchName: t.batch_name || '', plate: t.plate_number || '',
+        kind: (t.visitor_type || 'Visitor').toLowerCase(), arrivalId: t.arrival_id || null,
+        entryTime: t.entry_time || null, exitTime: t.exit_time || null, dateISO: toLocalISO(t.entry_time || t.exit_time),
+      })));
+    }).finally(() => setLoading(false));
+  }, [guard.guardId]);
+
+  const exportShiftPDF = () => {
+    const header = ['Time In', 'Time Out', 'Status'];
+    const rows = shifts.map((s) => [fmtDT(s.time_in), s.ended_at ? fmtDT(s.ended_at) : '—', s.ended_at ? 'Ended' : 'On Duty']);
+    exportPDF(`Shift Schedule — ${guard.fullName}`, header, rows, { subtitle: guard.shift || '' });
+  };
+  const exportShiftExcel = () => {
+    const header = ['Time In', 'Time Out', 'Status'];
+    const rows = shifts.map((s) => [fmtDT(s.time_in), s.ended_at ? fmtDT(s.ended_at) : '—', s.ended_at ? 'Ended' : 'On Duty']);
+    exportExcel('guard-shift-schedule', 'Shifts', header, rows);
+  };
+  const exportLogsPDF = (base) => {
+    const header = ['Visitor', 'Type', 'Reg Type', 'Resident', 'Entry', 'Exit', 'Status', 'Pass'];
+    const rows = base.map((l) => [l.visitor, l.type, l.regType, l.resident, l.entry, l.exit, l.status, l.pass]);
+    exportPDF(`Processed Entries — ${guard.fullName}`, header, rows, { subtitle: 'Guard history logs' });
+  };
+  const exportLogsExcel = (base) => {
+    const header = ['Visitor', 'Type', 'Reg Type', 'Resident', 'Entry', 'Exit', 'Status', 'Pass'];
+    const rows = base.map((l) => [l.visitor, l.type, l.regType, l.resident, l.entry, l.exit, l.status, l.pass]);
+    exportExcel('guard-processed-entries', 'Processed', header, rows);
+  };
+
+  return (
+    <div>
+      <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-bold text-teal-700 mb-4"><ChevronLeft size={18} /> Back to Guards</button>
+
+      {/* Header card */}
+      <div className="rounded-3xl p-6 shadow-md text-white mb-5" style={{ background: 'linear-gradient(135deg,#0F6E6E 0%,#0A4A4A 100%)' }}>
+        <div className="flex items-center gap-4">
+          <Avatar src={guard.photo} size={72} />
+          <div className="min-w-0 flex-1">
+            <p className="text-2xl font-extrabold truncate">{guard.fullName}</p>
+            <p className="text-sm text-white/80">{guard.username}</p>
+          </div>
+          <button onClick={onEdit} className="bg-white/20 rounded-full px-4 py-2 text-sm font-bold inline-flex items-center gap-1"><Settings size={15} /> Edit</button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+          {[
+            ['Guard Name', guard.fullName],
+            ['Shift', guard.shift && guard.shift !== '—' ? guard.shift : 'No shift set'],
+            ['Contact Number', guard.contact || '—'],
+            ['Email', guard.email || '—'],
+          ].map(([label, val]) => (
+            <div key={label} className="bg-white/10 rounded-2xl px-4 py-3">
+              <p className="text-[10px] font-semibold text-white/60">{label}</p>
+              <p className="text-sm font-bold truncate">{val}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Two buttons: Time Records / History Logs */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setTab('time')} className="flex-1 py-3 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2"
+                style={tab === 'time' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
+          <Clock size={16} /> Time Records
+        </button>
+        <button onClick={() => setTab('logs')} className="flex-1 py-3 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2"
+                style={tab === 'logs' ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#fff', color: '#112D31', border: '1px solid #e5e7eb' }}>
+          <ClipboardList size={16} /> History Logs
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        {loading ? (<p className="text-center text-ink/50 py-10 text-sm">Loading…</p>) : tab === 'time' ? (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="font-bold text-ink">Time In / Time Out Records</p>
+                <p className="text-xs text-ink/60">Shift Schedule: <span className="font-semibold">{guard.shift || 'No shift set'}</span> · auto time-in on login, time-out on end shift.</p>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={exportShiftPDF} className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-ink" title="Export PDF"><FileDown size={16} /></button>
+                <button onClick={exportShiftExcel} className="w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: '#0F6E6E' }} title="Export Excel"><FileSpreadsheet size={16} /></button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 px-3 py-2 text-[11px] font-bold text-white rounded-lg mb-1" style={{ backgroundColor: '#0F6E6E' }}>
+              <span>Time In</span><span>Time Out</span><span className="text-center">Status</span>
+            </div>
+            {shifts.length === 0 ? (
+              <p className="text-center text-ink/50 py-10 text-sm">No shift records yet.</p>
+            ) : (
+              <div className="max-h-[48vh] overflow-y-auto">
+                {shifts.map((s) => (
+                  <div key={s.shift_id} className="grid grid-cols-3 gap-2 px-3 py-3 border-b border-gray-100 text-sm text-ink items-center">
+                    <span className="font-semibold">{fmtDT(s.time_in)}</span>
+                    <span className="text-ink/70">{s.ended_at ? fmtDT(s.ended_at) : '—'}</span>
+                    <span className="text-center">
+                      <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={s.ended_at ? { backgroundColor: '#F3C9C9', color: '#8a2b2b' } : { backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>
+                        {s.ended_at ? 'Ended' : 'On Duty'}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="font-bold text-ink mb-1">History Logs — Processed Entries</p>
+            <p className="text-xs text-ink/60 mb-3">{logs.length} entr{logs.length === 1 ? 'y' : 'ies'} processed by {guard.fullName}.</p>
+            <VisitorLogsPanel records={logs} onExportPDF={exportLogsPDF} onExportExcel={exportLogsExcel} heightClass="max-h-[46vh]" />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Reusable Add/Edit form (walang gate assignment) ──
 function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onDelete }) {
   const fileRef = useRef(null);
   const [form, setForm] = useState({
     fullName: initial?.fullName || '',
-    gateId: initial?.gateId ?? '',
     shift: initial?.shift && initial.shift !== '—' ? initial.shift : '',
     contact: initial?.contact || '',
+    email: initial?.email || '',
     photo: initial?.photo || null,
   });
 
@@ -237,17 +313,13 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
           <div className="relative">
             <Avatar src={form.photo} size={84} />
             <button type="button" onClick={() => fileRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full text-white flex items-center justify-center shadow"
-                    style={{ backgroundColor: '#0F6E6E' }}>
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full text-white flex items-center justify-center shadow" style={{ backgroundColor: '#0F6E6E' }}>
               <Camera size={15} />
             </button>
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
           <p className="text-[11px] text-ink/50 mt-2">Upload 1x1 photo (optional)</p>
-          {form.photo && (
-            <button type="button" onClick={() => setForm((f) => ({ ...f, photo: null }))}
-                    className="text-[11px] font-semibold text-red-600 mt-1">Remove photo</button>
-          )}
+          {form.photo && <button type="button" onClick={() => setForm((f) => ({ ...f, photo: null }))} className="text-[11px] font-semibold text-red-600 mt-1">Remove photo</button>}
         </div>
 
         <div className="space-y-3 mt-2">
@@ -261,28 +333,23 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
             <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })}
                    placeholder="0917 123 4567" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">Gate Assignment</label>
-              <select value={form.gateId} onChange={(e) => setForm({ ...form, gateId: e.target.value })}
-                      className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
-                <option value="">Select Gate</option>
-                <option value="1">Gate 1</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1">Shift Schedule</label>
-              <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}
-                      className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
-                <option value="">Select Shift</option>
-                <option value="6:00 AM - 6:00 PM">6:00 AM - 6:00 PM</option>
-                <option value="6:00 PM - 6:00 AM">6:00 PM - 6:00 AM</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">Email</label>
+            <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                   placeholder="guard@email.com" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-teal-600" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">Shift Schedule</label>
+            <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
+              <option value="">Select Shift</option>
+              <option value="6:00 AM - 6:00 PM">6:00 AM - 6:00 PM</option>
+              <option value="6:00 PM - 6:00 AM">6:00 PM - 6:00 AM</option>
+            </select>
           </div>
           {initial && (
             <div className="rounded-xl px-4 py-3 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
-              Duty status is <span className="font-semibold">automatic</span> — On Duty while the guard is logged in within their shift, Off Duty once the shift time ends.
+              Duty status is <span className="font-semibold">automatic</span> — On Duty while logged in within the shift, Off Duty once the shift ends.
             </div>
           )}
         </div>
@@ -296,10 +363,7 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
 
         <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 py-3 rounded-full border border-gray-300 font-medium text-ink text-sm">Cancel</button>
-          <button onClick={() => {
-                    if (!form.fullName.trim()) { alert('Full name is required.'); return; }
-                    onSubmit(form);
-                  }}
+          <button onClick={() => { if (!form.fullName.trim()) { alert('Full name is required.'); return; } onSubmit(form); }}
                   className="flex-1 py-3 rounded-full text-white font-semibold text-sm whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
             {initial ? 'Save Changes' : 'Add Guard'}
           </button>

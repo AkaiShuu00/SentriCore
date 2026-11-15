@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { Clock, X } from 'lucide-react';
 
 const API = '/api';
 
@@ -10,6 +11,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [shiftMsg, setShiftMsg] = useState(''); // "Your shift is not open..." → reminder popup
 
   async function handleSignIn() {
     setError('');
@@ -28,6 +30,12 @@ export default function SignIn() {
       if (role === 'guard') navigate('/guard-home');
       else navigate('/home');
     } catch (err) {
+      // Guard na nag-login na sarado pa ang shift → reminder popup
+      if (err.response?.status === 403 && err.response?.data?.shiftClosed) {
+        setShiftMsg(err.response.data.message || 'Your shift is not open yet.');
+        setLoading(false);
+        return;
+      }
       setError(err.response?.data?.message || 'Sign in failed. Please try again.');
       setLoading(false);
     }
@@ -87,6 +95,24 @@ export default function SignIn() {
           </button>
         </div>
       </div>
+
+      {/* Shift-not-open reminder (guard) */}
+      {shiftMsg && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6" onClick={() => setShiftMsg('')}>
+          <div className="bg-white rounded-3xl p-7 w-full max-w-sm text-center relative" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShiftMsg('')} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#CDE7DE' }}>
+              <Clock size={30} style={{ color: '#0F6E6E' }} />
+            </div>
+            <h2 className="text-lg font-extrabold text-ink mb-1">Shift Not Open</h2>
+            <p className="text-sm text-ink/70 mb-6">{shiftMsg}</p>
+            <button onClick={() => { setShiftMsg(''); setPassword(''); }}
+                    className="w-full py-3 rounded-full text-white font-bold text-sm" style={{ backgroundColor: '#0F6E6E' }}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

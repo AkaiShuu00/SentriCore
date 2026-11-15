@@ -210,19 +210,17 @@ async function endShift(req, res) {
   }
 }
 
-// GET /api/guards/shifts  (Admin) - mga END SHIFT records lang (kailan nag-end shift ang guard).
-// Hindi na kasama ang time-in; ang time-out (end shift) lang ang itinatala/ipinapakita.
+// GET /api/guards/shifts  (Admin) - TIME-IN at TIME-OUT records ng bawat guard.
+// Kasama ang bukas pa (walang time_out) para makita kung naka-time-in ngayon.
 async function getGuardShifts(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT gs.shift_id, gs.guard_id, gs.time_out AS ended_at,
-              g.full_name, gt.gate_name
+      `SELECT gs.shift_id, gs.guard_id, gs.time_in, gs.time_out AS ended_at,
+              g.full_name
        FROM GuardShifts gs
        JOIN Guards g ON g.guard_id = gs.guard_id
-       LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
-       WHERE gs.time_out IS NOT NULL
-       ORDER BY gs.time_out DESC
-       LIMIT 200`
+       ORDER BY gs.shift_id DESC
+       LIMIT 500`
     );
     res.json(rows);
   } catch (err) {

@@ -1,11 +1,25 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
-import { Search, Settings, X, KeyRound, Trash2, Archive, FileText } from 'lucide-react';
+import { Search, Settings, X, KeyRound, Trash2, Archive, FileText, ArrowUpDown, FileDown } from 'lucide-react';
 import {
   adminListResidents, adminResidentActive, adminAddResident,
   adminUpdateResident, adminResetResidentPassword, adminDeleteResident,
   adminListDeactivatedResidents, adminResidentTransactions,
 } from '../../api';
+import { exportPDF } from '../../utils/exportUtils';
+import VisitorLogsPanel from './components/VisitorLogsPanel';
+
+const toLocalISO = (ts) => { if (!ts) return ''; const d = new Date(ts); if (isNaN(d)) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const fmtLog = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-----';
+const toLogRecords = (txs) => (txs || []).map((t) => ({
+  id: t.id, visitor: t.name, type: t.type || 'Visitor',
+  resident: '', unit: '', entry: fmtLog(t.entry), exit: fmtLog(t.exit),
+  status: t.status, rawStatus: t.rawStatus || (t.status === 'Departed' ? 'Completed' : t.status),
+  pass: t.pass || `P-${t.id}`, purpose: t.purpose || '—', regType: t.regType || 'Single',
+  batchName: t.batchName || '', plate: t.plate || '', kind: (t.type || 'Visitor').toLowerCase(),
+  arrivalId: t.arrivalId || null, entryTime: t.entry || null, exitTime: t.exit || null,
+  dateISO: toLocalISO(t.entry),
+}));
 
 // #5: PH phone validation (mobile 09XXXXXXXXX / +639XXXXXXXXX o landline)
 function isValidPhone(raw) {
@@ -23,6 +37,9 @@ export default function AdminResidents() {
   const [loading, setLoading] = useState(true);
 
   const [activeModal, setActiveModal] = useState(null);
+  const [logsModal, setLogsModal] = useState(null);   // { resident } — Visitors Logs
+  const [logsRecords, setLogsRecords] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editModal, setEditModal] = useState(null);
   const [credModal, setCredModal] = useState(null); // ipinapakitang generated credentials
@@ -92,6 +109,20 @@ export default function AdminResidents() {
       .catch(() => setActiveModal({ resident: r.fullName, unit: r.address, activeCount: 0, visitors: [] }));
   };
 
+  // Visitors Logs ng isang resident (buong history, guard-style tabs)
+  const openLogs = (r) => {
+    setLogsModal(r); setLogsRecords([]); setLogsLoading(true);
+    adminResidentTransactions(r.residentId, {})
+      .then((res) => setLogsRecords(toLogRecords(res.data?.transactions).map((x) => ({ ...x, resident: r.fullName, unit: r.address }))))
+      .catch(() => setLogsRecords([]))
+      .finally(() => setLogsLoading(false));
+  };
+  const exportResidentLogsPDF = (rows) => {
+    const header = ['Visitor', 'Type', 'Reg Type', 'Batch', 'Entry', 'Exit', 'Status', 'Pass'];
+    const body = rows.map((l) => [l.visitor, l.type, l.regType, l.batchName || '—', l.entry, l.exit, l.status, l.pass]);
+    exportPDF(`Visitor Logs — ${logsModal?.fullName || ''}`, header, body, { subtitle: logsModal?.address || '' });
+  };
+
   const fmt = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
   return (
@@ -121,22 +152,22 @@ export default function AdminResidents() {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, resident..."
                    className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
           </div>
-          <button onClick={() => setSortAZ((v) => !v)}
-                  className={`px-4 py-2 rounded-full text-sm font-bold shadow-sm ${sortAZ ? 'text-white' : 'bg-white border border-gray-200 text-ink'}`}
-                  style={sortAZ ? { backgroundColor: '#0F6E6E' } : {}}>
-            A–Z
+          <button onClick={() => setSortAZ((v) => !v)} title="Sort A–Z"
+                  className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+                  style={sortAZ ? { backgroundColor: '#0F6E6E', color: '#fff' } : { backgroundColor: '#CDE7DE', color: '#0F6E6E' }}>
+            <ArrowUpDown size={18} />
           </button>
           <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)}
-                  className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-semibold text-ink outline-none">
+                  className="rounded-full px-4 py-2 text-sm font-bold outline-none shrink-0" style={{ backgroundColor: '#CDE7DE', color: '#0F6E6E' }}>
             {areas.map((a) => <option key={a}>{a}</option>)}
           </select>
         </div>
 
         {/* Header */}
         <div className="grid grid-cols-6 gap-2 px-2 mb-2">
-          {['Resident Name', 'Address', 'Contact Number', 'Active Visitors', 'Total Visitors', ''].map((h, i) => (
+          {['Resident Name', 'Address', 'Contact Number', 'Visitors Logs', 'Total Visitors', ''].map((h, i) => (
             <span key={i} className={`text-[11px] font-bold text-white px-3 py-2 rounded-lg text-center ${i === 5 ? 'bg-transparent' : ''}`}
-                  style={i === 5 ? {} : { backgroundColor: '#3a4a4a' }}>{h}</span>
+                  style={i === 5 ? {} : { backgroundColor: '#0F6E6E' }}>{h}</span>
           ))}
         </div>
 
@@ -152,8 +183,8 @@ export default function AdminResidents() {
               <span className="text-ink/70">{r.address}</span>
               <span className="text-ink/70">{r.contact || '—'}</span>
               <span className="text-center">
-                <button onClick={() => openActive(r)}
-                        className="text-[11px] font-bold px-6 py-1.5 rounded-full" style={{ backgroundColor: '#F1C542', color: '#5a4a12' }}>
+                <button onClick={() => openLogs(r)}
+                        className="text-[11px] font-bold px-6 py-1.5 rounded-full" style={{ backgroundColor: '#CDE7DE', color: '#0F6E6E' }}>
                   View
                 </button>
               </span>
@@ -278,6 +309,22 @@ export default function AdminResidents() {
                 <span className="text-ink/70">{v.mode}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Visitors Logs modal — guard-style tabs + PDF download */}
+      {logsModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setLogsModal(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-4xl p-6 relative max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setLogsModal(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
+            <h2 className="text-2xl font-extrabold text-teal-800 mb-1">Visitors Logs</h2>
+            <p className="text-sm text-ink/60 mb-4">{logsModal.fullName} · {logsModal.address}</p>
+            {logsLoading ? (
+              <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
+            ) : (
+              <VisitorLogsPanel records={logsRecords} onExportPDF={exportResidentLogsPDF} heightClass="max-h-[56vh]" />
+            )}
           </div>
         </div>
       )}

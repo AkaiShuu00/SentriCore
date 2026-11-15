@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import { getAnnouncements, createAnnouncement, deleteAnnouncement } from '../../api';
-import { Flame, Droplet, Zap, Wrench, Users, Megaphone, Search, X } from 'lucide-react';
+import { Flame, Droplet, Zap, Wrench, Users, Megaphone, Search, X, ArrowUpDown, Calendar } from 'lucide-react';
 
 const statusBg = {
   Active:    { backgroundColor: '#B4E4BE', color: '#1e6b2e' },
@@ -42,6 +42,8 @@ const IconFor = ({ text, ...p }) => {
 export default function AdminAnnouncements() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [sortByCat, setSortByCat] = useState(false);
+  const [dateFilter, setDateFilter] = useState('');
   const [detail, setDetail] = useState(null);
   const [showCompose, setShowCompose] = useState(false);
   const [composeTab, setComposeTab] = useState('details');
@@ -118,35 +120,57 @@ export default function AdminAnnouncements() {
     }
   };
 
-  const filtered = items
+  let filtered = items
     .filter((a) => (a.title || '').toLowerCase().includes(search.toLowerCase()))
-    .filter((a) => statusFilter === 'All' || annStatus(a) === statusFilter);
+    .filter((a) => statusFilter === 'All' || annStatus(a) === statusFilter)
+    .filter((a) => {
+      if (!dateFilter) return true;
+      const s = toDay(a.start_date), e = toDay(a.end_date);
+      if (s && dateFilter < s) return false;
+      if (e && dateFilter > e) return false;
+      return true;
+    });
+  if (sortByCat) filtered = [...filtered].sort((a, b) => (a.category || '').localeCompare(b.category || ''));
   const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—');
 
   return (
     <AdminLayout>
-      <div className="flex items-end justify-between mb-5">
-        <div>
-          <h1 className="text-3xl font-extrabold text-ink">Announcements</h1>
-          <p className="text-sm text-ink/60">Manage community announcements for residents and guards</p>
+      <div className="mb-5">
+        <h1 className="text-3xl font-extrabold text-ink">Announcements</h1>
+        <p className="text-sm text-ink/60">Manage community announcements for residents and guards</p>
+      </div>
+
+      {/* Toolbar: search (half) + Post Announcement + sort + calendar */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm" style={{ width: '50%' }}>
+          <Search size={18} className="text-ink/40" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search announcement"
+                 className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
         </div>
         <button onClick={openCompose}
-                className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold" style={{ backgroundColor: '#0F6E6E' }}>
+                className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
           + Post Announcement
         </button>
+        <button onClick={() => setSortByCat((v) => !v)} title="Sort by category"
+                className={`w-11 h-11 rounded-full shadow-sm flex items-center justify-center shrink-0 ${sortByCat ? 'text-white' : 'bg-white text-ink'}`}
+                style={sortByCat ? { backgroundColor: '#0F6E6E' } : {}}>
+          <ArrowUpDown size={18} />
+        </button>
+        <label className="w-11 h-11 rounded-full shadow-sm bg-white flex items-center justify-center shrink-0 cursor-pointer relative" title="Filter by date">
+          <Calendar size={18} className="text-ink" />
+          <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}
+                 className="absolute inset-0 opacity-0 cursor-pointer" />
+        </label>
+        {dateFilter && (
+          <button onClick={() => setDateFilter('')} className="text-xs font-bold text-teal-700 whitespace-nowrap">Clear date</button>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm mb-4 max-w-md">
-        <Search size={18} className="text-ink/40" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search announcement"
-               className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
-      </div>
-
-      {/* Status filter */}
+      {/* Status filter — even sizes */}
       <div className="flex gap-2 mb-4">
         {['All', 'Active', 'Completed'].map((s) => (
           <button key={s} onClick={() => setStatusFilter(s)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-sm ${statusFilter === s ? 'text-white' : 'bg-white text-ink'}`}
+                  className={`w-32 py-2 rounded-full text-xs font-bold shadow-sm text-center ${statusFilter === s ? 'text-white' : 'bg-white text-ink'}`}
                   style={statusFilter === s ? { backgroundColor: '#0F6E6E' } : {}}>
             {s}
           </button>
@@ -163,16 +187,18 @@ export default function AdminAnnouncements() {
         ) : filtered.length === 0 ? (
           <p className="text-center text-ink/50 py-10 text-sm">No announcements yet.</p>
         ) : (
-          filtered.map((a) => (
-            <div key={a.announcement_id} className="grid grid-cols-4 gap-2 px-6 py-4 border-b border-gray-100 text-sm text-ink items-center">
-              <span className="font-semibold">{a.title}</span>
-              <span className="text-ink/70">{a.category || '—'}</span>
-              <span><span className="text-[9px] font-bold px-3 py-1 rounded-full" style={statusBg[annStatus(a)]}>{annStatus(a)}</span></span>
-              <span className="text-center">
-                <button onClick={() => setDetail(a)} className="text-[11px] font-bold text-teal-700">View</button>
-              </span>
-            </div>
-          ))
+          <div className="max-h-[52vh] overflow-y-auto">
+            {filtered.map((a) => (
+              <div key={a.announcement_id} className="grid grid-cols-4 gap-2 px-6 py-4 border-b border-gray-100 text-sm text-ink items-center">
+                <span className="font-semibold">{a.title}</span>
+                <span className="text-ink/70">{a.category || '—'}</span>
+                <span><span className="text-[9px] font-bold px-3 py-1 rounded-full" style={statusBg[annStatus(a)]}>{annStatus(a)}</span></span>
+                <span className="text-center">
+                  <button onClick={() => setDetail(a)} className="text-[11px] font-bold text-teal-700">View</button>
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

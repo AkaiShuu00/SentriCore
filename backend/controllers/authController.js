@@ -6,6 +6,37 @@ const { logAction } = require('../config/audit');
 // ⬇️ CHANGE: idagdag ang sendOtpEmail + OTP_EXP_MINUTES (nananatili pa rin ang sendMail kung kailangan)
 const { sendMail, sendOtpEmail, OTP_EXP_MINUTES } = require('../config/mailer');
 
+// Parse "6:00 AM - 6:00 PM" o DB shift_start/shift_end → minuto mula hatinggabi.
+function toMinutes(t) {
+  if (!t) return null;
+  const m = String(t).trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10); const min = m[2] ? parseInt(m[2], 10) : 0; const ap = (m[3] || '').toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12; if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+// Balik: { open: boolean, minsUntil: number|null }
+function shiftGate(g) {
+  let startStr = g.shift_start || null, endStr = g.shift_end || null;
+  const sched = g.shift_schedule || g.schedule;
+  if ((!startStr || !endStr) && sched) {
+    const parts = String(sched).split(/[-–—]/);
+    startStr = startStr || (parts[0] || '').trim();
+    endStr = endStr || (parts[1] || '').trim();
+  }
+  const start = toMinutes(startStr), end = toMinutes(endStr);
+  if (start == null || end == null) return { open: true, minsUntil: null }; // walang schedule → payagan
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  let open;
+  if (start <= end) open = cur >= start && cur <= end;       // normal (6AM–6PM)
+  else open = cur >= start || cur <= end;                    // overnight (6PM–6AM)
+  // minuto hanggang susunod na pagbukas ng shift
+  let minsUntil = start - cur;
+  if (minsUntil < 0) minsUntil += 24 * 60;
+  return { open, minsUntil };
+}
+
 // POST /api/auth/login
 async function login(req, res) {
   try {
@@ -35,6 +66,14 @@ async function login(req, res) {
     } else if (user.role_name === 'Guard') {
       const [g] = await pool.query('SELECT * FROM Guards WHERE user_id = ?', [user.user_id]);
       if (g.length) {
+        // ── SHIFT GATE: hindi makakapag-login kung sarado pa ang shift ──
+        const gate = shiftGate(g[0]);
+        if (!gate.open) {
+          const h = Math.floor((gate.minsUntil || 0) / 60);
+          const mm = (gate.minsUntil || 0) % 60;
+          const when = h > 0 ? `${h}hr and ${mm} mins` : `${mm} mins`;
+          return res.status(403).json({ shiftClosed: true, message: `Your shift is not open. Try again in ${when}.` });
+        }
         profile.guardId = g[0].guard_id; profile.gateId = g[0].gate_id; profile.name = g[0].full_name;
         // ── AUTO TIME-IN sa login (kung walang bukas na shift pa) ──
         try {

@@ -302,7 +302,7 @@ async function getAllLogs(req, res) {
               t.plate_number, t.pass_number, t.entry_time, t.exit_time, t.status, t.registration_id,
               t.arrival_id, t.exit_note, t.exit_additional_note,
               res.full_name AS resident_name, res.unit_address,
-              vr.registration_type, g.full_name AS guard_name
+              vr.registration_type, vr.batch_name, g.full_name AS guard_name, t.guard_id
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
        LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id

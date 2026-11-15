@@ -183,9 +183,9 @@ export default function AdminReports() {
                   <p className="font-bold text-ink">{c.title}</p>
                   <p className="text-xs text-ink/60 mb-3">{c.desc}</p>
                   <button onClick={() => setView(c.key)}
-                          className="text-ink text-sm font-medium px-8 py-2 rounded-full bg-white border border-gray-200 shadow-sm whitespace-nowrap">View</button>
+                          className="text-sm font-bold px-8 py-2 rounded-full shadow-sm whitespace-nowrap" style={{ backgroundColor: '#CDE7DE', color: '#0F6E6E' }}>View</button>
                 </div>
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-sm"><c.Icon size={26} className="text-teal-700" /></div>
+                <div className="w-14 h-14 rounded-full flex items-center justify-center shadow-sm" style={{ backgroundColor: '#CDE7DE' }}><c.Icon size={26} style={{ color: '#0F6E6E' }} /></div>
               </div>
             ))}
           </div>
@@ -200,7 +200,7 @@ export default function AdminReports() {
               <h3 className="font-bold text-ink">Monthly Report</h3>
               <p className="text-xs text-ink/60">Total visitors, trends, peak visitation days.</p>
             </div>
-            <button onClick={() => setShowGen(true)} className="text-white text-sm font-medium px-6 py-2 rounded-full whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>Summary</button>
+            <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full flex items-center gap-1 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
           </div>
 
           <div className="border border-gray-100 rounded-2xl p-4 mt-3">
@@ -224,7 +224,7 @@ export default function AdminReports() {
 
           <div className="grid grid-cols-4 gap-2 mt-5 mb-2">
             {['MONTH', 'VISITORS', 'DELIVERIES', 'TOTAL'].map((h, i) => (
-              <span key={h} className={`text-[11px] font-semibold text-white px-4 py-2 rounded-lg ${i > 0 ? 'text-center' : ''}`} style={{ backgroundColor: '#3a4a4a' }}>{h}</span>
+              <span key={h} className={`text-[11px] font-semibold text-white px-4 py-2 rounded-lg ${i > 0 ? 'text-center' : ''}`} style={{ backgroundColor: '#0F6E6E' }}>{h}</span>
             ))}
           </div>
           {table.map((m, i) => (
@@ -236,10 +236,6 @@ export default function AdminReports() {
               <span className="text-center font-semibold text-ink">{m.total}</span>
             </div>
           ))}
-
-          <div className="flex justify-end mt-5">
-            <button onClick={() => setView('overview')} className="text-white text-sm font-medium px-6 py-2 rounded-full flex items-center gap-1 whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>← Back</button>
-          </div>
         </div>
       )}
 
@@ -268,17 +264,17 @@ export default function AdminReports() {
 
             <div className="grid grid-cols-4 gap-3 mb-4">
               {['Visitor', 'Guard', 'Security', 'HOA'].map((k) => (
-                <div key={k} className="rounded-2xl px-4 py-3 text-center" style={{ backgroundColor: CAT_COLOR[k].bg }}>
-                  <p className="text-2xl font-extrabold" style={{ color: CAT_COLOR[k].fg }}>{sum.byCategory ? (sum.byCategory[k] || 0) : 0}</p>
-                  <p className="text-[11px] font-semibold mt-0.5" style={{ color: CAT_COLOR[k].fg }}>{k}</p>
+                <div key={k} className="rounded-2xl px-4 py-5 text-center shadow-md" style={{ background: 'linear-gradient(135deg,#0F6E6E 0%,#0A4A4A 100%)' }}>
+                  <p className="text-4xl font-extrabold text-white">{sum.byCategory ? (sum.byCategory[k] || 0) : 0}</p>
+                  <p className="text-xs font-semibold mt-1 text-white/80">{k}</p>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
+            <div className="grid grid-cols-5 gap-2 mb-2">
               {cats.map((c) => (
                 <button key={c} onClick={() => setCatFilter(c)}
-                        className={`px-4 py-2 rounded-full text-xs font-medium shrink-0 whitespace-nowrap ${catFilter === c ? 'text-white' : 'bg-white text-ink border border-gray-200'}`}
+                        className={`py-2 rounded-full text-xs font-medium text-center whitespace-nowrap ${catFilter === c ? 'text-white' : 'bg-white text-ink border border-gray-200'}`}
                         style={catFilter === c ? { backgroundColor: '#0F6E6E' } : {}}>
                   {c}
                 </button>
@@ -286,7 +282,7 @@ export default function AdminReports() {
             </div>
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <select value={compStatus} onChange={(e) => setCompStatus(e.target.value)}
-                      className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm text-ink outline-none">
+                      className="bg-white border border-gray-200 rounded-full px-4 py-2 text-sm text-ink outline-none shadow-sm w-36">
                 {statuses.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Status' : s}</option>)}
               </select>
               <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 flex-1 min-w-[180px]" style={{ backgroundColor: '#F5F2E9' }}>
@@ -297,12 +293,12 @@ export default function AdminReports() {
             </div>
 
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>CATEGORY</span>
-              <span className="col-span-3 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>SUBJECT</span>
-              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>TYPE</span>
-              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>FILED BY</span>
-              <span className="col-span-1 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE</span>
-              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>STATUS</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>CATEGORY</span>
+              <span className="col-span-3 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>SUBJECT</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>TYPE</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>FILED BY</span>
+              <span className="col-span-1 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>DATE</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-3 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>STATUS</span>
             </div>
             {list.length === 0 ? (
               <p className="text-center text-ink/50 py-10 text-sm">No complaints found.</p>
@@ -362,9 +358,9 @@ export default function AdminReports() {
 
             <div className="grid grid-cols-3 gap-3 mt-4 mb-6">
               {cards.map(([label, n]) => (
-                <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: GR_COLOR[label].bg }}>
-                  <p className="text-3xl font-extrabold" style={{ color: GR_COLOR[label].fg }}>{n}</p>
-                  <p className="text-[11px] font-semibold mt-1" style={{ color: GR_COLOR[label].fg }}>{label}</p>
+                <div key={label} className="rounded-2xl px-4 py-6 text-center shadow-md" style={{ background: 'linear-gradient(135deg,#0F6E6E 0%,#0A4A4A 100%)' }}>
+                  <p className="text-4xl font-extrabold text-white">{n}</p>
+                  <p className="text-xs font-semibold mt-1 text-white/80">{label}</p>
                 </div>
               ))}
             </div>
@@ -396,33 +392,37 @@ export default function AdminReports() {
                         <span>· {g.created_at ? new Date(g.created_at).toLocaleString('en-US') : ''}</span>
                       </p>
 
-                      <button onClick={() => setGrThread(expanded ? null : g.report_id)}
-                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700">
-                        <MessageSquare size={13} /> {expanded ? 'Hide thread' : 'View thread'}
-                      </button>
                       {expanded && g.description && (
                         <div className="rounded-xl px-3 py-2 mt-2" style={{ backgroundColor: '#F5F2E9' }}>
                           <p className="text-xs text-ink whitespace-pre-wrap">{g.description}</p>
                         </div>
                       )}
 
-                      {g.status === 'Resolved' && (
-                        <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-green-700">
-                          <CheckCircle2 size={13} /> Marked resolved by the guard.
-                        </div>
-                      )}
-                      {g.status === 'Open' && (
-                        <button onClick={async () => {
-                                  try { await adminAckGuardReport(g.report_id); const r = await adminGuardReports(); setGuardReports(r.data || { list: [], summary: {} }); }
-                                  catch { alert('Failed to acknowledge.'); }
-                                }}
-                                className="mt-3 block text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-                          Acknowledge
+                      {/* Actions row — View thread (light teal border) + status/resolved sa gilid */}
+                      <div className="mt-3 flex items-center gap-2 flex-wrap">
+                        <button onClick={() => setGrThread(expanded ? null : g.report_id)}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold px-4 py-2 rounded-full border"
+                                style={{ borderColor: '#9BD3C6', color: '#0F6E6E', backgroundColor: '#fff' }}>
+                          <MessageSquare size={13} /> {expanded ? 'Hide thread' : 'View thread'}
                         </button>
-                      )}
-                      {g.status === 'Acknowledged' && (
-                        <p className="text-[11px] text-ink/50 mt-2 italic">Acknowledged. Waiting for the guard to mark it resolved.</p>
-                      )}
+                        {g.status === 'Resolved' && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700">
+                            <CheckCircle2 size={13} /> Marked resolved by the guard.
+                          </span>
+                        )}
+                        {g.status === 'Open' && (
+                          <button onClick={async () => {
+                                    try { await adminAckGuardReport(g.report_id); const r = await adminGuardReports(); setGuardReports(r.data || { list: [], summary: {} }); }
+                                    catch { alert('Failed to acknowledge.'); }
+                                  }}
+                                  className="text-xs font-semibold px-4 py-2 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+                            Acknowledge
+                          </button>
+                        )}
+                        {g.status === 'Acknowledged' && (
+                          <span className="text-[11px] text-ink/50 italic">Acknowledged. Waiting for the guard to mark it resolved.</span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -460,19 +460,19 @@ export default function AdminReports() {
             {/* Summary cards — Total Records = Entries + Exits + Reports */}
             <div className="grid grid-cols-4 gap-3 mt-4 mb-5">
               {[
-                ['Total Records', s.total ?? list.length, '#CFEDE4', '#0F6E6E'],
-                ['Entries Logged', s.entries ?? 0, '#DCF3E4', '#1e6b2e'],
-                ['Exits Logged', s.exits ?? 0, '#F3C9C9', '#9b2c2c'],
-                ['Reports', s.reports ?? 0, '#F1D88A', '#8a6d12'],
-              ].map(([label, n, bg, fg]) => (
-                <div key={label} className="rounded-2xl px-4 py-4 text-center" style={{ backgroundColor: bg }}>
-                  <p className="text-3xl font-extrabold" style={{ color: fg }}>{n}</p>
-                  <p className="text-[11px] font-semibold mt-1" style={{ color: fg }}>{label}</p>
+                ['Total Records', s.total ?? list.length],
+                ['Entries Logged', s.entries ?? 0],
+                ['Exits Logged', s.exits ?? 0],
+                ['Reports', s.reports ?? 0],
+              ].map(([label, n]) => (
+                <div key={label} className="rounded-2xl px-4 py-6 text-center shadow-md" style={{ background: 'linear-gradient(135deg,#0F6E6E 0%,#0A4A4A 100%)' }}>
+                  <p className="text-4xl font-extrabold text-white">{n}</p>
+                  <p className="text-xs font-semibold mt-1 text-white/80">{label}</p>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2 mb-4 max-w-md" style={{ backgroundColor: '#F5F2E9' }}>
+            <div className="flex items-center gap-2 bg-cream rounded-full px-4 py-2.5 mb-4 max-w-2xl" style={{ backgroundColor: '#F5F2E9' }}>
               <Search size={18} className="text-ink/40" />
               <input value={auditSearch} onChange={(e) => setAuditSearch(e.target.value)}
                      placeholder="Search actor, action, details..."
@@ -480,10 +480,10 @@ export default function AdminReports() {
             </div>
 
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <span className="col-span-3 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DATE &amp; TIME</span>
-              <span className="col-span-3 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTOR</span>
-              <span className="col-span-2 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>ACTION</span>
-              <span className="col-span-4 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#3a4a4a' }}>DETAILS</span>
+              <span className="col-span-3 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>DATE &amp; TIME</span>
+              <span className="col-span-3 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>ACTOR</span>
+              <span className="col-span-2 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>ACTION</span>
+              <span className="col-span-4 text-[11px] font-semibold text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#0F6E6E' }}>DETAILS</span>
             </div>
             {list.length === 0 ? (
               <p className="text-center text-ink/50 py-10 text-sm">No audit records for this period.</p>

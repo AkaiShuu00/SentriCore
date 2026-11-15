@@ -7,18 +7,14 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-// Stat card styling (value + sub galing DB)
-// #4 — "Registered Visitors" (expectedToday) ay PAREHAS na ng gradient sa "Today's Entries".
-const ENTRIES_GRADIENT = 'linear-gradient(135deg,#1E7E7E 0%,#0F5E5E 100%)';
+// Stat cards — PAREHONG teal gradient sa resident/guard tally, naka-center ang laman.
+// Layout: [Expected Today | Active Visitors] sa taas, [Today's Entries | Visitors This Week] sa baba.
+const TEAL_GRADIENT = 'linear-gradient(135deg,#0F6E6E 0%,#0A4A4A 100%)';
 const STAT_META = [
-  { key: 'activeVisitors', label: 'Active Visitors', sub: 'Inside Subdivision', Icon: MapPin,
-    gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
-  { key: 'todayEntries', label: "Today's Entries", sub: 'Entries logged today', Icon: LogIn,
-    gradient: ENTRIES_GRADIENT, dark: true },
-  { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', Icon: CalendarDays,
-    gradient: ENTRIES_GRADIENT, dark: true },
-  { key: 'weeklyVisitors', label: 'Visitors This Week', sub: 'Mon–Sun', Icon: Users,
-    gradient: 'linear-gradient(135deg,#E0A83E 0%,#C98A28 100%)', dark: false },
+  { key: 'expectedToday', label: 'Expected Today', sub: 'Registered Visitors', Icon: CalendarDays, gradient: TEAL_GRADIENT },
+  { key: 'activeVisitors', label: 'Active Visitors', sub: 'Inside Subdivision', Icon: MapPin, gradient: TEAL_GRADIENT },
+  { key: 'todayEntries', label: "Today's Entries", sub: 'Entries logged today', Icon: LogIn, gradient: TEAL_GRADIENT },
+  { key: 'weeklyVisitors', label: 'Visitors This Week', sub: 'Mon–Sun', Icon: Users, gradient: TEAL_GRADIENT },
 ];
 
 const annIcon = (text) => {
@@ -98,20 +94,17 @@ export default function AdminDashboard() {
       <div className="flex gap-6">
         {/* LEFT column */}
         <div className="flex-1 min-w-0">
-          {/* Stat cards */}
+          {/* Stat cards — teal squares, even sizes, naka-center (spaces in between) */}
           <div className="grid grid-cols-2 gap-5">
             {STAT_META.map((s) => (
-              <div key={s.key} className="rounded-3xl p-5 shadow-md relative overflow-hidden"
-                   style={{ background: s.gradient, minHeight: 130 }}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0
-                                  ${s.dark ? 'bg-white/20 text-white' : 'bg-white text-ink'}`}>
-                    <s.Icon size={22} />
-                  </div>
-                  <span className="ml-auto text-[11px] font-bold px-3 py-1 rounded-lg bg-ink/80 text-white">{s.label}</span>
+              <div key={s.key} className="rounded-3xl p-5 shadow-md flex flex-col items-center justify-center text-center aspect-square"
+                   style={{ background: s.gradient }}>
+                <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white/20 text-white mb-3">
+                  <s.Icon size={26} />
                 </div>
-                <p className="text-5xl font-extrabold text-white mt-3 leading-none">{stats[s.key] ?? 0}</p>
-                <p className="text-[11px] font-semibold text-white/80 mt-2">{s.sub}</p>
+                <p className="text-6xl font-extrabold text-white leading-none">{stats[s.key] ?? 0}</p>
+                <p className="text-sm font-bold text-white mt-3">{s.label}</p>
+                <p className="text-[11px] font-semibold text-white/70 mt-0.5">{s.sub}</p>
               </div>
             ))}
           </div>
@@ -129,7 +122,7 @@ export default function AdminDashboard() {
                   <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip />
-                  <Bar dataKey="expected" name="Expected" fill="#1E7E7E" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expected" name="Expected" fill="#0F6E6E" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -204,21 +197,35 @@ export default function AdminDashboard() {
 
           {/* Announcement panel */}
           <div className="bg-white rounded-3xl p-5 shadow-sm mt-5">
-            <h3 className="text-lg font-extrabold text-ink mb-4">Announcement</h3>
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => navigate('/admin-announcements')}
-                      className="flex-1 flex items-center gap-2 bg-ink text-white rounded-xl px-4 py-3 text-sm font-semibold">
-                <MessageSquare size={18} className="inline" /> Share an important community update?
-              </button>
-              <button onClick={() => navigate('/admin-announcements')}
-                      className="bg-white border border-gray-200 rounded-xl px-4 text-xs font-bold text-ink flex items-center gap-1">
-                ▦ View All
-              </button>
+            <h3 className="text-lg font-extrabold text-ink mb-3">Announcement</h3>
+            <div className="flex flex-col items-center text-center mb-5">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: '#CDE7DE' }}>
+                <Megaphone size={30} style={{ color: '#0F6E6E' }} />
+              </div>
+              <p className="text-sm font-semibold text-ink mb-4">Share an important community update?</p>
+              <div className="w-full space-y-2">
+                <button onClick={() => navigate('/admin-announcements')}
+                        className="w-full rounded-full px-4 py-3 text-sm font-bold text-ink" style={{ backgroundColor: '#CDE7DE' }}>
+                  POST ANNOUNCEMENT
+                </button>
+                <button onClick={() => navigate('/admin-announcements')}
+                        className="w-full rounded-full px-4 py-3 text-sm font-bold text-ink bg-white border border-gray-200">
+                  View All
+                </button>
+              </div>
             </div>
             <div className="space-y-3">
-              {announcements.length === 0 ? (
-                <p className="text-center text-ink/50 py-4 text-sm">No announcements yet.</p>
-              ) : announcements.slice(0, 3).map((a) => {
+              {announcements.filter((a) => {
+                const e = a.end_date ? String(a.end_date).slice(0, 10) : null;
+                const today = new Date(); const t = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                return !e || e >= t; // Active lang — itago ang Completed sa dashboard
+              }).length === 0 ? (
+                <p className="text-center text-ink/50 py-4 text-sm">No active announcements.</p>
+              ) : announcements.filter((a) => {
+                const e = a.end_date ? String(a.end_date).slice(0, 10) : null;
+                const today = new Date(); const t = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                return !e || e >= t;
+              }).slice(0, 3).map((a) => {
                 const ic = annIcon(a.title + ' ' + (a.content || ''));
                 return (
                   <div key={a.announcement_id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl px-3 py-3 shadow-sm">
@@ -234,8 +241,8 @@ export default function AdminDashboard() {
           <button onClick={() => navigate('/admin-reports?view=complaints')}
                   className="w-full mt-5 bg-white rounded-3xl p-5 shadow-sm flex items-center gap-4 text-left active:scale-[0.99] transition">
             <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#F3C9C9' }}>
-                <AlertTriangle size={22} style={{ color: '#9b2c2c' }} />
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#CDE7DE' }}>
+                <AlertTriangle size={22} style={{ color: '#0F6E6E' }} />
               </div>
               {pendRes > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow">
@@ -258,8 +265,8 @@ export default function AdminDashboard() {
           <button onClick={() => navigate('/admin-reports?view=incident')}
                   className="w-full mt-4 bg-white rounded-3xl p-5 shadow-sm flex items-center gap-4 text-left active:scale-[0.99] transition">
             <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#D9C2E9' }}>
-                <ShieldAlert size={22} style={{ color: '#5b2c86' }} />
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#CDE7DE' }}>
+                <ShieldAlert size={22} style={{ color: '#0F6E6E' }} />
               </div>
               {pendGuard > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center shadow">

@@ -71,8 +71,8 @@ export default function AdminLayout({ children }) {
     </div>
   );
 
-  // Lighter na sidebar background (para mas visible ang logo) + banayad na gradient.
-  const SIDEBAR_BG = 'linear-gradient(180deg, #2A6E70 0%, #1E5A5C 55%, #18504F 100%)';
+  // Sidebar background = kapareho ng teal gradient ng header natin (resident/guard).
+  const SIDEBAR_BG = 'linear-gradient(160deg, #0F6E6E 0%, #0A4A4A 70%, #0E2A2E 100%)';
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F2EFE4' }}>
