@@ -575,7 +575,7 @@ export default function GuardVerify() {
   };
 
   const afterReading = () => {
-    if (isPickup && pickupTarget === 'RESIDENT') return 'pickupResidents';
+    // Pickup RESIDENT: napili na ang resident BAGO mag-scan, kaya diretso na sa 'matched'
     if (isExit && exitMultiRef.current) return 'exitSelect';
     if (multiRef.current) return 'selectVisitor';
     return 'matched';
@@ -681,12 +681,16 @@ export default function GuardVerify() {
   const SCAN_SENSITIVE = new Set(['matched', 'confirmed', 'additional', 'selectVisitor', 'blocklistAlert', 'unlisted']);
   const backTargetFor = (s) => {
     switch (s) {
-      case 'scan': return isExit ? null : (isDelivery ? 'deliveryResidents' : 'choose');
+      case 'scan': return isExit ? null
+        : (isDelivery ? 'deliveryResidents'
+        : (isPickup && pickupTarget === 'RESIDENT') ? 'pickupResidents'
+        : (isPickup && pickupTarget === 'VISITOR') ? 'activeVisitors'
+        : 'choose');
       case 'reading': return 'scan';
       case 'selectVisitor': return 'scan';
       case 'visitorSearch': return 'scan';
       case 'exitSelect': return 'scan';
-      case 'pickupResidents': return 'scan';
+      case 'pickupResidents': return 'vehicle';
       case 'deliveryResidents': return 'choose';
       case 'activeVisitors': return 'vehicle';
       case 'matched': return isExit ? 'exitSelect' : (isDelivery ? 'deliveryResidents' : 'scan');
@@ -886,6 +890,7 @@ export default function GuardVerify() {
                               if (drivePurpose === 'PICKUP' && !pickupTarget) { alert('Please select who is being picked up.'); return; }
                               if (!plate.trim()) { alert('Please enter the plate number.'); return; }
                               if (drivePurpose === 'PICKUP' && pickupTarget === 'VISITOR') { setStep('activeVisitors'); return; }
+                              if (drivePurpose === 'PICKUP' && pickupTarget === 'RESIDENT') { setStep('pickupResidents'); return; }
                               setStep('scan');
                             }}
                             className="px-8 py-2 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>
@@ -1479,11 +1484,11 @@ export default function GuardVerify() {
                 </div>
               </div>
               <div className="flex gap-3 justify-center mb-6">
-                <button onClick={() => setStep('scan')}
+                <button onClick={() => setStep('vehicle')}
                         className="px-8 py-3 rounded-full text-sm font-bold text-ink border border-gray-300 bg-white">BACK</button>
                 <button onClick={() => {
                           if (!pickupResident) { alert('Please select the resident being picked up.'); return; }
-                          setStep('matched');
+                          setStep('scan');
                         }}
                         className="px-8 py-3 rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#112D31' }}>PROCEED</button>
               </div>
