@@ -329,8 +329,8 @@ export default function GuardHome() {
               <p className="text-xs text-ink/60">Address: {callResult.address}</p>
               <p className="text-xs text-ink/60">Contact: {callResult.contact || '—'}</p>
             </div>
-            <p className="text-[11px] text-ink/60 text-center mb-4 px-2">
-              Kung pinapapasok ng resident ang bisita, i-register bilang walk-in (active). Kung hindi, bumalik sa home.
+            <p className="text-sm font-semibold text-ink text-center mb-4 px-2">
+              Resident approves the entry of visitor?
             </p>
             <div className="flex flex-col gap-2">
               <button onClick={() => {
