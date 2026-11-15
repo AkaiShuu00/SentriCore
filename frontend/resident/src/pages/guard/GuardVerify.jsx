@@ -1211,6 +1211,12 @@ export default function GuardVerify() {
                     MANUAL SEARCH
                   </button>
                   <button onClick={() => {
+                            // Siguraduhin may driver name at napiling resident/visitor (para hindi NULL ang resident_id)
+                            if (!driverName.trim()) { alert(isDelivery ? 'Please enter the rider name.' : 'Please enter the driver name.'); return; }
+                            if (!isDelivery && drivePurpose === 'PICKUP') {
+                              if (pickupTarget === 'RESIDENT' && !pickupResident?.residentId) { alert('Please select the resident being picked up first.'); setStep('pickupResidents'); return; }
+                              if (pickupTarget === 'VISITOR' && !pickedUpVisitor) { alert('Please select the visitor being picked up first.'); setStep('activeVisitors'); return; }
+                            }
                             setEntryInfo(isDelivery
                               ? {
                                   passId: 'DRV-1001', category: 'DELIVERY', regType: 'Delivery',
