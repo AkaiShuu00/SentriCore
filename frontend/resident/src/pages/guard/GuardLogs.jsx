@@ -127,7 +127,20 @@ export default function GuardLogs() {
       groups.sort((a, b) => (sortBy === 'Oldest first' ? new Date(a.when) - new Date(b.when) : new Date(b.when) - new Date(a.when)));
       return groups;
     }
-    filtered.filter((r) => r.type !== 'BATCH').forEach((r) => { if (r.status !== 'DEPARTED' || !r.exitTime) return; const k = localMinuteKey(r.exitTime); if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] }); map.get(k).members.push(r); });
+    // LINKED EXIT = sino ang SABAY lumabas (parehong exit minute), KAHIT hindi sila
+    // sabay pumasok. Kaya galing mismo sa `records` (single visitors lang), hindi sa
+    // `filtered` na naka-restrict sa may arrival_id lang.
+    const q = search.toLowerCase();
+    records.filter((r) => r.type !== 'BATCH').forEach((r) => {
+      if (r.status !== 'DEPARTED' || !r.exitTime) return;
+      const okQ = !q || r.name.toLowerCase().includes(q) || (r.entryId || '').toLowerCase().includes(q);
+      let okD = true;
+      if (fromDate || toDate) { const rd = new Date((r.dateISO || '') + 'T00:00:00'); if (fromDate && rd < new Date(fromDate + 'T00:00:00')) okD = false; if (toDate && rd > new Date(toDate + 'T23:59:59')) okD = false; }
+      if (!okQ || !okD) return;
+      const k = localMinuteKey(r.exitTime);
+      if (!map.has(k)) map.set(k, { key: k, when: r.exitTime, members: [] });
+      map.get(k).members.push(r);
+    });
     let groups = Array.from(map.values()).filter((g) => g.members.length >= 2);
     groups.forEach((g) => { g.activeCount = 0; });
     groups.sort((a, b) => (sortBy === 'Oldest first' ? new Date(a.when) - new Date(b.when) : new Date(b.when) - new Date(a.when)));
