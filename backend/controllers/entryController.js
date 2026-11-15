@@ -525,6 +525,35 @@ async function getSchedule(req, res) {
         residentId: r.resident_id, visitors,
       });
     }
+
+    // WALK-IN / UNLISTED (walang registration) — active, o lumabas ngayong araw.
+    // Para makita sa UI ng guard (Today's Schedule / Visitors Schedule) kahit walang pre-registration.
+    const [walkins] = await pool.query(
+      `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose, t.status,
+              t.entry_time, t.exit_time, t.arrival_id, t.pass_number,
+              DATE_FORMAT(t.entry_time, '%Y-%m-%d') AS entry_date,
+              res.resident_id, res.full_name AS resident_name, res.unit_address
+       FROM VisitorTransactions t
+       JOIN Residents res ON res.resident_id = t.resident_id
+       WHERE t.registration_id IS NULL
+         AND (t.status = 'Active' OR (t.status = 'Completed' AND DATE(t.exit_time) = CURDATE()))
+       ORDER BY t.transaction_id DESC`
+    );
+    for (const t of walkins) {
+      const status = t.status === 'Active' ? 'ACTIVE' : (t.status === 'Completed' ? 'DEPARTED' : 'EXPECTED');
+      result.push({
+        registrationId: `WALKIN-${t.transaction_id}`,
+        registrationType: t.visitor_type === 'Delivery' ? 'Delivery' : 'Single',
+        batchName: null, purpose: t.purpose || 'Unlisted Visit', expectedDate: t.entry_date,
+        resident: t.resident_name, address: t.unit_address, residentId: t.resident_id,
+        walkIn: true,
+        visitors: [{
+          name: t.visitor_name, status, timeIn: t.entry_time, timeOut: t.exit_time,
+          arrivalId: t.arrival_id, transactionId: t.transaction_id, passNumber: t.pass_number,
+        }],
+      });
+    }
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching schedule.', error: err.message });

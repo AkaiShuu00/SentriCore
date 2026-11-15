@@ -174,6 +174,38 @@ async function getMyRegistrations(req, res) {
       });
     }
 
+    // ⬇️ WALK-IN / UNLISTED visitors — may VisitorTransaction pero WALANG registration.
+    // Dapat makita pa rin ng resident sa UI (Home/Schedule) bilang active (o departed).
+    const [walkins] = await pool.query(
+      `SELECT transaction_id, visitor_name, visitor_type, purpose, status,
+              entry_time, exit_time, pass_number, plate_number,
+              DATE_FORMAT(entry_time, '%Y-%m-%d') AS entry_date
+       FROM VisitorTransactions
+       WHERE resident_id = ? AND registration_id IS NULL
+       ORDER BY transaction_id DESC`,
+      [residentId]
+    );
+    for (const t of walkins) {
+      const status = t.status === 'Completed' ? 'Departed' : (t.status === 'Active' ? 'Active' : 'Expected');
+      result.push({
+        registration_id: `WALKIN-${t.transaction_id}`,
+        registration_type: t.visitor_type === 'Delivery' ? 'Delivery' : 'Single',
+        batch_name: null,
+        order_id: null,
+        purpose: t.purpose || 'Unlisted Visit',
+        expected_date: t.entry_date,
+        status,
+        created_at: t.entry_time,
+        canManage: false,
+        walkIn: true,
+        visitors: [{
+          name: t.visitor_name, status,
+          timeIn: t.entry_time, timeOut: t.exit_time,
+          pass_number: t.pass_number || null, plate_number: t.plate_number || null,
+        }],
+      });
+    }
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching registrations.', error: err.message });
