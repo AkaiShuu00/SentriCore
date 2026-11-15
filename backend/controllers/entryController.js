@@ -531,7 +531,7 @@ async function getSchedule(req, res) {
     const [walkins] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose, t.status,
               t.entry_time, t.exit_time, t.arrival_id, t.pass_number,
-              DATE_FORMAT(t.entry_time, '%Y-%m-%d') AS entry_date,
+              DATE_FORMAT(COALESCE(t.entry_time, NOW()), '%Y-%m-%d') AS entry_date,
               res.resident_id, res.full_name AS resident_name, res.unit_address
        FROM VisitorTransactions t
        JOIN Residents res ON res.resident_id = t.resident_id
@@ -544,7 +544,7 @@ async function getSchedule(req, res) {
       result.push({
         registrationId: `WALKIN-${t.transaction_id}`,
         registrationType: t.visitor_type === 'Delivery' ? 'Delivery' : 'Single',
-        batchName: null, purpose: t.purpose || 'Unlisted Visit', expectedDate: t.entry_date,
+        batchName: null, purpose: t.purpose || 'Walk-in', expectedDate: t.entry_date,
         resident: t.resident_name, address: t.unit_address, residentId: t.resident_id,
         walkIn: true,
         visitors: [{

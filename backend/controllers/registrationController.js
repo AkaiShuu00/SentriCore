@@ -179,7 +179,7 @@ async function getMyRegistrations(req, res) {
     const [walkins] = await pool.query(
       `SELECT transaction_id, visitor_name, visitor_type, purpose, status,
               entry_time, exit_time, pass_number, plate_number,
-              DATE_FORMAT(entry_time, '%Y-%m-%d') AS entry_date
+              DATE_FORMAT(COALESCE(entry_time, NOW()), '%Y-%m-%d') AS entry_date
        FROM VisitorTransactions
        WHERE resident_id = ? AND registration_id IS NULL
        ORDER BY transaction_id DESC`,
@@ -192,10 +192,10 @@ async function getMyRegistrations(req, res) {
         registration_type: t.visitor_type === 'Delivery' ? 'Delivery' : 'Single',
         batch_name: null,
         order_id: null,
-        purpose: t.purpose || 'Unlisted Visit',
+        purpose: t.purpose || 'Walk-in',
         expected_date: t.entry_date,
         status,
-        created_at: t.entry_time,
+        created_at: t.entry_time || new Date(),
         canManage: false,
         walkIn: true,
         visitors: [{
