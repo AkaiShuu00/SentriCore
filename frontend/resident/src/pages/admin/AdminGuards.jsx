@@ -9,6 +9,8 @@ import { exportExcel, exportPDF } from '../../utils/exportUtils';
 import VisitorLogsPanel from './components/VisitorLogsPanel';
 
 const fmtDT = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+const fmtDateOnly = (ts) => ts ? new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+const fmtTimeOnly = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—';
 const fmtLog = (ts) => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-----';
 const toLocalISO = (ts) => { if (!ts) return ''; const d = new Date(ts); if (isNaN(d)) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
@@ -168,23 +170,17 @@ function GuardDetail({ guard, onBack, onEdit }) {
         entry: fmtLog(t.entry_time), exit: fmtLog(t.exit_time),
         status: t.status === 'Completed' ? 'Departed' : t.status, rawStatus: t.status,
         pass: t.pass_number || `P-${t.transaction_id}`, purpose: t.purpose || '—',
-        regType: t.registration_type || 'Single', batchName: t.batch_name || '', plate: t.plate_number || '',
+        regType: t.registration_type || 'Single', batchName: t.batch_name || '', regId: t.registration_id || null, plate: t.plate_number || '',
         kind: (t.visitor_type || 'Visitor').toLowerCase(), arrivalId: t.arrival_id || null,
         entryTime: t.entry_time || null, exitTime: t.exit_time || null, dateISO: toLocalISO(t.entry_time || t.exit_time),
       })));
     }).finally(() => setLoading(false));
   }, [guard.guardId]);
 
-  const exportShiftPDF = () => {
-    const header = ['Time In', 'Time Out', 'Status'];
-    const rows = shifts.map((s) => [fmtDT(s.time_in), s.ended_at ? fmtDT(s.ended_at) : '—', s.ended_at ? 'Ended' : 'On Duty']);
-    exportPDF(`Shift Schedule — ${guard.fullName}`, header, rows, { subtitle: guard.shift || '' });
-  };
-  const exportShiftExcel = () => {
-    const header = ['Time In', 'Time Out', 'Status'];
-    const rows = shifts.map((s) => [fmtDT(s.time_in), s.ended_at ? fmtDT(s.ended_at) : '—', s.ended_at ? 'Ended' : 'On Duty']);
-    exportExcel('guard-shift-schedule', 'Shifts', header, rows);
-  };
+  const shiftRows = () => shifts.map((s) => [fmtDateOnly(s.time_in), fmtTimeOnly(s.time_in), s.ended_at ? fmtTimeOnly(s.ended_at) : '—', s.ended_at ? 'Ended' : 'On Duty']);
+  const SHIFT_HEADER = ['Date', 'Time In', 'Time Out', 'Status'];
+  const exportShiftPDF = () => exportPDF(`Shift Schedule — ${guard.fullName}`, SHIFT_HEADER, shiftRows(), { subtitle: guard.shift || '' });
+  const exportShiftExcel = () => exportExcel('guard-shift-schedule', 'Shifts', SHIFT_HEADER, shiftRows());
   const exportLogsPDF = (base) => {
     const header = ['Visitor', 'Type', 'Reg Type', 'Resident', 'Entry', 'Exit', 'Status', 'Pass'];
     const rows = base.map((l) => [l.visitor, l.type, l.regType, l.resident, l.entry, l.exit, l.status, l.pass]);
@@ -215,7 +211,7 @@ function GuardDetail({ guard, onBack, onEdit }) {
             ['Guard Name', guard.fullName],
             ['Shift', guard.shift && guard.shift !== '—' ? guard.shift : 'No shift set'],
             ['Contact Number', guard.contact || '—'],
-            ['Email', guard.email || '—'],
+            ['Email', guard.email || guard.username || '—'],
           ].map(([label, val]) => (
             <div key={label} className="bg-white/10 rounded-2xl px-4 py-3">
               <p className="text-[10px] font-semibold text-white/60">{label}</p>
@@ -250,17 +246,18 @@ function GuardDetail({ guard, onBack, onEdit }) {
                 <button onClick={exportShiftExcel} className="w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: '#0F6E6E' }} title="Export Excel"><FileSpreadsheet size={16} /></button>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 px-3 py-2 text-[11px] font-bold text-white rounded-lg mb-1" style={{ backgroundColor: '#0F6E6E' }}>
-              <span>Time In</span><span>Time Out</span><span className="text-center">Status</span>
+            <div className="grid grid-cols-4 gap-2 px-3 py-2 text-[11px] font-bold text-white rounded-lg mb-1" style={{ backgroundColor: '#0F6E6E' }}>
+              <span>Date</span><span>Time In</span><span>Time Out</span><span className="text-center">Status</span>
             </div>
             {shifts.length === 0 ? (
               <p className="text-center text-ink/50 py-10 text-sm">No shift records yet.</p>
             ) : (
               <div className="max-h-[48vh] overflow-y-auto">
                 {shifts.map((s) => (
-                  <div key={s.shift_id} className="grid grid-cols-3 gap-2 px-3 py-3 border-b border-gray-100 text-sm text-ink items-center">
-                    <span className="font-semibold">{fmtDT(s.time_in)}</span>
-                    <span className="text-ink/70">{s.ended_at ? fmtDT(s.ended_at) : '—'}</span>
+                  <div key={s.shift_id} className="grid grid-cols-4 gap-2 px-3 py-3 border-b border-gray-100 text-sm text-ink items-center">
+                    <span className="font-bold text-[13px]">{fmtDateOnly(s.time_in)}</span>
+                    <span className="font-semibold">{fmtTimeOnly(s.time_in)}</span>
+                    <span className="text-ink/70">{s.ended_at ? fmtTimeOnly(s.ended_at) : '—'}</span>
                     <span className="text-center">
                       <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={s.ended_at ? { backgroundColor: '#F3C9C9', color: '#8a2b2b' } : { backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>
                         {s.ended_at ? 'Ended' : 'On Duty'}

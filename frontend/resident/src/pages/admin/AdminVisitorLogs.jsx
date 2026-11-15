@@ -61,6 +61,7 @@ export default function AdminVisitorLogs() {
           purpose: t.purpose || '—',
           regType: t.registration_type || 'Single',
           batchName: t.batch_name || '',
+          regId: t.registration_id || null,
           plate: t.plate_number || '',
           kind: (t.visitor_type || 'Visitor').toLowerCase(),
           arrivalId: t.arrival_id || null,
@@ -96,8 +97,10 @@ export default function AdminVisitorLogs() {
   const buildBatchGroups = () => {
     const map = new Map();
     base.filter(isBatch).forEach((l) => {
-      const k = l.batchName ? 'B' + l.batchName : 'R' + l.id;
+      // Grupo ayon sa registration (lahat ng kasama sa iisang batch), batch number para sa display
+      const k = l.regId ? 'G' + l.regId : (l.batchName ? 'B' + l.batchName : 'R' + l.id);
       if (!map.has(k)) map.set(k, { key: k, batchNo: l.batchName || '—', members: [] });
+      if (!map.get(k).batchNo || map.get(k).batchNo === '—') map.get(k).batchNo = l.batchName || map.get(k).batchNo;
       map.get(k).members.push(l);
     });
     const groups = Array.from(map.values());

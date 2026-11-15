@@ -54,8 +54,9 @@ export default function VisitorLogsPanel({ records = [], onExportPDF, onExportEx
   const buildBatchGroups = () => {
     const map = new Map();
     base.filter(isBatch).forEach((l) => {
-      const k = l.batchName ? 'B' + l.batchName : 'R' + l.id;
+      const k = l.regId ? 'G' + l.regId : (l.batchName ? 'B' + l.batchName : 'R' + l.id);
       if (!map.has(k)) map.set(k, { key: k, batchNo: l.batchName || '—', members: [] });
+      if (!map.get(k).batchNo || map.get(k).batchNo === '—') map.get(k).batchNo = l.batchName || map.get(k).batchNo;
       map.get(k).members.push(l);
     });
     const groups = Array.from(map.values());

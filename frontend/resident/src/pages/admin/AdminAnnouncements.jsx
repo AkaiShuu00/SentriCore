@@ -140,17 +140,13 @@ export default function AdminAnnouncements() {
         <p className="text-sm text-ink/60">Manage community announcements for residents and guards</p>
       </div>
 
-      {/* Toolbar: search (half) + Post Announcement + sort + calendar */}
+      {/* Toolbar: search + sort + calendar sa kaliwa, Post Announcement sa dulo (right) */}
       <div className="flex items-center gap-2 mb-4">
         <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm" style={{ width: '50%' }}>
           <Search size={18} className="text-ink/40" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search announcement"
                  className="flex-1 outline-none text-sm text-ink placeholder-ink/40 bg-transparent" />
         </div>
-        <button onClick={openCompose}
-                className="flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
-          + Post Announcement
-        </button>
         <button onClick={() => setSortByCat((v) => !v)} title="Sort by category"
                 className={`w-11 h-11 rounded-full shadow-sm flex items-center justify-center shrink-0 ${sortByCat ? 'text-white' : 'bg-white text-ink'}`}
                 style={sortByCat ? { backgroundColor: '#0F6E6E' } : {}}>
@@ -162,8 +158,12 @@ export default function AdminAnnouncements() {
                  className="absolute inset-0 opacity-0 cursor-pointer" />
         </label>
         {dateFilter && (
-          <button onClick={() => setDateFilter('')} className="text-xs font-bold text-teal-700 whitespace-nowrap">Clear date</button>
+          <button onClick={() => setDateFilter('')} className="text-xs font-bold text-teal-700 whitespace-nowrap">Clear</button>
         )}
+        <button onClick={openCompose}
+                className="ml-auto flex items-center gap-2 text-white rounded-full px-5 py-2.5 shadow-sm text-sm font-semibold whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
+          + Post Announcement
+        </button>
       </div>
 
       {/* Status filter — even sizes */}

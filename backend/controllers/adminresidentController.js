@@ -294,7 +294,7 @@ async function residentTransactions(req, res) {
     const [[r]] = await pool.query(`SELECT full_name, unit_address FROM Residents WHERE resident_id = ?`, [id]);
     const [rows] = await pool.query(
       `SELECT t.transaction_id, t.visitor_name, t.visitor_type, t.purpose, t.plate_number,
-              t.pass_number, t.entry_time, t.exit_time, t.status, t.arrival_id,
+              t.pass_number, t.entry_time, t.exit_time, t.status, t.arrival_id, t.registration_id,
               vr.registration_type, vr.batch_name
        FROM VisitorTransactions t
        LEFT JOIN VisitorRegistrations vr ON vr.registration_id = t.registration_id
@@ -318,6 +318,7 @@ async function residentTransactions(req, res) {
         status: t.status === 'Completed' ? 'Departed' : t.status,
         rawStatus: t.status,
         arrivalId: t.arrival_id || null,
+        regId: t.registration_id || null,
         regType: t.registration_type || 'Single',
         batchName: t.batch_name || '',
       })),

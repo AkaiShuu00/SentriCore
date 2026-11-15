@@ -16,7 +16,7 @@ const toLogRecords = (txs) => (txs || []).map((t) => ({
   resident: '', unit: '', entry: fmtLog(t.entry), exit: fmtLog(t.exit),
   status: t.status, rawStatus: t.rawStatus || (t.status === 'Departed' ? 'Completed' : t.status),
   pass: t.pass || `P-${t.id}`, purpose: t.purpose || '—', regType: t.regType || 'Single',
-  batchName: t.batchName || '', plate: t.plate || '', kind: (t.type || 'Visitor').toLowerCase(),
+  batchName: t.batchName || '', regId: t.regId || null, plate: t.plate || '', kind: (t.type || 'Visitor').toLowerCase(),
   arrivalId: t.arrivalId || null, entryTime: t.entry || null, exitTime: t.exit || null,
   dateISO: toLocalISO(t.entry),
 }));
@@ -316,14 +316,16 @@ export default function AdminResidents() {
       {/* Visitors Logs modal — guard-style tabs + PDF download */}
       {logsModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setLogsModal(null)}>
-          <div className="bg-white rounded-3xl w-full max-w-4xl p-6 relative max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setLogsModal(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center"><X size={16} /></button>
-            <h2 className="text-2xl font-extrabold text-teal-800 mb-1">Visitors Logs</h2>
-            <p className="text-sm text-ink/60 mb-4">{logsModal.fullName} · {logsModal.address}</p>
+          <div className="bg-white rounded-3xl w-full max-w-4xl p-6 relative flex flex-col overflow-hidden" style={{ height: '88vh' }} onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setLogsModal(null)} className="absolute top-5 right-5 w-8 h-8 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center z-10"><X size={16} /></button>
+            <h2 className="text-2xl font-extrabold text-teal-800 mb-1 shrink-0">Visitors Logs</h2>
+            <p className="text-sm text-ink/60 mb-4 shrink-0">{logsModal.fullName} · {logsModal.address}</p>
             {logsLoading ? (
               <p className="text-center text-ink/50 py-10 text-sm">Loading…</p>
             ) : (
-              <VisitorLogsPanel records={logsRecords} onExportPDF={exportResidentLogsPDF} heightClass="max-h-[56vh]" />
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <VisitorLogsPanel records={logsRecords} onExportPDF={exportResidentLogsPDF} heightClass="h-[55vh]" />
+              </div>
             )}
           </div>
         </div>

@@ -94,17 +94,17 @@ export default function AdminDashboard() {
       <div className="flex gap-6">
         {/* LEFT column */}
         <div className="flex-1 min-w-0">
-          {/* Stat cards — teal squares, even sizes, naka-center (spaces in between) */}
-          <div className="grid grid-cols-2 gap-5">
+          {/* Stat cards — maliliit na teal squares (parang resident/guard, mas malaki lang ng onti) */}
+          <div className="grid grid-cols-2 gap-4 max-w-md">
             {STAT_META.map((s) => (
-              <div key={s.key} className="rounded-3xl p-5 shadow-md flex flex-col items-center justify-center text-center aspect-square"
+              <div key={s.key} className="rounded-2xl p-4 shadow-md flex flex-col items-center justify-center text-center aspect-square"
                    style={{ background: s.gradient }}>
-                <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white/20 text-white mb-3">
-                  <s.Icon size={26} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/20 text-white mb-2">
+                  <s.Icon size={20} />
                 </div>
-                <p className="text-6xl font-extrabold text-white leading-none">{stats[s.key] ?? 0}</p>
-                <p className="text-sm font-bold text-white mt-3">{s.label}</p>
-                <p className="text-[11px] font-semibold text-white/70 mt-0.5">{s.sub}</p>
+                <p className="text-4xl font-extrabold text-white leading-none">{stats[s.key] ?? 0}</p>
+                <p className="text-xs font-bold text-white mt-2">{s.label}</p>
+                <p className="text-[10px] font-semibold text-white/70 mt-0.5">{s.sub}</p>
               </div>
             ))}
           </div>
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
               <h3 className="text-lg font-extrabold text-ink">Recent Activity</h3>
               {/* #1 — View All → Audit Trails */}
               <button onClick={() => navigate('/admin-reports?view=audit')}
-                      className="text-xs font-bold text-teal-700">View All ›</button>
+                      className="text-xs font-bold px-4 py-2 rounded-full" style={{ backgroundColor: '#CDE7DE', color: '#0F6E6E' }}>View All ›</button>
             </div>
             <div className="space-y-2">
               {recentAudit.length === 0 ? (
