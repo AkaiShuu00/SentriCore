@@ -5,7 +5,7 @@ import AnnouncementsModal from '../components/AnnouncementsModal';
 import GroupList from '../components/GroupList';
 import { getMyRegistrations, getAnnouncements, getNotifications, notifyGatePickup } from '../api';
 import { useT, LangToggle } from '../i18n';
-import { Bell, Megaphone, CalendarClock, Users, Phone, MessageSquareWarning, DoorOpen, Search } from 'lucide-react';
+import { Bell, Megaphone, CalendarClock, Users, Phone, MessageSquareWarning, DoorOpen, Search, CheckCircle2 } from 'lucide-react';
 
 const DARK = '#0A4A4A';   // dark teal (font)
 const TEAL = '#0F6E6E';
@@ -21,6 +21,7 @@ export default function Home() {
   const [showNotifyGate, setShowNotifyGate] = useState(false);
   const [rideHailing, setRideHailing] = useState(null);
   const [notifying, setNotifying] = useState(false);
+  const [gateSuccess, setGateSuccess] = useState(false);
 
   const [registrations, setRegistrations] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -261,7 +262,7 @@ export default function Home() {
                         try {
                           await notifyGatePickup({ rideHailing });
                           setShowNotifyGate(false);
-                          alert(t('Gate notified! The guard has been informed that you are waiting for a pick-up.', 'Naipaalam na sa gate! Alam na ng guard na naghihintay ka ng sundo.'));
+                          setGateSuccess(true);
                         } catch (err) {
                           alert(err.response?.data?.message || t('Failed to notify the gate. Please try again.', 'Hindi naipaalam sa gate. Pakisubukan ulit.'));
                         } finally {
@@ -272,6 +273,23 @@ export default function Home() {
                 {notifying ? t('NOTIFYING…', 'IPINAPAALAM…') : t('NOTIFY GATE', 'IPAALAM SA GATE')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gate notified — success pop-up (gaya ng registration success) */}
+      {gateSuccess && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center px-6" onClick={() => setGateSuccess(false)}>
+          <div className="bg-white rounded-3xl p-7 w-full max-w-sm text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center mb-3"><CheckCircle2 size={52} style={{ color: TEAL }} /></div>
+            <h2 className="text-xl font-extrabold mb-2" style={{ color: DARK }}>{t('Gate notified!', 'Naipaalam na sa gate!')}</h2>
+            <p className="text-sm text-ink/60 mb-6 leading-relaxed">
+              {t('The guard has been informed that you are waiting for a pick-up.', 'Naabisuhan na ang guard na naghihintay ka ng sundo.')}
+            </p>
+            <button onClick={() => setGateSuccess(false)}
+                    className="w-full py-3 rounded-full text-sm font-extrabold text-white" style={{ backgroundColor: '#112D31' }}>
+              {t('OKAY', 'OKAY')}
+            </button>
           </div>
         </div>
       )}

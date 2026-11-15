@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import GuardHome from './GuardHome';
-import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, checkBlocklist, getExpectedDeliveries, getAdminContact } from '../../api';
+import { getResidentsForGuard, getActiveVisitors, getCompanions, getSchedule, getGatePickups, resolveGatePickup, checkBlocklist, getExpectedDeliveries, getAdminContact } from '../../api';
 import { User, Truck, Camera, Search, RefreshCw, ShieldAlert, Phone, CheckCircle2, LogOut } from 'lucide-react';
 
 const LIGHT_TEAL = '#CDE7DE';
@@ -721,6 +721,10 @@ export default function GuardVerify() {
         setSuccessData({ isExit: true, total, passes: [] });
       } else {
         const passes = await saveArrival();
+        // Kapag pickup ng resident na nag-Notify Gate → i-resolve para mawala sa waiting list
+        if (drivePurpose === 'PICKUP' && pickupTarget === 'RESIDENT' && pickupResident?.pickupId) {
+          try { await resolveGatePickup(pickupResident.pickupId); } catch (e) { /* ignore */ }
+        }
         setSuccessData({ isExit: false, total, passes: passes || [] });
       }
     } catch (err) {
@@ -732,7 +736,14 @@ export default function GuardVerify() {
 
   // ── Confirm-match handler (entry o exit) ──
   const onConfirmMatch = async () => {
-    const info = { ...matchData, visitor: matchData.visitor || scannedName, transactionId: matchData.transactionId || null };
+    // DROP-OFF (personal-visit flow na may sasakyan) → i-record ang purpose bilang "Drop-off"
+    const purposeOverride = (!isExit && drivePurpose === 'DROP-OFF') ? 'Drop-off' : null;
+    const info = {
+      ...matchData,
+      visitor: matchData.visitor || scannedName,
+      transactionId: matchData.transactionId || null,
+      purpose: purposeOverride || matchData.purpose,
+    };
     setEntryInfo(info);
     setSelectedCompanions([]);
     // Both entry and exit ask about accompanying visitors

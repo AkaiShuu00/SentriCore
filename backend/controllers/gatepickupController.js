@@ -30,15 +30,28 @@ async function notifyPickup(req, res) {
   }
 }
 
+// Auto-close ang mga Waiting na lampas 24 oras na (hindi na-process / hindi na sinundo).
+// Iwas ipon/doble sa listahan ng guard.
+async function expireStalePickups() {
+  try {
+    await pool.query(
+      `UPDATE GatePickups
+         SET status = 'Done', resolved_at = NOW()
+       WHERE status = 'Waiting' AND created_at < NOW() - INTERVAL 24 HOUR`
+    );
+  } catch (e) { /* ignore — defensive */ }
+}
+
 // GET /api/gate/pickups  (Guard) — listahan ng mga resident na naghihintay ng pickup
 async function getWaitingPickups(req, res) {
   try {
+    await expireStalePickups();  // linisin muna ang lumang Waiting (>24h)
     const [rows] = await pool.query(
       `SELECT p.pickup_id, p.resident_id, p.ride_hailing, p.note, p.created_at,
               res.full_name, res.unit_address, res.phone_number AS contact_number
        FROM GatePickups p
        JOIN Residents res ON res.resident_id = p.resident_id
-       WHERE p.status = 'Waiting'
+       WHERE p.status = 'Waiting' AND p.created_at >= NOW() - INTERVAL 24 HOUR
        ORDER BY p.created_at DESC`
     );
     res.json(rows);
@@ -63,10 +76,12 @@ async function resolvePickup(req, res) {
 // GET /api/gate/pickup/mine  (Resident) — para makita ng resident kung naka-Waiting pa
 async function myPickup(req, res) {
   try {
+    await expireStalePickups();  // para kay resident, mawawala rin ang sarili niyang lumang Waiting
     const residentId = req.user.residentId;
     const [rows] = await pool.query(
       `SELECT pickup_id, ride_hailing, note, status, created_at
-       FROM GatePickups WHERE resident_id = ? AND status = 'Waiting'
+       FROM GatePickups
+       WHERE resident_id = ? AND status = 'Waiting' AND created_at >= NOW() - INTERVAL 24 HOUR
        ORDER BY created_at DESC LIMIT 1`,
       [residentId]
     );
