@@ -134,7 +134,7 @@ export default function AdminGuards() {
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4"><KeyRound size={30} className="text-teal-700" /></div>
             <h2 className="text-lg font-extrabold text-ink mb-1">Guard Login Credentials</h2>
-            <p className="text-sm text-ink/60 mb-4">Ibigay ito sa guard. Ipakita lang isang beses.</p>
+            <p className="text-sm text-ink/60 mb-4">Give this to the guard. Shown only once.</p>
             <div className="rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
               <p className="text-xs font-semibold text-ink/50">Username</p>
               <p className="text-base font-bold text-teal-800 mb-2">{credModal.username}</p>
@@ -177,7 +177,7 @@ function GuardDetail({ guard, onBack, onEdit }) {
     }).finally(() => setLoading(false));
   }, [guard.guardId]);
 
-  const shiftRows = () => shifts.map((s) => [fmtDateOnly(s.time_in), fmtTimeOnly(s.time_in), s.ended_at ? fmtTimeOnly(s.ended_at) : '—', s.ended_at ? 'Ended' : 'On Duty']);
+  const shiftRows = () => shifts.map((s) => [fmtDateOnly(s.time_in), fmtTimeOnly(s.time_in), s.ended_at ? fmtTimeOnly(s.ended_at) : '—', s.ended_at ? 'Completed' : 'On Duty']);
   const SHIFT_HEADER = ['Date', 'Time In', 'Time Out', 'Status'];
   const exportShiftPDF = () => exportPDF(`Shift Schedule — ${guard.fullName}`, SHIFT_HEADER, shiftRows(), { subtitle: guard.shift || '' });
   const exportShiftExcel = () => exportExcel('guard-shift-schedule', 'Shifts', SHIFT_HEADER, shiftRows());
@@ -239,7 +239,7 @@ function GuardDetail({ guard, onBack, onEdit }) {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="font-bold text-ink">Time In / Time Out Records</p>
-                <p className="text-xs text-ink/60">Shift Schedule: <span className="font-semibold">{guard.shift || 'No shift set'}</span> · auto time-in on login, time-out on end shift.</p>
+                <p className="text-xs text-ink/60">Shift Schedule: <span className="font-semibold">{guard.shift || 'No shift set'}</span></p>
               </div>
               <div className="flex gap-1">
                 <button onClick={exportShiftPDF} className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-ink" title="Export PDF"><FileDown size={16} /></button>
@@ -259,8 +259,8 @@ function GuardDetail({ guard, onBack, onEdit }) {
                     <span className="font-semibold">{fmtTimeOnly(s.time_in)}</span>
                     <span className="text-ink/70">{s.ended_at ? fmtTimeOnly(s.ended_at) : '—'}</span>
                     <span className="text-center">
-                      <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={s.ended_at ? { backgroundColor: '#F3C9C9', color: '#8a2b2b' } : { backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>
-                        {s.ended_at ? 'Ended' : 'On Duty'}
+                      <span className="text-[10px] font-bold px-3 py-1 rounded-full" style={s.ended_at ? { backgroundColor: '#CDE7DE', color: '#0F6E6E' } : { backgroundColor: '#B4E4BE', color: '#1e6b2e' }}>
+                        {s.ended_at ? 'Completed' : 'On Duty'}
                       </span>
                     </span>
                   </div>
@@ -303,7 +303,7 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
       <div className="bg-white rounded-3xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
         <h2 className="text-xl font-extrabold text-ink mb-1">{title}</h2>
-        {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
+        {!initial && <p className="text-xs text-ink/60 mb-4">Username and password are generated automatically.</p>}
         {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-semibold">{initial.username}</span></p>}
 
         <div className="flex flex-col items-center mb-4">
@@ -344,11 +344,6 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
               <option value="6:00 PM - 6:00 AM">6:00 PM - 6:00 AM</option>
             </select>
           </div>
-          {initial && (
-            <div className="rounded-xl px-4 py-3 text-xs" style={{ backgroundColor: '#F5F2E9', color: '#5b4a2e' }}>
-              Duty status is <span className="font-semibold">automatic</span> — On Duty while logged in within the shift, Off Duty once the shift ends.
-            </div>
-          )}
         </div>
 
         {showManage && (

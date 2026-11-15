@@ -397,7 +397,7 @@ export default function AdminResidents() {
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4"><KeyRound size={30} className="text-teal-700" /></div>
             <h2 className="text-lg font-extrabold text-ink mb-1">Login Credentials</h2>
-            <p className="text-sm text-ink/60 mb-4">Ibigay ito sa resident. Ipakita lang isang beses.</p>
+            <p className="text-sm text-ink/60 mb-4">Give this to the resident. Shown only once.</p>
             <div className="bg-cream rounded-xl p-4 mb-5 text-left" style={{ backgroundColor: '#F5F2E9' }}>
               <p className="text-xs font-bold text-ink/50">Username</p>
               <p className="text-base font-extrabold text-teal-800 mb-2">{credModal.username}</p>
@@ -433,7 +433,7 @@ function ResidentForm({ title, initial, showReset, onClose, onSubmit, onReset })
       <div className="bg-white rounded-3xl w-full max-w-md p-6 relative" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-ink"><X size={16} /></button>
         <h2 className="text-xl font-extrabold text-ink mb-1">{title}</h2>
-        {!initial && <p className="text-xs text-ink/60 mb-4">Ang username at password ay awtomatikong gagawin.</p>}
+        {!initial && <p className="text-xs text-ink/60 mb-4">Username and password are generated automatically.</p>}
         {initial && <p className="text-xs text-ink/60 mb-4">Username: <span className="font-bold">{initial.username}</span></p>}
 
         <div className="space-y-3 mt-2">

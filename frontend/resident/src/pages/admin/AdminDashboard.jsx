@@ -94,17 +94,17 @@ export default function AdminDashboard() {
       <div className="flex gap-6">
         {/* LEFT column */}
         <div className="flex-1 min-w-0">
-          {/* Stat cards — maliliit na teal squares (parang resident/guard, mas malaki lang ng onti) */}
-          <div className="grid grid-cols-2 gap-4 max-w-md">
+          {/* Stat cards — even na rectangles, sakop ang buong lapad, naka-center */}
+          <div className="grid grid-cols-2 gap-4">
             {STAT_META.map((s) => (
-              <div key={s.key} className="rounded-2xl p-4 shadow-md flex flex-col items-center justify-center text-center aspect-square"
-                   style={{ background: s.gradient }}>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/20 text-white mb-2">
-                  <s.Icon size={20} />
+              <div key={s.key} className="rounded-2xl p-5 shadow-md flex flex-col items-center justify-center text-center"
+                   style={{ background: s.gradient, minHeight: 150 }}>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white/20 text-white mb-2">
+                  <s.Icon size={24} />
                 </div>
-                <p className="text-4xl font-extrabold text-white leading-none">{stats[s.key] ?? 0}</p>
-                <p className="text-xs font-bold text-white mt-2">{s.label}</p>
-                <p className="text-[10px] font-semibold text-white/70 mt-0.5">{s.sub}</p>
+                <p className="text-5xl font-extrabold text-white leading-none">{stats[s.key] ?? 0}</p>
+                <p className="text-sm font-bold text-white mt-2">{s.label}</p>
+                <p className="text-[11px] font-semibold text-white/70 mt-0.5">{s.sub}</p>
               </div>
             ))}
           </div>

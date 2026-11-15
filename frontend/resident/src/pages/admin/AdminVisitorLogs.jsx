@@ -298,7 +298,7 @@ export default function AdminVisitorLogs() {
                           <div className="divide-y divide-gray-100">{d.members.map((l) => <BatchMemberRow key={l.id} l={l} onClick={() => setDetail(l)} />)}</div>
                         </div>
                       ))}
-                      {g.activeCount > 0 && <p className="text-[10px] text-ink/60 text-center">{g.activeCount} nasa loob pa (active)</p>}
+                      {g.activeCount > 0 && <p className="text-[10px] text-ink/60 text-center">{g.activeCount} still inside (active)</p>}
                     </div>
                   )}
                 </div>
@@ -328,7 +328,7 @@ export default function AdminVisitorLogs() {
                       <div className="min-w-0">
                         <p className="font-semibold text-ink text-sm truncate">{l.visitor}</p>
                         <p className="text-[11px] text-ink/60 truncate">{l.type} · {l.resident} · {l.unit}</p>
-                        <p className="text-[11px] text-ink/50">Pumasok: {fmtFullDate(l.entryTime)} · Lumabas: {fmtFullDate(l.exitTime)}</p>
+                        <p className="text-[11px] text-ink/50">In: {fmtFullDate(l.entryTime)} · Out: {fmtFullDate(l.exitTime)}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-[11px] font-bold text-ink">{l.pass}</p>
