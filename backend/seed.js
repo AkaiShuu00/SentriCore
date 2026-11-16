@@ -1,12 +1,14 @@
-// seeds.js — SentriCore demo data seeder
-// Patakbuhin: node seeds.js
-// LIGTAS i-rerun: nililinis muna ang demo rows bago mag-insert (walang duplicate error).
-// Pwede pa ring mag-add ng resident/guard/transaction sa app pagkatapos — seeded lang ito bilang simula.
+// seed.js — SentriCore demo data seeder (RESIDENTS + LOGS + COMPLAINTS + REPORTS ONLY)
+// Patakbuhin: node seed.js   (nasa backend folder, katabi ng config/db.js)
 //
-// Accounts:
-//   Admin:  admin@sentricore  / admin0001
-//   Guards: guard1@sentricore / guard0001 ,  guard2@sentricore / guard0002
-//   Residents: resident1..resident30 / resident123
+// ⚠️ HINDI hinahawakan ang GUARDS at ADMIN — ginagamit lang ang existing guards para
+//    ikabit sa mga transaction/report. Residents, logs, complaints, reports lang ang sine-seed.
+//
+//   Residents: resident1..resident200 / resident123
+//
+// Data: mula JUNE 2026 hanggang ngayon. 200 residents, daan-daang visitors + deliveries,
+//       batch, linked, active + expected ngayon, complaints, at guard reports.
+//       Address format: "Block 7 Daniel Street" (Bible-themed na street names).
 
 const pool = require('./config/db');
 const bcrypt = require('bcrypt');
@@ -15,49 +17,103 @@ const pad = (n) => String(n).padStart(3, '0');
 function dt(y, m, d, hh = 9, mm = 0) {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
 }
-const todayISO = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-const plusDaysISO = (n) => {
-  const d = new Date(); d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const plusDaysISO = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const clampDay = (d) => Math.max(1, Math.min(28, d));
 
-const ADMIN_USER = 'admin@sentricore';
-const GUARD_USERS = ['guard1@sentricore', 'guard2@sentricore'];
-const RESIDENT_COUNT = 30;
+const RESIDENT_COUNT = 200;
 const RESIDENT_USERS = Array.from({ length: RESIDENT_COUNT }, (_, i) => `resident${i + 1}`);
-const SEED_USERNAMES = [ADMIN_USER, ...GUARD_USERS, ...RESIDENT_USERS];
 
-// ---- Name generators (deterministic, para pare-pareho kada run) ----
-const FIRST = ['Juan', 'Maria', 'Roberto', 'Liza', 'Mark', 'Ana', 'Jose', 'Grace', 'Ramon', 'Elena',
-  'Paolo', 'Sofia', 'Ben', 'Rita', 'Danilo', 'Karla', 'Noel', 'Teresa', 'Victor', 'Mila',
-  'Rafael', 'Jenny', 'Arturo', 'Cora', 'Dennis', 'Fe', 'Glenn', 'Divina', 'Carlos', 'Patricia'];
-const LAST = ['Dela Cruz', 'Santos', 'Garcia', 'Fernandez', 'Villanueva', 'Reyes', 'Mendoza', 'Lim', 'Tan', 'Cruz',
-  'Flores', 'Ramos', 'Torres', 'Gomez', 'Yap', 'Diaz', 'Aquino', 'Bautista', 'Ong', 'Co',
-  'Uy', 'Chua', 'Sy', 'Villar', 'Perez', 'Hernandez', 'Castro', 'Rosales', 'Navarro', 'Domingo'];
-const residentFullName = (i) => `${FIRST[i % FIRST.length]} ${LAST[i % LAST.length]}`;
-const visitorName = (i, k) => `${FIRST[(i * 3 + k + 5) % FIRST.length]} ${LAST[(i * 2 + k + 7) % LAST.length]}`;
+// ---- Bible-themed generators (deterministic) ----
+const BIBLE_FIRST = ['Judith', 'Daniel', 'Esther', 'Ruth', 'Samuel', 'Isaiah', 'Noah', 'David', 'Solomon', 'Elijah',
+  'Sarah', 'Rebecca', 'Rachel', 'Leah', 'Hannah', 'Miriam', 'Deborah', 'Naomi', 'Abigail', 'Mary',
+  'Martha', 'Joanna', 'Lydia', 'Priscilla', 'Paul', 'Peter', 'John', 'James', 'Andrew', 'Thomas',
+  'Philip', 'Matthew', 'Luke', 'Mark', 'Stephen', 'Timothy', 'Titus', 'Silas', 'Barnabas', 'Aaron',
+  'Moses', 'Joshua', 'Caleb', 'Gideon', 'Jacob', 'Joseph', 'Benjamin', 'Levi', 'Judah', 'Simeon',
+  'Nathan', 'Ezra', 'Nehemiah', 'Job', 'Jonah', 'Micah', 'Amos', 'Hosea', 'Joel', 'Nahum',
+  'Enoch', 'Seth', 'Abel', 'Abraham', 'Isaac', 'Gabriel', 'Michael', 'Zachariah', 'Elizabeth', 'Anna'];
+const BIBLE_LAST = ['Canaan', 'Jordan', 'Hebron', 'Zion', 'Carmel', 'Tabor', 'Sinai', 'Nazareth', 'Galilee', 'Judea',
+  'Samaria', 'Bethany', 'Jericho', 'Gilead', 'Sharon', 'Eden', 'Moriah', 'Horeb', 'Bashan', 'Shiloh',
+  'Gibeon', 'Ramah', 'Ophir', 'Tarshish', 'Cana', 'Emmaus', 'Capernaum', 'Bethel', 'Magdala', 'Kedar',
+  'Seir', 'Nineveh', 'Babylon', 'Damascus', 'Lebanon', 'Pisgah', 'Peniel', 'Succoth', 'Shechem', 'Gerar'];
+const STREETS = ['Daniel', 'Judith', 'Exodus', 'Leviticus', 'Genesis', 'Numbers', 'Joshua', 'Ruth', 'Samuel', 'Psalms',
+  'Proverbs', 'Isaiah', 'Jeremiah', 'Ezekiel', 'Hosea', 'Joel', 'Amos', 'Jonah', 'Micah', 'Matthew',
+  'Mark', 'Luke', 'John', 'Acts', 'Romans', 'Timothy', 'Titus', 'James', 'Jude', 'Peter',
+  'Hebrews', 'Esther', 'Ezra', 'Nehemiah', 'Solomon', 'Elijah', 'Elisha', 'Nahum', 'Obadiah', 'Malachi'];
+
+const fullName = (i) => `${BIBLE_FIRST[i % BIBLE_FIRST.length]} ${BIBLE_LAST[(i * 3 + 7) % BIBLE_LAST.length]}`;
+const visitorName = (i, k) => `${BIBLE_FIRST[(i * 5 + k + 11) % BIBLE_FIRST.length]} ${BIBLE_LAST[(i * 2 + k + 3) % BIBLE_LAST.length]}`;
+const addressFor = (i) => `Block ${(i % 12) + 1} ${STREETS[i % STREETS.length]} Street`;
+
+// ---- Complaint + report samples (module scope para magamit din sa cleanup) ----
+const COMP = [
+  ['Visitor', 'Visitor refused to show ID', 'Unregistered visitor', 'Pending', null],
+  ['Visitor', 'Visitor overstayed past curfew', 'Curfew violation', 'Acknowledged', 'Visitor was reminded of the 10 PM curfew.'],
+  ['Guard', 'Guard was rude at the gate', 'Staff conduct', 'Acknowledged', 'Guard verbally reminded on proper conduct.'],
+  ['Guard', 'Slow entry processing', 'Service delay', 'Resolved', 'Added a second lane during peak hours.'],
+  ['Security', 'Broken CCTV near Block 3', 'CCTV / equipment', 'Pending', null],
+  ['Security', 'Suspicious person loitering', 'Security concern', 'Resolved', 'Patrol increased; area cleared.'],
+  ['HOA', 'Street light not working', 'Maintenance', 'Acknowledged', 'Maintenance request scheduled.'],
+  ['HOA', 'Garbage not collected on time', 'Sanitation', 'Resolved', 'Collection schedule corrected.'],
+  ['Visitor', 'Delivery rider used wrong gate', 'Gate misuse', 'Resolved', 'Rider redirected to the delivery gate.'],
+  ['Security', 'Tailgating vehicle at entry', 'Security concern', 'Pending', null],
+  ['HOA', 'Clogged drainage after rain', 'Maintenance', 'Acknowledged', 'Drainage cleaning scheduled.'],
+  ['Guard', 'No guard at gate during shift', 'Staffing', 'Resolved', 'Shift coverage reviewed and fixed.'],
+  ['Visitor', 'Unverified contractor entered', 'Unregistered visitor', 'Acknowledged', 'Contractor list now required.'],
+  ['Security', 'Perimeter fence damaged', 'Security concern', 'Pending', null],
+  ['HOA', 'Noise complaint from event', 'Noise', 'Resolved', 'Homeowner advised on noise policy.'],
+  ['Visitor', 'Visitor parked blocking driveway', 'Parking', 'Resolved', 'Visitor asked to transfer; towing policy shared.'],
+  ['Guard', 'Logbook entry missing', 'Record keeping', 'Acknowledged', 'Digital log reinforced.'],
+  ['Security', 'Gate left open at night', 'Security concern', 'Resolved', 'Night checklist updated.'],
+];
+const REP = [
+  ['Security Concern', 'Suspicious vehicle', 'Main Gate', 'Unregistered vehicle circled the block twice.', 'Open'],
+  ['Small Problem', 'Barrier malfunction', 'Gate 1', 'Boom barrier stuck halfway for 10 minutes.', 'Acknowledged'],
+  ['Incident', 'Minor vehicle scratch', 'Parking Area', 'Two vehicles brushed while entering.', 'Resolved'],
+  ['Security Concern', 'Tailgating attempt', 'Main Gate', 'Motorcycle tried to follow a resident in.', 'Open'],
+  ['Small Problem', 'Flickering gate light', 'Gate 1', 'Entry light flickers at night.', 'Acknowledged'],
+  ['Incident', 'Lost-and-found item', 'Guard House', 'Wallet turned over by a visitor.', 'Resolved'],
+  ['Security Concern', 'Unattended package', 'Delivery Lane', 'Package left without a recipient.', 'Open'],
+  ['Small Problem', 'Intercom static', 'Main Gate', 'Hard to hear residents on the intercom.', 'Acknowledged'],
+  ['Incident', 'Slip near wet floor', 'Guard House', 'Visitor slipped; no injury.', 'Resolved'],
+  ['Security Concern', 'Fence gap spotted', 'Perimeter', 'Small gap near Block 7 fence.', 'Open'],
+  ['Small Problem', 'Logbook pen out', 'Gate 1', 'Backup supplies requested.', 'Resolved'],
+  ['Incident', 'Noise disturbance', 'Clubhouse', 'Late event ran past allowed hours.', 'Acknowledged'],
+];
+
+// ---- Flexible insert: iinsert lang ang existing columns (iwas "unknown column") ----
+const _colCache = {};
+async function tableCols(table) {
+  if (_colCache[table]) return _colCache[table];
+  try { const [cols] = await pool.query(`SHOW COLUMNS FROM ${table}`); _colCache[table] = cols.map((c) => c.Field); }
+  catch (e) { _colCache[table] = []; }
+  return _colCache[table];
+}
+async function insertFlexible(table, data) {
+  const names = await tableCols(table);
+  const keys = Object.keys(data).filter((k) => names.includes(k));
+  if (!keys.length) return false;
+  await pool.query(`INSERT INTO ${table} (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`, keys.map((k) => data[k]));
+  return true;
+}
 
 async function cleanup() {
-  console.log('🧹 Cleaning previous demo rows (if any)...');
+  console.log('🧹 Cleaning previous demo residents + their data (guards/admin untouched)...');
   const [users] = await pool.query(
-    `SELECT user_id FROM Users WHERE username IN (${SEED_USERNAMES.map(() => '?').join(',')})`,
-    SEED_USERNAMES
+    `SELECT user_id FROM Users WHERE username IN (${RESIDENT_USERS.map(() => '?').join(',')})`,
+    RESIDENT_USERS
   );
   const userIds = users.map((u) => u.user_id);
   if (userIds.length) {
     const inU = userIds.map(() => '?').join(',');
     const [resi] = await pool.query(`SELECT resident_id FROM Residents WHERE user_id IN (${inU})`, userIds);
     const resIds = resi.map((r) => r.resident_id);
-    const [guards] = await pool.query(`SELECT guard_id FROM Guards WHERE user_id IN (${inU})`, userIds);
-    const guardIds = guards.map((g) => g.guard_id);
-
     if (resIds.length) {
       const inR = resIds.map(() => '?').join(',');
       const [regs] = await pool.query(`SELECT registration_id FROM VisitorRegistrations WHERE resident_id IN (${inR})`, resIds);
       const regIds = regs.map((r) => r.registration_id);
+      try { await pool.query(`DELETE FROM Complaints WHERE resident_id IN (${inR})`, resIds); } catch (e) {}
+      try { await pool.query(`DELETE FROM GatePickups WHERE resident_id IN (${inR})`, resIds); } catch (e) {}
       await pool.query(`DELETE FROM VisitorTransactions WHERE resident_id IN (${inR})`, resIds);
       if (regIds.length) {
         const inReg = regIds.map(() => '?').join(',');
@@ -65,175 +121,128 @@ async function cleanup() {
         await pool.query(`DELETE FROM VisitorRegistrations WHERE registration_id IN (${inReg})`, regIds);
       }
     }
-    if (guardIds.length) {
-      const inG = guardIds.map(() => '?').join(',');
-      try { await pool.query(`DELETE FROM GuardShifts WHERE guard_id IN (${inG})`, guardIds); } catch (e) {}
-      try { await pool.query(`UPDATE VisitorTransactions SET guard_id = NULL WHERE guard_id IN (${inG})`, guardIds); } catch (e) {}
-      try { await pool.query(`UPDATE VisitorTransactions SET exit_guard_id = NULL WHERE exit_guard_id IN (${inG})`, guardIds); } catch (e) {}
-    }
-    try { await pool.query(`DELETE FROM Admins WHERE user_id IN (${inU})`, userIds); } catch (e) {}
-    await pool.query(`DELETE FROM Guards WHERE user_id IN (${inU})`, userIds);
     await pool.query(`DELETE FROM Residents WHERE user_id IN (${inU})`, userIds);
     await pool.query(`DELETE FROM Users WHERE user_id IN (${inU})`, userIds);
   }
+  // Tanggalin lang ang mga DATING SEEDED na guard reports (exact description match) — hindi ang real reports.
+  try {
+    const descs = REP.map((r) => r[3]);
+    await pool.query(`DELETE FROM GuardReports WHERE description IN (${descs.map(() => '?').join(',')})`, descs);
+  } catch (e) {}
 }
 
 async function seed() {
   try {
     await cleanup();
-    console.log('🌱 Seeding accounts...');
 
-    const adminPw = await bcrypt.hash('admin0001', 10);
-    const guardPw1 = await bcrypt.hash('guard0001', 10);
-    const guardPw2 = await bcrypt.hash('guard0002', 10);
+    // ---- Kunin ang EXISTING guards (hindi ginagalaw) para ikabit sa transactions/reports ----
+    const [guards] = await pool.query(`SELECT guard_id, gate_id FROM Guards ORDER BY guard_id`);
+    if (!guards.length) {
+      console.error('❌ Walang guards sa database. Magdagdag muna ng guard bago mag-seed (para may maikabit sa logs).');
+      process.exit(1);
+    }
+    const GID = [guards[0].guard_id, (guards[1] || guards[0]).guard_id];
+    const GATE = [guards[0].gate_id || 1, (guards[1] || guards[0]).gate_id || 1];
+    console.log(`👮 Using existing guards: ${GID.join(', ')}`);
+
     const residentPw = await bcrypt.hash('resident123', 10);
 
-    // ---- ADMIN ----
-    const [adminUser] = await pool.query(
-      `INSERT INTO Users (role_id, username, password_hash) VALUES (1, ?, ?)`, [ADMIN_USER, adminPw]
-    );
-    try {
-      await pool.query(
-        `INSERT INTO Admins (user_id, display_name, phone_number, email)
-         VALUES (?, 'HOA Administrator', '09170000001', 'admin.sentricore@gmail.com')`,
-        [adminUser.insertId]
-      );
-    } catch (e) { console.warn('   (Admins table insert skipped:', e.message, ')'); }
-
-    // ---- GUARDS ----
-    const [g1] = await pool.query(`INSERT INTO Users (role_id, username, password_hash) VALUES (2, ?, ?)`, [GUARD_USERS[0], guardPw1]);
-    await pool.query(
-      `INSERT INTO Guards (user_id, gate_id, full_name, employee_id, phone_number, email, shift_start, shift_end, date_hired, status)
-       VALUES (?, 1, 'Pedro Santos', 'GD-1001', '09181112222', 'pedro.sentricore@gmail.com', '06:00:00', '18:00:00', '2022-05-12', 'Off Duty')`,
-      [g1.insertId]
-    );
-    const [g2] = await pool.query(`INSERT INTO Users (role_id, username, password_hash) VALUES (2, ?, ?)`, [GUARD_USERS[1], guardPw2]);
-    await pool.query(
-      `INSERT INTO Guards (user_id, gate_id, full_name, employee_id, phone_number, email, shift_start, shift_end, date_hired, status)
-       VALUES (?, 2, 'Maria Reyes', 'GD-1002', '09183334444', 'maria.sentricore@gmail.com', '18:00:00', '06:00:00', '2023-01-09', 'Off Duty')`,
-      [g2.insertId]
-    );
-    const [[guard1]] = await pool.query(`SELECT guard_id FROM Guards WHERE user_id = ?`, [g1.insertId]);
-    const [[guard2]] = await pool.query(`SELECT guard_id FROM Guards WHERE user_id = ?`, [g2.insertId]);
-    const GID = [guard1.guard_id, guard2.guard_id];
-    const GATE = [1, 2];
-
-    // ---- RESIDENTS (30) ----
+    // ---- RESIDENTS (200) ----
+    console.log(`🌱 Seeding ${RESIDENT_COUNT} residents...`);
     const residentIds = [];
     for (let i = 0; i < RESIDENT_COUNT; i++) {
-      const username = RESIDENT_USERS[i];
-      const fullName = residentFullName(i);
-      const address = `Block ${(i % 10) + 1} Lot ${i + 1}`;
+      const [u] = await pool.query(`INSERT INTO Users (role_id, username, password_hash) VALUES (3, ?, ?)`, [RESIDENT_USERS[i], residentPw]);
       const phone = `0917${String(1000000 + i).slice(-7)}`;
-      const email = `resident${i + 1}.sentricore@gmail.com`;
-      const [u] = await pool.query(`INSERT INTO Users (role_id, username, password_hash) VALUES (3, ?, ?)`, [username, residentPw]);
       const [r] = await pool.query(
         `INSERT INTO Residents (user_id, full_name, unit_address, phone_number, email) VALUES (?, ?, ?, ?, ?)`,
-        [u.insertId, fullName, address, phone, email]
+        [u.insertId, fullName(i), addressFor(i), phone, `resident${i + 1}.sentricore@gmail.com`]
       );
       residentIds.push(r.insertId);
     }
 
-    console.log(`🌱 Seeding visits for ${RESIDENT_COUNT} residents...`);
-
+    console.log('🌱 Seeding visits + deliveries (June–present)...');
     let vCount = 0, dCount = 0;
     const vPass = () => `V-${pad(++vCount)}`;
     const dPass = () => `D-${pad(++dCount)}`;
 
-    async function seedCompletedVisit(resIdx, name, y, m, d, hh, typeIsDelivery = false) {
-      const resId = residentIds[resIdx];
-      const type = typeIsDelivery ? 'Delivery' : 'Single';
-      const vtype = typeIsDelivery ? 'Delivery' : 'Visitor';
-      const purpose = typeIsDelivery ? 'Package delivery' : 'Family visit';
+    async function seedCompletedVisit(resId, name, y, m, d, hh, isDelivery = false, gi = 0) {
+      const type = isDelivery ? 'Delivery' : 'Single';
+      const vtype = isDelivery ? 'Delivery' : 'Visitor';
+      const purpose = isDelivery ? 'Package delivery' : 'Family visit';
       const expDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const [reg] = await pool.query(
-        `INSERT INTO VisitorRegistrations (resident_id, registration_type, purpose, expected_date, status)
-         VALUES (?, ?, ?, ?, 'Departed')`,
-        [resId, type, purpose, expDate]
+        `INSERT INTO VisitorRegistrations (resident_id, registration_type, order_id, purpose, expected_date, status)
+         VALUES (?, ?, ?, ?, ?, 'Departed')`,
+        [resId, type, isDelivery ? `PH-${y}${m}${d}-${dCount + 1}` : null, purpose, expDate]
       );
       await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`, [reg.insertId, name]);
-      const gi = resIdx % 2;
       await pool.query(
         `INSERT INTO VisitorTransactions
           (resident_id, guard_id, exit_guard_id, gate_id, registration_id, visitor_name, visitor_type, purpose, plate_number, pass_number, entry_time, exit_time, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completed')`,
         [resId, GID[gi], GID[(gi + 1) % 2], GATE[gi], reg.insertId, name.toUpperCase(), vtype, purpose,
-         null, typeIsDelivery ? dPass() : vPass(), dt(y, m, d, hh, 0), dt(y, m, d, hh + 2, 0)]
+         null, isDelivery ? dPass() : vPass(), dt(y, m, d, hh, 0), dt(y, m, d, hh + 2, 0)]
       );
     }
 
-    // Bawat resident: 4 completed visit + 1 completed delivery (= 5+), Sept–Oct
     for (let i = 0; i < residentIds.length; i++) {
-      const dayBase = 1 + (i % 25);
-      await seedCompletedVisit(i, visitorName(i, 0), 2026, 9, dayBase, 9);
-      await seedCompletedVisit(i, visitorName(i, 1), 2026, 9, Math.min(28, dayBase + 2), 11);
-      await seedCompletedVisit(i, visitorName(i, 2), 2026, 9, Math.min(28, dayBase + 4), 14);
-      await seedCompletedVisit(i, visitorName(i, 3), 2026, 9, Math.min(28, dayBase + 6), 16, true); // DELIVERY
-      await seedCompletedVisit(i, visitorName(i, 4), 2026, 10, 1 + (i % 4), 10);
+      const resId = residentIds[i];
+      const gi = i % 2;
+      await seedCompletedVisit(resId, visitorName(i, 0), 2026, 6 + (i % 5), clampDay(1 + (i % 27)), 9, false, gi);
+      await seedCompletedVisit(resId, visitorName(i, 1), 2026, 6 + ((i + 3) % 6), clampDay(1 + ((i + 5) % 27)), 13, false, gi);
+      if (i % 2 === 0) {
+        await seedCompletedVisit(resId, visitorName(i, 2), 2026, 6 + ((i + 1) % 6), clampDay(1 + ((i + 9) % 27)), 15, true, gi);
+      }
     }
 
-    // ---- BATCH (resident1), Completed, 3 magkasabay (arrival) ----
+    // ---- BATCH (resident1), Completed, 3 magkasabay (arrival = linked) ----
     {
       const resId = residentIds[0];
       const [reg] = await pool.query(
         `INSERT INTO VisitorRegistrations (resident_id, registration_type, batch_name, purpose, expected_date, status)
-         VALUES (?, 'Batch', 'Birthday Party', 'Birthday celebration', '2026-09-28', 'Departed')`,
-        [resId]
+         VALUES (?, 'Batch', '728', 'Birthday celebration', '2026-09-28', 'Departed')`, [resId]
       );
       const batchNames = ['Luis Perez', 'Marites Cruz', 'Andoy Reyes'];
-      for (const n of batchNames) {
-        await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`, [reg.insertId, n]);
-      }
+      for (const n of batchNames) await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`, [reg.insertId, n]);
       const [arr] = await pool.query(`INSERT INTO Arrivals () VALUES ()`);
       for (const n of batchNames) {
         await pool.query(
           `INSERT INTO VisitorTransactions
             (resident_id, guard_id, exit_guard_id, gate_id, registration_id, arrival_id, visitor_name, visitor_type, purpose, pass_number, entry_time, exit_time, status)
-           VALUES (?, ?, ?, 1, ?, ?, ?, 'Visitor', 'Birthday celebration', ?, '2026-09-28 15:00:00', '2026-09-28 20:30:00', 'Completed')`,
-          [resId, GID[0], GID[1], reg.insertId, arr.insertId, n.toUpperCase(), vPass()]
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'Visitor', 'Birthday celebration', ?, '2026-09-28 15:00:00', '2026-09-28 20:30:00', 'Completed')`,
+          [resId, GID[0], GID[1], GATE[0], reg.insertId, arr.insertId, n.toUpperCase(), vPass()]
         );
       }
     }
 
-    // ---- ACTIVE ngayon: visitor (resident2) + delivery (resident3) ----
+    // ---- ACTIVE ngayon: 2 visitors + 1 delivery ----
     const ny = new Date().getFullYear(), nm = new Date().getMonth() + 1, nd = new Date().getDate();
-    {
-      const resId = residentIds[1];
-      const [reg] = await pool.query(
-        `INSERT INTO VisitorRegistrations (resident_id, registration_type, purpose, expected_date, status)
-         VALUES (?, 'Single', 'Family visit', ?, 'Active')`, [resId, todayISO()]
-      );
-      await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, 'Rico Hernandez')`, [reg.insertId]);
-      await pool.query(
-        `INSERT INTO VisitorTransactions
-          (resident_id, guard_id, gate_id, registration_id, visitor_name, visitor_type, purpose, pass_number, entry_time, status)
-         VALUES (?, ?, 1, ?, 'RICO HERNANDEZ', 'Visitor', 'Family visit', ?, ?, 'Active')`,
-        [resId, GID[0], reg.insertId, vPass(), dt(ny, nm, nd, 8, 30)]
-      );
-    }
-    {
-      const resId = residentIds[2];
+    async function seedActive(resId, name, isDelivery, hh) {
       const [reg] = await pool.query(
         `INSERT INTO VisitorRegistrations (resident_id, registration_type, order_id, purpose, expected_date, status)
-         VALUES (?, 'Delivery', 'PH-2026-99887', 'Package delivery', ?, 'Active')`, [resId, todayISO()]
+         VALUES (?, ?, ?, ?, ?, 'Active')`,
+        [resId, isDelivery ? 'Delivery' : 'Single', isDelivery ? 'PH-ACTIVE-01' : null, isDelivery ? 'Package delivery' : 'Family visit', todayISO()]
       );
-      await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, 'Delivery Rider')`, [reg.insertId]);
+      await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, ?)`, [reg.insertId, name]);
       await pool.query(
         `INSERT INTO VisitorTransactions
           (resident_id, guard_id, gate_id, registration_id, visitor_name, visitor_type, purpose, plate_number, pass_number, entry_time, status)
-         VALUES (?, ?, 1, ?, 'LALAMOVE RIDER', 'Delivery', 'Package delivery', 'ABC 1234', ?, ?, 'Active')`,
-        [resId, GID[0], reg.insertId, dPass(), dt(ny, nm, nd, 9, 15)]
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active')`,
+        [resId, GID[0], GATE[0], reg.insertId, name.toUpperCase(), isDelivery ? 'Delivery' : 'Visitor',
+         isDelivery ? 'Package delivery' : 'Family visit', isDelivery ? 'ABC 1234' : null, isDelivery ? dPass() : vPass(), dt(ny, nm, nd, hh, 15)]
       );
     }
+    await seedActive(residentIds[1], 'Rico Hernandez', false, 8);
+    await seedActive(residentIds[4], 'Grace Canaan', false, 10);
+    await seedActive(residentIds[2], 'Lalamove Rider', true, 9);
 
-    // ---- EXPECTED (hindi pa dumarating): bukas (resident1) + delivery ngayon (resident4) ----
+    // ---- EXPECTED (hindi pa dumating) ----
     {
       const [reg1] = await pool.query(
         `INSERT INTO VisitorRegistrations (resident_id, registration_type, purpose, expected_date, status)
          VALUES (?, 'Single', 'Tutor session', ?, 'Expected')`, [residentIds[0], plusDaysISO(1)]
       );
-      await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, 'Patricia Gomez')`, [reg1.insertId]);
-
+      await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, 'Patricia Shiloh')`, [reg1.insertId]);
       const [reg2] = await pool.query(
         `INSERT INTO VisitorRegistrations (resident_id, registration_type, order_id, purpose, expected_date, status)
          VALUES (?, 'Delivery', 'SHP-77001', 'Appliance delivery', ?, 'Expected')`, [residentIds[3], todayISO()]
@@ -241,11 +250,42 @@ async function seed() {
       await pool.query(`INSERT INTO VisitorRegistrationDetails (registration_id, visitor_name) VALUES (?, 'Delivery Rider')`, [reg2.insertId]);
     }
 
+    // ---- COMPLAINTS ----
+    console.log('🌱 Seeding complaints...');
+    let compOk = 0;
+    for (let i = 0; i < COMP.length; i++) {
+      const [category, subject, ctype, status, resolution] = COMP[i];
+      const d = new Date(); d.setDate(d.getDate() - (i * 5 + 3));
+      const incident = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      try {
+        if (await insertFlexible('Complaints', {
+          resident_id: residentIds[(i * 7) % residentIds.length],
+          category, subject, complaint_type: ctype, description: subject + '.',
+          incident_date: incident, status, resolution, blocklist: 0,
+          created_at: dt(d.getFullYear(), d.getMonth() + 1, d.getDate(), 10, 0),
+        })) compOk++;
+      } catch (e) { if (i === 0) console.warn('   (Complaints skipped:', e.message, ')'); }
+    }
+
+    // ---- GUARD REPORTS ----
+    console.log('🌱 Seeding guard reports...');
+    let repOk = 0;
+    for (let i = 0; i < REP.length; i++) {
+      const [category, rtype, location, description, status] = REP[i];
+      const d = new Date(); d.setDate(d.getDate() - (i * 6 + 2));
+      try {
+        if (await insertFlexible('GuardReports', {
+          guard_id: GID[i % 2], category, report_type: rtype, location, description, status,
+          created_at: dt(d.getFullYear(), d.getMonth() + 1, d.getDate(), 20, 0),
+        })) repOk++;
+      } catch (e) { if (i === 0) console.warn('   (GuardReports skipped:', e.message, ')'); }
+    }
+
     console.log('✅ Seeding complete!');
-    console.log('   Admin:     admin@sentricore / admin0001');
-    console.log('   Guards:    guard1@sentricore / guard0001 , guard2@sentricore / guard0002');
-    console.log(`   Residents: resident1..resident${RESIDENT_COUNT} / resident123`);
-    console.log('   Data:      5+ transactions/resident (Sept–Oct), batch, deliveries, active + expected.');
+    console.log(`   Residents: ${RESIDENT_COUNT}  (resident1..resident${RESIDENT_COUNT} / resident123)`);
+    console.log(`   Visitors : ${vCount}   Deliveries: ${dCount}`);
+    console.log(`   Complaints: ${compOk}   Guard reports: ${repOk}`);
+    console.log('   (Guards at admin: hindi ginalaw.)');
     process.exit(0);
   } catch (err) {
     console.error('❌ Seeding failed:', err.message);
