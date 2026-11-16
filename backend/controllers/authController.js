@@ -26,8 +26,10 @@ function shiftGate(g) {
   }
   const start = toMinutes(startStr), end = toMinutes(endStr);
   if (start == null || end == null) return { open: true, minsUntil: null }; // walang schedule → payagan
-  const now = new Date();
-  const cur = now.getHours() * 60 + now.getMinutes();
+  // Gamitin ang Philippine time (UTC+8) kahit UTC ang server (hal. Azure VM).
+  const TZ_OFFSET_MIN = 8 * 60; // PH
+  const nowPH = new Date(Date.now() + TZ_OFFSET_MIN * 60 * 1000);
+  const cur = nowPH.getUTCHours() * 60 + nowPH.getUTCMinutes();
   let open;
   if (start <= end) open = cur >= start && cur <= end;       // normal (6AM–6PM)
   else open = cur >= start || cur <= end;                    // overnight (6PM–6AM)
