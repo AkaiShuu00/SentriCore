@@ -303,8 +303,8 @@ export default function GuardLogs() {
                       <div key={i} className="flex items-center justify-between px-4 py-2.5 gap-2">
                         <div className="min-w-0"><p className="font-bold text-ink text-sm truncate">{r.name}</p>
                           <p className="text-[11px] text-ink/60 truncate">{r.kind} · {r.resident}</p>
-                          <p className="text-[10px] text-ink/70">Pumasok: {fmtFullDate(r.entryTime)}</p>
-                          <p className="text-[10px] text-ink/70">Lumabas: {fmtFullDate(r.exitTime)}</p>
+                          <p className="text-[10px] text-ink/70">Entry: {fmtFullDate(r.entryTime)}</p>
+                          <p className="text-[10px] text-ink/70">Exit: {fmtFullDate(r.exitTime)}</p>
                           <p className="text-[11px] text-ink/50">{r.time}</p></div>
                         <div className="text-right shrink-0"><p className="text-[11px] font-bold text-ink">{r.entryId}</p>
                           <span className="text-[8px] font-bold px-2 py-1 rounded-full inline-block mt-1" style={statusBg[r.status]}>{r.status}</span></div>
@@ -360,7 +360,7 @@ export default function GuardLogs() {
                           </div>
                         ))}
                         {activeCount > 0 && (
-                          <p className="text-[10px] text-ink/60 text-center">{activeCount} nasa loob pa (active)</p>
+                          <p className="text-[10px] text-ink/60 text-center">{activeCount} still inside (active)</p>
                         )}
                       </div>
                     )}
