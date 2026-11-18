@@ -22,6 +22,27 @@ function Avatar({ src, size = 40 }) {
   );
 }
 
+// ── Shift time helpers: <input type="time"> (24h "HH:MM") ↔ display "6:00 PM" ──
+// "18:00" → "6:00 PM" (format na tinatanggap ng admin guards controller)
+function to12(t) {
+  if (!t) return '';
+  const [hh, mm] = t.split(':').map(Number);
+  const ap = hh >= 12 ? 'PM' : 'AM';
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:${String(mm).padStart(2, '0')} ${ap}`;
+}
+// "6:00 PM" (o "18:00:00") → "18:00" para sa <input type="time">
+function shiftTo24(part) {
+  const m = String(part || '').trim().match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+  if (!m) return '';
+  let hh = parseInt(m[1], 10);
+  const mm = m[2] ? parseInt(m[2], 10) : 0;
+  const ap = (m[3] || '').toUpperCase();
+  if (ap === 'PM' && hh !== 12) hh += 12;
+  if (ap === 'AM' && hh === 12) hh = 0;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
 const fileToSquare = (file, max = 320) =>
   new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -285,11 +306,15 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
   const fileRef = useRef(null);
   const [form, setForm] = useState({
     fullName: initial?.fullName || '',
-    shift: initial?.shift && initial.shift !== '—' ? initial.shift : '',
     contact: initial?.contact || '',
     email: initial?.email || '',
     photo: initial?.photo || null,
   });
+
+  // Custom shift: hiwalay na Start at End (24h sa input), ico-convert sa "h:mm AM/PM - h:mm AM/PM" sa submit.
+  const _initShift = initial?.shift && initial.shift !== '—' ? String(initial.shift).split(/[-–—]/) : [];
+  const [startT, setStartT] = useState(shiftTo24(_initShift[0]));
+  const [endT, setEndT] = useState(shiftTo24(_initShift[1]));
 
   const onPickPhoto = async (e) => {
     const file = e.target.files?.[0];
@@ -337,12 +362,18 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
           </div>
           <div>
             <label className="block text-xs font-semibold text-ink mb-1">Shift Schedule</label>
-            <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none">
-              <option value="">Select Shift</option>
-              <option value="6:00 AM - 6:00 PM">6:00 AM - 6:00 PM</option>
-              <option value="6:00 PM - 6:00 AM">6:00 PM - 6:00 AM</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <input type="time" value={startT} onChange={(e) => setStartT(e.target.value)}
+                     className="flex-1 border border-gray-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-teal-600" />
+              <span className="text-ink/50 text-sm font-semibold">to</span>
+              <input type="time" value={endT} onChange={(e) => setEndT(e.target.value)}
+                     className="flex-1 border border-gray-300 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-teal-600" />
+            </div>
+            <p className="text-[11px] text-ink/50 mt-1">
+              {startT && endT
+                ? <>Shift: <span className="font-semibold text-teal-700">{to12(startT)} - {to12(endT)}</span>{startT >= endT ? ' (overnight)' : ''}</>
+                : 'Pumili ng start at end time. Kaya ang overnight (hal. 6:00 PM → 6:00 AM).'}
+            </p>
           </div>
         </div>
 
@@ -355,7 +386,11 @@ function GuardForm({ title, initial, showManage, onClose, onSubmit, onReset, onD
 
         <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 py-3 rounded-full border border-gray-300 font-medium text-ink text-sm">Cancel</button>
-          <button onClick={() => { if (!form.fullName.trim()) { alert('Full name is required.'); return; } onSubmit(form); }}
+          <button onClick={() => {
+                    if (!form.fullName.trim()) { alert('Full name is required.'); return; }
+                    const shift = (startT && endT) ? `${to12(startT)} - ${to12(endT)}` : '';
+                    onSubmit({ ...form, shift });
+                  }}
                   className="flex-1 py-3 rounded-full text-white font-semibold text-sm whitespace-nowrap" style={{ backgroundColor: '#0F6E6E' }}>
             {initial ? 'Save Changes' : 'Add Guard'}
           </button>

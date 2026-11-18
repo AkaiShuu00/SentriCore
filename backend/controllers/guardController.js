@@ -132,9 +132,32 @@ async function getOnDutyGuards(req, res) {
   }
 }
 
+// ─── shared helper: On/Off Duty base sa custom shift window (PH time, overnight-aware) ───
+// Azure VM ay naka-UTC; ide-adjust sa PH (UTC+8). Ginagamit ng getGuardDirectory.
+function dutyFromShift(g) {
+  const nowPH = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const cur = nowPH.getUTCHours() * 60 + nowPH.getUTCMinutes();
+  const toMin = (v) => {
+    const m = String(v || '').match(/(\d{1,2}):(\d{2})/);
+    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+  };
+  let s = toMin(g.shift_start);
+  let e = toMin(g.shift_end);
+  // Fallback kung shift_schedule/schedule string lang ang meron
+  if ((s == null || e == null) && (g.shift_schedule || g.schedule)) {
+    const p = parseShiftSchedule(g.shift_schedule || g.schedule);
+    if (s == null) s = toMin(p.start);
+    if (e == null) e = toMin(p.end);
+  }
+  if (s == null || e == null || s === e) return 'OFF DUTY';
+  const on = s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
+  return on ? 'ON DUTY' : 'OFF DUTY';
+}
+
 // GET /api/guards/directory  (Resident/Guard) - LAHAT ng guards + status para sa Contact Guard screen.
 // Nagbabalik ng hugis na direktang nababasa ng ContactGuard.jsx (name/phone/email/gate/status).
-// Status mapping: DB 'Active' → ON DUTY; iba → OFF DUTY (walang hiwalay na break/unavailable sa schema).
+// Status = AUTOMATIC base sa custom shift na itinakda ni admin (hindi na Guards.status),
+// kaya kapag binago ni admin ang shift, agad sumusunod ang On/Off Duty dito.
 async function getGuardDirectory(req, res) {
   try {
     const [rows] = await pool.query(
@@ -143,21 +166,18 @@ async function getGuardDirectory(req, res) {
        LEFT JOIN Gates gt ON gt.gate_id = g.gate_id
        ORDER BY g.guard_id`
     );
-    const dutyLabel = (s) => {
-      const v = String(s || '').toLowerCase().trim();
-      if (v.includes('break')) return 'ON BREAK';
-      if (v.includes('off')) return 'OFF DUTY';
-      // 'Active' (naka-login / may bukas na shift) o 'On Duty' → ON DUTY (real-time)
-      if (v.includes('active') || v.includes('on')) return 'ON DUTY';
-      return 'OFF DUTY';
-    };
+    const shiftLabel = (r) =>
+      (r.shift_start && r.shift_end)
+        ? `${String(r.shift_start).slice(0, 5)} - ${String(r.shift_end).slice(0, 5)}`
+        : (r.shift_schedule || r.schedule || '-');
     const guards = rows.map((r) => ({
       guardId: r.guard_id,
       name: r.full_name || 'Guard',
       phone: decrypt(r.phone_number) || '',
       email: r.email || '',
       gate: r.gate_name || (r.gate_id != null ? `Gate ${r.gate_id}` : '-'),
-      status: dutyLabel(r.status),
+      shift: shiftLabel(r),
+      status: dutyFromShift(r),
     }));
     res.json(guards);
   } catch (err) {

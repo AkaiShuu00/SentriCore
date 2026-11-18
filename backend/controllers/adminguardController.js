@@ -19,7 +19,9 @@ function computeDuty(shiftSchedule) {
   const parts = String(shiftSchedule).split(/[-–—]/);
   const s = hmTo24(parts[0]); const e = hmTo24(parts[1]);
   if (s == null || e == null || s === e) return 'Off Duty';
-  const now = new Date(); const cur = now.getHours() * 60 + now.getMinutes();
+  // PH time (UTC+8) — Azure VM ay naka-UTC kaya ide-adjust natin.
+  const nowPH = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const cur = nowPH.getUTCHours() * 60 + nowPH.getUTCMinutes();
   const on = s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
   return on ? 'On Duty' : 'Off Duty';
 }
@@ -77,7 +79,7 @@ async function listGuards(req, res) {
         gate: g.gate_id ? `Gate ${g.gate_id}` : '—',
         gateId: g.gate_id,
         shift: shiftStr || '—',
-        // AUTOMATIC — base sa oras ngayon vs shift window (kung kailangan man ipakita)
+        // AUTOMATIC — base sa oras ngayon (PH) vs shift window
         status: computeDuty(shiftStr),
         username: g.username,
         contact: g.phone_number || '',
